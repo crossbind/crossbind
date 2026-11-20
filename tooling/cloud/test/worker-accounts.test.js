@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import {
-    createAccounts, randomAccountId, DEVICE_REF_LENGTH, MAX_TOKENS_PER_USER, OWN_IDS_BELOW, OWN_IDS_FROM, TOKEN_IDLE_DAYS,
+    createAccounts, dayWords, randomAccountId, DEVICE_REF_LENGTH, MAX_TOKENS_PER_USER, OWN_IDS_BELOW, OWN_IDS_FROM, TOKEN_IDLE_DAYS,
 } from '../worker/accounts.js';
 import { sqliteD1 } from '../scripts/sqlite-d1.mjs';
 
@@ -17,6 +17,9 @@ const github = { provider: 'github', subject: '583231', login: 'octocat' };
 const madeUp = { provider: 'github', subject: '8000000002', login: 'made_up_two' };
 // Ids of crossbind's own, which the tests draw in turn.
 const OWN = [OWN_IDS_FROM + 1, OWN_IDS_FROM + 2, OWN_IDS_FROM + 3];
+// Made-up Apple ids, in the form of Apple's `sub`, and the identity a sign-in with one hands over: no name.
+const APPLE = ['000123.made0up0apple0id0one.0001', '000123.made0up0apple0id0two.0002'];
+const appleOf = (subject) => ({ provider: 'apple', subject, login: '' });
 
 function setup({ draws = OWN } = {}) {
     let now = NOW;
@@ -34,6 +37,12 @@ const accountOfToday = (db, { id, login }) => db.batch([
     db.prepare("INSERT INTO identities (provider, subject, user_id, created_at) VALUES ('github', ?1, ?2, ?3)").bind(String(id), Number(id), AT),
 ]);
 const signedInAs = (id, login, blocked = false) => ({ user: { id: String(id), login, blocked } });
+// An account with a GitHub account and an Apple ID linked.
+const withBoth = (db, id, { subject, login }, apple) => db.batch([
+    rowAlone(db, { id, login }),
+    db.prepare("INSERT INTO identities (provider, subject, user_id, created_at) VALUES ('github', ?1, ?2, ?3), ('apple', ?4, ?2, ?3)").bind(subject, id, AT, apple),
+]);
+const identitiesOf = (db) => rows(db, 'SELECT provider, subject, user_id, unlinked_at FROM identities ORDER BY user_id, provider');
 
 test('makes an account of crossbind\'s own at a GitHub account\'s first sign-in, and keeps its name current', async () => {
     const { db, accounts, advance } = setup();
@@ -189,6 +198,67 @@ test('signs an identity unlinked from an account with build seconds this month i
         { provider: 'apple', user_id: OWN[0], unlinked_at: null },
         { provider: 'github', user_id: OWN[1], unlinked_at: null },
     ]);
+});
+
+test('holds an identity unlinked from an account with build seconds through the month of its unlinking alone, though the account builds on', async () => {
+    const { db, accounts, advance } = setup({ draws: [OWN[1]] });
+    await db.prepare("INSERT INTO users (id, login, created_at, last_login_at) VALUES (?1, '', ?2, ?2)").bind(OWN[0], AT).run();
+    await db.prepare(`INSERT INTO identities (provider, subject, user_id, created_at, unlinked_at)
+        VALUES ('apple', ?3, ?1, ?2, NULL), ('github', '583231', ?1, ?2, ?2)`).bind(OWN[0], AT, APPLE[0]).run();
+    await accounts.addBuildSeconds(String(OWN[0]), NOW, 'web', 60);
+
+    advance(Date.parse('2026-10-31T23:59:00Z') - NOW);
+    const lastMinute = await accounts.signIn(github);
+    advance(2 * MINUTE);
+    await accounts.addBuildSeconds(String(OWN[0]), Date.parse('2026-11-01T00:01:00Z'), 'web', 60);
+    const nextMonth = await accounts.signIn(github);
+
+    assert.deepEqual(lastMinute, { freeFrom: '2026-11-01' });
+    assert.deepEqual(nextMonth, signedInAs(OWN[1], 'octocat'));
+});
+
+test('unlinks a way into an account, never its last: free at once without build seconds this month, held until the 1st with them', async () => {
+    const { db, accounts } = setup({ draws: [OWN[2]] });
+    await withBoth(db, OWN[0], github, APPLE[0]);
+    await withBoth(db, OWN[1], madeUp, APPLE[1]);
+    await accounts.addBuildSeconds(String(OWN[1]), NOW, 'web', 60);
+
+    const outcomes = [
+        await accounts.unlink(String(OWN[0]), 'apple'),
+        await accounts.unlink(String(OWN[0]), 'github'),
+        await accounts.unlink(String(OWN[1]), 'github'),
+        await accounts.unlink(String(OWN[1]), 'github'),
+    ];
+
+    assert.deepEqual(outcomes, [{ outcome: 'unlinked' }, { outcome: 'last' }, { outcome: 'held', freeFrom: '2026-11-01' }, { outcome: 'none' }]);
+    assert.deepEqual(await identitiesOf(db), [
+        { provider: 'github', subject: '583231', user_id: OWN[0], unlinked_at: null },
+        { provider: 'apple', subject: APPLE[1], user_id: OWN[1], unlinked_at: null },
+        { provider: 'github', subject: '8000000002', user_id: OWN[1], unlinked_at: AT },
+    ]);
+    // Unlinking GitHub blanks the account's GitHub name; unlinking an Apple ID keeps it.
+    assert.deepEqual(await rows(db, 'SELECT id, login FROM users ORDER BY id'), [{ id: OWN[0], login: 'octocat' }, { id: OWN[1], login: '' }]);
+    assert.deepEqual(await accounts.signIn(appleOf(APPLE[0])), signedInAs(OWN[2], ''));
+    assert.deepEqual(await accounts.signIn(madeUp), { freeFrom: '2026-11-01' });
+});
+
+test('prunes an identity unlinked in an earlier month, and keeps one unlinked this month and every linked one', async () => {
+    const { db, accounts } = setup();
+    await db.prepare("INSERT INTO users (id, login, created_at, last_login_at) VALUES (?1, '', ?2, ?2)").bind(OWN[0], AT).run();
+    await db.prepare(`INSERT INTO identities (provider, subject, user_id, created_at, unlinked_at) VALUES
+        ('apple', ?2, ?1, ?3, NULL), ('github', '583231', ?1, ?3, '2026-09-30T23:59:59.999Z'), ('github', '8000000002', ?1, ?3, '2026-10-01T00:00:00.000Z')`)
+        .bind(OWN[0], APPLE[0], AT).run();
+
+    await accounts.prune();
+
+    assert.deepEqual(await rows(db, 'SELECT subject FROM identities ORDER BY subject'), [{ subject: APPLE[0] }, { subject: '8000000002' }]);
+});
+
+test('words a day without a locale\'s data', (t) => {
+    t.mock.method(Date.prototype, 'toLocaleDateString', () => { throw new Error('no locale data here'); });
+    t.mock.method(Intl, 'DateTimeFormat', () => { throw new Error('no locale data here'); });
+
+    assert.deepEqual(['2026-12-01', '2027-01-31', '2026-02-28'].map(dayWords), ['1 December 2026', '31 January 2027', '28 February 2026']);
 });
 
 test('issues a token it keeps only as a hash, and finds the account by it', async () => {
