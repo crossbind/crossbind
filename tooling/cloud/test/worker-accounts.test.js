@@ -25,9 +25,13 @@ function setup({ draws = OWN } = {}) {
 }
 
 const rows = async (db, sql) => (await db.prepare(sql).all()).results;
-// An account as the code before identities made one, under its GitHub id; migrations/0002's trigger gives it the
-// identity the migration gave every account of then.
-const accountOfToday = (db, { id, login }) => db.prepare('INSERT INTO users (id, login, created_at, last_login_at) VALUES (?1, ?2, ?3, ?3)').bind(id, login, AT).run();
+// An account's row alone, as the code before identities made one under its GitHub id.
+const rowAlone = (db, { id, login }) => db.prepare('INSERT INTO users (id, login, created_at, last_login_at) VALUES (?1, ?2, ?3, ?3)').bind(id, login, AT);
+// An account made before identities, with the identity migrations/0002 gave every account of then.
+const accountOfToday = (db, { id, login }) => db.batch([
+    rowAlone(db, { id, login }),
+    db.prepare("INSERT INTO identities (provider, subject, user_id, created_at) VALUES ('github', ?1, ?2, ?3)").bind(String(id), Number(id), AT),
+]);
 const signedInAs = (id, login, blocked = false) => ({ user: { id: String(id), login, blocked } });
 
 test('makes an account of crossbind\'s own at a GitHub account\'s first sign-in, and keeps its name current', async () => {
@@ -51,7 +55,7 @@ test('signs an account made before identities in as itself, by its identity and 
     await accountOfToday(db, octocat);
     // An account of crossbind's own, and one a rollback to the code before identities made under its GitHub id.
     await accounts.signIn(madeUp);
-    await accountOfToday(db, { id: madeUp.subject, login: madeUp.login });
+    await rowAlone(db, { id: madeUp.subject, login: madeUp.login }).run();
 
     assert.deepEqual(await accounts.signIn(github), signedInAs(octocat.id, 'octocat'));
     assert.deepEqual(await accounts.signIn(madeUp), signedInAs(OWN[0], 'made_up_two'));
@@ -97,7 +101,7 @@ test('draws a new account\'s id again while an account, or a deleted account\'s 
 test('makes no account after three ids drawn are taken', async () => {
     const live = OWN_IDS_FROM + 7;
     const { db, accounts } = setup({ draws: [live, live, live, OWN[0]] });
-    await accountOfToday(db, { id: live, login: 'made_up_live' });
+    await rowAlone(db, { id: live, login: 'made_up_live' }).run();
 
     await assert.rejects(accounts.signIn(github), /no account could be made for this github sign-in/);
     assert.deepEqual(await rows(db, 'SELECT id FROM users'), [{ id: live }]);

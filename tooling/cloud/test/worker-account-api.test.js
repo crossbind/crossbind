@@ -51,9 +51,11 @@ function setup({ fetcher = github(), environment = env, loginOverLimit = false }
     return { db, accounts, call };
 }
 
-// The account as the code before identities made it, under its GitHub id; migrations/0002 gives it its identity.
-const accountOfToday = (db) => db.prepare("INSERT INTO users (id, login, created_at, last_login_at) VALUES (583231, 'octocat', ?1, ?1)")
-    .bind(new Date(NOW).toISOString()).run();
+// The account as the code before identities made it, under its GitHub id, with the identity migrations/0002 gave it.
+const accountOfToday = (db) => db.batch([
+    db.prepare("INSERT INTO users (id, login, created_at, last_login_at) VALUES (583231, 'octocat', ?1, ?1)").bind(new Date(NOW).toISOString()),
+    db.prepare("INSERT INTO identities (provider, subject, user_id, created_at) VALUES ('github', '583231', 583231, ?1)").bind(new Date(NOW).toISOString()),
+]);
 
 async function signedIn() {
     const context = setup();
