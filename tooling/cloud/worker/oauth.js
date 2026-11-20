@@ -2,7 +2,7 @@ import { nameOf, userKey } from './accounts.js';
 import { appleAuthorizeUrl, appleIdentity, isAppleConfigured } from './apple.js';
 import { log } from './http.js';
 import {
-    signSession, sessionCookie, clearCookie, noticeCookie, readCookie, randomToken, toBase64Url, SESSION_COOKIE, SESSION_TTL_MS,
+    signSession, sessionCookie, clearCookie, noticeCookie, pendingCookie, readCookie, randomToken, toBase64Url, SESSION_COOKIE, SESSION_TTL_MS,
 } from './session.js';
 import { numberOr } from './settings.js';
 
@@ -104,7 +104,8 @@ export async function startLogin(request, env, { provider = 'github', next = 'pl
 
 // Signed in, the browser goes where the start chose: the account's page on this origin, or the configured playground
 // page, never an address the request names; a sign-in started before the account's page goes to the playground.
-// Anything else comes back to the account's page, which says what happened and offers to sign in again.
+// Anything else comes back to the account's page, which says what happened and offers to sign in again. A first
+// sign-in with an identity crossbind does not know makes no account: the page asks its person first.
 export async function finishLogin(request, env, {
     provider = 'github', fetcher = fetch, now = Date.now(), accounts,
 }) {
@@ -122,7 +123,8 @@ export async function finishLogin(request, env, {
             code: params.get('code') ?? '', secret, redirectUri: callbackUrl(request, provider), fetcher, now,
         });
         if (failure) return back(failure);
-        const { user, freeFrom } = await accounts.signIn(identity);
+        const { user, freeFrom, unknown } = await accounts.signIn(identity, { create: false });
+        if (unknown) return done(page, [await pendingCookie(identity, next === 'account' ? 'account' : 'playground', env.SESSION_SECRET, now)]);
         if (freeFrom) return done(page, [noticeCookie({ said: 'held', provider, day: freeFrom })]);
         if (user.blocked) {
             log({ event: 'blocked-sign-in', who: userKey(user.id) });

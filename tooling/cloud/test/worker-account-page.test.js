@@ -24,7 +24,7 @@ const env = {
 // Made-up GitHub accounts: ids of ten digits, and names with an underscore, which no GitHub login has.
 const dev = { provider: 'github', subject: '8000000001', login: 'made_up_dev' };
 const two = { provider: 'github', subject: '8000000002', login: 'made_up_two' };
-const POLICY = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
+const POLICY = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; form-action 'self' https://crossbind.dev; frame-ancestors 'none'; base-uri 'none'";
 
 function setup({ environment = env } = {}) {
     let now = NOW;
@@ -117,6 +117,7 @@ test('renders a notice for each result a sign-in or a form sends the page back w
         ['login=too-new', 'This GitHub account is too new; accounts can sign in 30 days after they were created.'],
         ['login=blocked', 'This account may not use crossbind cloud.'],
         ['signed-out-everywhere', 'Every device and every browser is signed out of the account, this one included.'],
+        ['waited', 'That sign-in waited over ten minutes for an answer; sign in again.'],
         ['deleted', 'Your crossbind account is deleted, and every device is signed out of it.'],
     ]);
 });
@@ -127,7 +128,7 @@ test('takes a form from the account\'s own page alone: crossbind.dev, another si
     const token = await accounts.issueToken(user.id);
     const cookie = await cookieOf(user, NOW);
     const forms = {
-        '/account/logout': {}, '/account/tokens/revoke': { ref: refOf(token) }, '/account/logout-everywhere': {}, '/account/delete': { confirm: 'yes' },
+        '/account/logout': {}, '/account/tokens/revoke': { ref: refOf(token) }, '/account/logout-everywhere': {}, '/account/delete': { confirm: 'yes' }, '/account/new': {},
     };
 
     const answers = [];
@@ -141,7 +142,7 @@ test('takes a form from the account\'s own page alone: crossbind.dev, another si
         }
     }
 
-    assert.equal(answers.length, 20);
+    assert.equal(answers.length, 25);
     assert.deepEqual(answers.filter((answer) => answer.status !== 403 || answer.cookie !== null || answer.error !== 'This is accepted from the account\'s page only.'), []);
     assert.deepEqual(await accounts.standing(user.id), {
         exists: true, blocked: false, login: 'made_up_dev', name: 'made_up_dev', signedOutAt: null,

@@ -1,12 +1,12 @@
 import {
-    ACCOUNT_BLOCKED, DEVICE_REF_LENGTH, dayWords, userKey,
+    ACCOUNT_BLOCKED, DEVICE_REF_LENGTH, dayWords, nameOf, userKey,
 } from './accounts.js';
 import {
     BodyTooLarge, SECURITY_HEADERS, jsonResponse, log, readLimited,
 } from './http.js';
 import { minAccountDays, signInProviders, startLogin } from './oauth.js';
 import {
-    clearCookie, readNotice, readSignedIn, NOTICE_COOKIE, SESSION_COOKIE,
+    clearCookie, noticeCookie, readNotice, readPending, readSignedIn, sessionCookie, signSession, NOTICE_COOKIE, PENDING_COOKIE, SESSION_COOKIE, SESSION_TTL_MS,
 } from './session.js';
 
 // The account's own page, /login on this API's origin, and the routes under /account/ that its forms post to. Those
@@ -15,10 +15,11 @@ import {
 const MAX_FORM_BYTES = 1024;
 const DEVICE_REF = new RegExp(`^[0-9a-f]{${DEVICE_REF_LENGTH}}$`);
 // same-origin and not no-referrer: a form's POST from a no-referrer page carries `Origin: null`, which the origin rule
-// refuses.
-const PAGE_HEADERS = Object.freeze({
+// refuses. Chromium holds a form's POST whose redirect leaves `form-action`, and making an account goes on to the
+// playground: its origin is listed.
+const pageHeaders = (env) => ({
     'content-type': 'text/html; charset=utf-8',
-    'content-security-policy': "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+    'content-security-policy': `default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; form-action ${["'self'", URL.parse(env.PLAYGROUND_URL ?? '')?.origin].filter(Boolean).join(' ')}; frame-ancestors 'none'; base-uri 'none'`,
     'referrer-policy': 'same-origin',
     'x-content-type-options': 'nosniff',
     'cache-control': 'no-store',
@@ -32,6 +33,7 @@ const notices = (env) => ({
     'login=too-new': `This GitHub account is too new; accounts can sign in ${minAccountDays(env)} days after they were created.`,
     'login=blocked': ACCOUNT_BLOCKED,
     'signed-out-everywhere': 'Every device and every browser is signed out of the account, this one included.',
+    waited: 'That sign-in waited over ten minutes for an answer; sign in again.',
     deleted: 'Your crossbind account is deleted, and every device is signed out of it.',
 });
 
@@ -64,6 +66,7 @@ main { max-width: 40rem; margin: 0 auto; padding: 2rem 1rem; }
 h1 { font-size: 1.5rem; }
 h2 { font-size: 1.15rem; margin-top: 2rem; }
 .notice { padding: 0.5rem 0.75rem; border-left: 3px solid; }
+.question { padding: 0 1rem 0.5rem; border: 1px solid; border-radius: 6px; }
 .devices { list-style: none; padding: 0; }
 .devices li { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; align-items: center; padding: 0.5rem 0; }
 .when { opacity: 0.75; font-size: 0.9rem; }
@@ -98,6 +101,15 @@ ${list}
 <button type="submit">Delete account</button></form>`;
 }
 
+// A first sign-in's question (oauth.js): no account is made until its person says so.
+function questionPart(pending) {
+    return `<section class="question">
+<h2>A new crossbind account?</h2>
+<p>No crossbind account signs in with this ${IDENTITY_WORDS[pending.provider]} yet.</p>
+<form method="post" action="/account/new"><button type="submit">Make a new account</button></form>
+</section>`;
+}
+
 // `next`: where a sign-in started here returns, the playground when this page was opened from it.
 function signedOutPart(env, next) {
     const query = next === 'playground' ? '?next=playground' : '';
@@ -109,7 +121,7 @@ function signedOutPart(env, next) {
 }
 
 function page(env, {
-    user, devices, said, next,
+    user, devices, said, next, pending,
 }) {
     const shown = Object.entries(notices(env)).map(([key, words]) => `<p class="notice" data-notice="${key}" hidden>${escape(words)}</p>`);
     if (said) shown.unshift(`<p class="notice" role="status">${escape(said)}</p>`);
@@ -126,6 +138,7 @@ function page(env, {
 <main>
 <h1>crossbind account</h1>
 ${shown.join('\n')}
+${pending && Object.hasOwn(IDENTITY_WORDS, pending.provider) ? questionPart(pending) : ''}
 ${user ? signedInPart(user, devices) : signedOutPart(env, next)}
 </main>
 </body>
@@ -135,11 +148,13 @@ ${user ? signedInPart(user, devices) : signedOutPart(env, next)}
 
 const asset = (body, type) => new Response(body, { headers: { ...SECURITY_HEADERS, 'content-type': type } });
 
-function seeOther(request, path, cookies = []) {
-    const headers = new Headers({ location: `${new URL(request.url).origin}${path}`, 'cache-control': 'no-store' });
+function redirectAfterPost(location, cookies = []) {
+    const headers = new Headers({ location, 'cache-control': 'no-store' });
     cookies.forEach((cookie) => headers.append('set-cookie', cookie));
     return new Response(null, { status: 303, headers });
 }
+
+const seeOther = (request, path, cookies) => redirectAfterPost(`${new URL(request.url).origin}${path}`, cookies);
 
 async function readForm(request) {
     try {
@@ -158,11 +173,12 @@ const nextOf = (request) => (new URL(request.url).searchParams.get('next') === '
 async function loginPage({ request, env, deps }) {
     const user = await signedInUser({ request, env, deps });
     const devices = user ? await deps.accounts.devices(user.id) : [];
+    const pending = await readPending(request, env.SESSION_SECRET, (deps.now ?? Date.now)());
     const notice = readNotice(request);
-    const headers = new Headers(PAGE_HEADERS);
+    const headers = new Headers(pageHeaders(env));
     if (notice) headers.append('set-cookie', clearCookie(NOTICE_COOKIE));
     return new Response(page(env, {
-        user, devices, said: wordsOf(notice), next: nextOf(request),
+        user, devices, said: wordsOf(notice), next: nextOf(request), pending,
     }), { headers });
 }
 
@@ -206,6 +222,25 @@ async function deleteRoute({ request, deps }, user) {
     return seeOther(request, '/login#deleted', [clearCookie(SESSION_COOKIE)]);
 }
 
+// "Make a new account": the identity a first sign-in confirmed, from its sealed cookie, gets an account of its own
+// and signs in, or signs in to the one it has by now; then where that sign-in was to return.
+async function newAccountRoute({ request, env, deps }) {
+    const now = (deps.now ?? Date.now)();
+    const pending = await readPending(request, env.SESSION_SECRET, now);
+    if (!pending) return seeOther(request, '/login#waited');
+    const page = pending.next === 'playground' ? '/login?next=playground' : '/login';
+    const cleared = clearCookie(PENDING_COOKIE);
+    const { user, freeFrom } = await deps.accounts.signIn(pending);
+    if (freeFrom) return seeOther(request, page, [cleared, noticeCookie({ said: 'held', provider: pending.provider, day: freeFrom })]);
+    if (user.blocked) {
+        log({ event: 'blocked-sign-in', who: userKey(user.id) });
+        return seeOther(request, `${page}#login=blocked`, [cleared]);
+    }
+    const session = await signSession({ id: user.id, name: nameOf(user) }, env.SESSION_SECRET, now);
+    const target = pending.next === 'playground' ? env.PLAYGROUND_URL : `${new URL(request.url).origin}/login`;
+    return redirectAfterPost(`${target}#login=ok`, [cleared, sessionCookie(SESSION_COOKIE, session, SESSION_TTL_MS / 1000)]);
+}
+
 const ROUTES = Object.freeze({
     'GET /login': loginPage,
     'GET /account.css': () => asset(STYLE, 'text/css; charset=utf-8'),
@@ -216,6 +251,7 @@ const ROUTES = Object.freeze({
     'POST /account/tokens/revoke': fromThePage(signedIn(revokeRoute)),
     'POST /account/logout-everywhere': fromThePage(signedIn(everywhereRoute)),
     'POST /account/delete': fromThePage(signedIn(deleteRoute)),
+    'POST /account/new': fromThePage(newAccountRoute),
 });
 
 export const isAccountPath = (pathname) => ['/login', '/account.css', '/account.js'].includes(pathname) || pathname.startsWith('/account/');
