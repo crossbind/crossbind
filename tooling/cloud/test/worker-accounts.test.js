@@ -24,7 +24,7 @@ test('records a GitHub account at its first sign-in and keeps its name current',
     await accounts.signIn({ ...octocat, login: 'octocat-renamed' });
 
     assert.deepEqual(await rows(db, 'SELECT * FROM users'), [{
-        id: 583231, login: 'octocat-renamed', created_at: '2026-10-08T12:00:00.000Z', last_login_at: '2026-10-08T12:01:00.000Z', blocked: 0,
+        id: 583231, login: 'octocat-renamed', created_at: '2026-10-08T12:00:00.000Z', last_login_at: '2026-10-08T12:01:00.000Z', blocked: 0, signed_out_at: null,
     }]);
 });
 
