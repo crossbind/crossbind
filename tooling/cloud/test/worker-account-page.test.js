@@ -77,7 +77,7 @@ test('serves the account\'s page with its policy, and to a browser signed out a 
     assert.ok(html.includes('<a class="button" href="/account/login/github">Sign in with GitHub</a>'));
     assert.ok(!html.includes('Signed in as') && !html.includes('<form'));
     assert.ok(html.includes('<link rel="stylesheet" href="/account.css">') && html.includes('<script src="/account.js" defer></script>'));
-    assert.ok(!/<script>|<style|style=/.test(html), 'nothing inline, which the policy would block');
+    assert.ok(!html.includes('<script>') && !html.includes('<style') && !html.includes('style='), 'nothing inline, which the policy would block');
     assert.deepEqual([style.status, style.headers.get('content-type'), script.status, script.headers.get('content-type')], [200, 'text/css; charset=utf-8', 200, 'text/javascript; charset=utf-8']);
     const unsetHtml = await (await unset.send('GET', '/login')).text();
     assert.ok(unsetHtml.includes('Signing in with GitHub is not set up.') && !unsetHtml.includes('/account/login/github'));

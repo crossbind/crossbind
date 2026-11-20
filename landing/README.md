@@ -96,7 +96,7 @@ switch, and it is deliberately not automatic.
 | `src/changelog/` | `/changelog/`: the page object built from `generated/changelog.js`, its own `ChangelogPage.jsx` with a version rail, the anchor helper and the release row; reached from the navbar's version menu, not the docs sidebar |
 | `src/why.js` | The "why" bullets and the limits, shared by the introduction and llms.txt |
 | `src/llms/` | Renders `/llms.txt`, `/llms-full.txt` and the Markdown twin of every page (its path plus `.md`; the reference documents under `/api/`) at build time from the snapshot, the catalog and the page list; `pnpm test` covers the block renderer and the link rewriting |
-| `public/_redirects` | 301s for the retired Docusaurus routes; checked by `scripts/site/check-site-links.mjs` |
+| `public/_redirects` | 301s for the retired Docusaurus routes, and 302s from `/login` to crossbind cloud's account page; checked by `scripts/site/check-site-links.mjs` |
 | `src/theme.js` | Palettes, the light/dark token tables, and the persisted theme hook |
 | `src/components/` | `Nav` with its `DocsMenu`, its `EcosystemMenu` (Libraries and Integrations) and its `VersionMenu` (the version, with the changelog, all packages, the migration guide and the v1 docs), and the shared `ui.jsx` primitives |
 | `src/sections/` | One file per band of the page, composed in `src/App.jsx` |
