@@ -79,6 +79,10 @@ export function previewHost(requested, routeAddress, interfaces = os.networkInte
 // The address as a URL holds it.
 export const urlHost = (address) => (net.isIPv6(address) ? `[${address}]` : address);
 
+// The dev server's address as the account's list keeps it, host:port with the host as a URL writes it, the one form
+// crossbind cloud takes: a name in lower case, an IPv6 address shortened, and the port kept, 80 too.
+export const listedAddress = (address, port) => `${new URL(`http://${urlHost(address)}`).host}:${port}`;
+
 function isFree(host, port) {
     return new Promise((resolve) => {
         const server = net.createServer();
