@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { handleRequest } from '../worker/api.js';
-import { createAccounts } from '../worker/accounts.js';
+import { createAccounts, OWN_IDS_FROM } from '../worker/accounts.js';
 import { sqliteD1 } from '../scripts/sqlite-d1.mjs';
 
 const API = 'https://api.crossbind.dev/v1';
@@ -26,16 +27,19 @@ const github = ({ answer = { access_token: 'gho_token' }, ageDays = 400 } = {}) 
     return Response.json({ id: 583231, login: 'octocat', created_at: new Date(NOW - ageDays * DAY).toISOString() });
 };
 
+// The id of crossbind's own that a new account draws here.
+const OWN_ID = OWN_IDS_FROM + 1;
+
 function setup({ fetcher = github(), environment = env, loginOverLimit = false } = {}) {
     const db = sqliteD1();
-    const accounts = createAccounts(db, () => NOW);
+    const accounts = createAccounts(db, () => NOW, () => OWN_ID);
     const deps = {
         limits: {
             api: { limit: async () => ({ success: true }) },
             login: { limit: async () => ({ success: !loginOverLimit }) },
         },
         accounts,
-        quota: { remaining: async ({ key, limit }) => (key === 'github:583231' ? limit - 3 : limit) },
+        quota: { remaining: async ({ key, limit }) => (key === 'user:583231' ? limit - 3 : limit) },
         fetcher,
         now: () => NOW,
     };
@@ -47,10 +51,21 @@ function setup({ fetcher = github(), environment = env, loginOverLimit = false }
     return { db, accounts, call };
 }
 
+// The account as the code before identities made it, under its GitHub id; migrations/0002 gives it its identity.
+const accountOfToday = (db) => db.prepare("INSERT INTO users (id, login, created_at, last_login_at) VALUES (583231, 'octocat', ?1, ?1)")
+    .bind(new Date(NOW).toISOString()).run();
+
 async function signedIn() {
     const context = setup();
-    await context.accounts.signIn({ id: '583231', login: 'octocat' });
+    await accountOfToday(context.db);
     return { ...context, token: await context.accounts.issueToken('583231') };
+}
+
+// A token of another kind than the CLI's, which no route of today issues.
+async function tokenOfKind({ accounts, db }, kind) {
+    const token = await accounts.issueToken('583231');
+    await db.prepare('UPDATE tokens SET kind = ? WHERE hash = ?').bind(kind, createHash('sha256').update(token).digest('hex')).run();
+    return token;
 }
 
 test('starts a CLI sign-in with a GitHub device code', async () => {
@@ -86,7 +101,7 @@ test('keeps the CLI waiting while the user has not approved the code yet', async
     assert.deepEqual(await responses[1].json(), { pending: true, interval: 10 });
 });
 
-test('gives the CLI a token of its own once GitHub approved the code, and records the account', async () => {
+test('makes an account of crossbind\'s own at once for a GitHub account it does not know, and gives the CLI its token', async () => {
     const { call, db } = setup();
 
     const response = await call('POST', '/login/token', { body: { deviceCode: 'the-device-code' } });
@@ -95,14 +110,45 @@ test('gives the CLI a token of its own once GitHub approved the code, and record
     assert.equal(response.status, 200);
     assert.equal(login, 'octocat');
     assert.match(token, /^cbt_/);
-    assert.deepEqual((await db.prepare('SELECT id, login FROM users').all()).results, [{ id: 583231, login: 'octocat' }]);
+    assert.deepEqual((await db.prepare('SELECT id, login FROM users').all()).results, [{ id: OWN_ID, login: 'octocat' }]);
+    assert.deepEqual((await db.prepare('SELECT provider, subject, user_id FROM identities').all()).results, [{ provider: 'github', subject: '583231', user_id: OWN_ID }]);
     assert.equal((await call('GET', '/usage', { token })).status, 200);
+    assert.deepEqual(await (await call('GET', '/account', { token })).json(), { id: String(OWN_ID), name: 'octocat' });
+});
+
+test('signs an account made before identities in as itself on the CLI\'s sign-in', async () => {
+    const { call, db } = setup();
+    await accountOfToday(db);
+
+    const { token } = await (await call('POST', '/login/token', { body: { deviceCode: 'the-device-code' } })).json();
+
+    assert.deepEqual(await (await call('GET', '/account', { token })).json(), { id: '583231', name: 'octocat' });
+    assert.deepEqual((await db.prepare('SELECT id FROM users').all()).results, [{ id: 583231 }]);
+});
+
+test('refuses the CLI sign-in of a GitHub account unlinked this month from an account with build seconds, and says when it signs in again', async () => {
+    const { call, db } = setup();
+    const at = new Date(NOW).toISOString();
+    const held = OWN_IDS_FROM + 9;
+    // An account that unlinked its GitHub account this month, signing in with its Apple ID since.
+    await db.prepare("INSERT INTO users (id, login, created_at, last_login_at) VALUES (?1, '', ?2, ?2)").bind(held, at).run();
+    await db.prepare(`INSERT INTO identities (provider, subject, user_id, created_at, unlinked_at)
+        VALUES ('apple', '000123.made-up.0456', ?1, ?2, NULL), ('github', '583231', ?1, ?2, ?2)`).bind(held, at).run();
+    await db.prepare("INSERT INTO build_usage (user_id, month, image, seconds) VALUES (?, '2026-10', 'web', 60)").bind(held).run();
+
+    const response = await call('POST', '/login/token', { body: { deviceCode: 'the-device-code' } });
+
+    assert.equal(response.status, 403);
+    assert.deepEqual(await response.json(), {
+        error: 'This GitHub account was unlinked from a crossbind account this month: it signs in again from 1 November 2026, and can be linked back to that account now.',
+    });
+    assert.deepEqual((await db.prepare('SELECT (SELECT count(1) FROM users) AS users, (SELECT count(1) FROM tokens) AS tokens').all()).results, [{ users: 1, tokens: 0 }]);
 });
 
 test('refuses the CLI sign-in of an account that is too new or blocked, and tells why', async () => {
     const tooNew = setup({ fetcher: github({ ageDays: 3 }) });
     const blocked = setup();
-    await blocked.accounts.signIn({ id: '583231', login: 'octocat' });
+    await accountOfToday(blocked.db);
     await blocked.db.prepare('UPDATE users SET blocked = 1').run();
 
     const responses = [
@@ -166,6 +212,42 @@ test('answers 401 without a valid token, and 403 to a blocked account', async ()
     assert.equal((await call('GET', '/usage', { token })).status, 403);
 });
 
+test('tells a token the account it signs in to', async () => {
+    const { call, db, token } = await signedIn();
+
+    const response = await call('GET', '/account', { token });
+    const anonymous = await call('GET', '/account');
+    await db.prepare('UPDATE users SET blocked = 1').run();
+    const blocked = await call('GET', '/account', { token });
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { id: '583231', name: 'octocat' });
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.deepEqual([anonymous.status, blocked.status], [401, 403]);
+});
+
+test('takes the CLI\'s tokens on every route, the crossbind app\'s on the account\'s own alone, and no other kind', async () => {
+    const routes = [['GET', '/usage'], ['GET', '/account'], ['DELETE', '/token'], ['DELETE', '/tokens'], ['DELETE', '/account']];
+    const statuses = {};
+    for (const kind of ['cli', 'app', 'partner']) {
+        statuses[kind] = [];
+        for (const [method, path] of routes) {
+            const context = await signedIn();
+            statuses[kind].push((await context.call(method, path, { token: await tokenOfKind(context, kind) })).status);
+        }
+    }
+    const refused = await signedIn();
+    const answer = await refused.call('GET', '/usage', { token: await tokenOfKind(refused, 'app') });
+
+    assert.deepEqual(statuses, {
+        cli: [200, 200, 204, 204, 204],
+        app: [403, 200, 204, 204, 204],
+        partner: [403, 403, 403, 403, 403],
+    });
+    assert.deepEqual(await answer.json(), { error: 'This token cannot be used here.' });
+    assert.equal((await refused.db.prepare('SELECT count(1) AS tokens FROM tokens').first('tokens')), 2);
+});
+
 test('revokes the token it was sent, or every token of the account', async () => {
     const { call, accounts, token } = await signedIn();
     const other = await accounts.issueToken('583231');
@@ -198,9 +280,9 @@ test('logs a blocked sign-in and every revocation, never the token', async (t) =
 
     const events = lines.mock.calls.map((each) => JSON.parse(each.arguments[0]));
     assert.deepEqual(events.map(({ event, who, all }) => ({ event, who, all })), [
-        { event: 'token-revoked', who: 'github:583231', all: false },
-        { event: 'token-revoked', who: 'github:583231', all: true },
-        { event: 'blocked-sign-in', who: 'github:583231', all: undefined },
+        { event: 'token-revoked', who: 'user:583231', all: false },
+        { event: 'token-revoked', who: 'user:583231', all: true },
+        { event: 'blocked-sign-in', who: 'user:583231', all: undefined },
     ]);
     assert.ok(!lines.mock.calls.some((each) => each.arguments[0].includes('cbt_')));
 });

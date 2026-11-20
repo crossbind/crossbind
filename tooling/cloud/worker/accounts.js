@@ -10,6 +10,13 @@ const DAY_MS = 24 * 3600 * 1000;
 const TOUCH_EVERY_MS = 3600 * 1000;
 // The months of build seconds kept before the current one: enough to answer for a recent bill or look into abuse.
 export const USAGE_MONTHS_KEPT = 3;
+// Ids of crossbind's own: above every GitHub id, which the accounts made before them keep as their ids, and below
+// 2^53, so that each is exact in JavaScript.
+export const OWN_IDS_FROM = 2 ** 40;
+export const OWN_IDS_BELOW = 2 ** 53;
+// An id drawn that is taken is drawn again, which with 2^53 ids is next to never; two sign-ins that make one
+// identity's account at once meet on its row, and the later one signs in to the other's.
+const MAX_SIGN_IN_ATTEMPTS = 3;
 
 const hex = (bytes) => [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 const hashOf = async (token) => hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token)));
@@ -23,25 +30,76 @@ const monthsBefore = (at, months) => {
     const date = new Date(at);
     return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() - months, 1)).toISOString().slice(0, 7);
 };
+const firstOfNextMonth = (at) => `${monthsBefore(at, -1)}-01`;
 
 export const ACCOUNT_BLOCKED = 'This GitHub account may not use crossbind cloud.';
 
 // The key a signed-in user's daily playground compiles count under (worker/quota.js).
-export const userKey = (id) => `github:${id}`;
+export const userKey = (id) => `user:${id}`;
 
 export const isTokenShaped = (token) => typeof token === 'string' && TOKEN_PATTERN.test(token);
 
-// The accounts in D1 (migrations/): GitHub users who signed in, their CLI tokens and their cloud build seconds.
-// User ids are GitHub's, as strings.
-export function createAccounts(db, now = () => Date.now()) {
+// An id of crossbind's own, drawn evenly: 53 random bits, drawn again below OWN_IDS_FROM.
+export function randomAccountId() {
+    let id;
+    do {
+        const [high, low] = crypto.getRandomValues(new Uint32Array(2));
+        id = (high >>> 11) * 2 ** 32 + low;
+    } while (id < OWN_IDS_FROM);
+    return id;
+}
+
+// The accounts in D1 (migrations/): the identities each signs in with, its tokens and its cloud build seconds. An
+// account made before identities keeps its GitHub id as its id; a later one has an id of crossbind's own. Ids are
+// strings here.
+export function createAccounts(db, now = () => Date.now(), drawId = randomAccountId) {
     const timestamp = () => new Date(now()).toISOString();
+    const hasSecondsThisMonth = async (id) => (await db.prepare('SELECT EXISTS (SELECT 1 FROM build_usage WHERE user_id = ? AND month = ?) AS spent')
+        .bind(id, periodsOf(now()).month).first('spent')) === 1;
+
+    // A plain INSERT, never an upsert, which on an id taken would sign the person in to someone else's account. An id
+    // that a deleted account's identities or seconds still name is taken too. Null when the id drawn was taken, or
+    // when the identity's account was made meanwhile.
+    async function createAccount({ provider, subject, login }) {
+        const id = drawId();
+        const named = await db.prepare(`SELECT EXISTS (SELECT 1 FROM identities WHERE user_id = ?1)
+            OR EXISTS (SELECT 1 FROM build_usage WHERE user_id = ?1) AS named`).bind(id).first('named');
+        if (named === 1) return null;
+        const at = timestamp();
+        try {
+            const [made] = await db.batch([
+                db.prepare('INSERT INTO users (id, login, created_at, last_login_at) VALUES (?1, ?2, ?3, ?3) RETURNING id, login, blocked').bind(id, login, at),
+                db.prepare('INSERT INTO identities (provider, subject, user_id, created_at) VALUES (?, ?, ?, ?)').bind(provider, subject, id, at),
+            ]);
+            return userOf(made.results[0]);
+        } catch (error) {
+            if (/UNIQUE constraint failed: (users\.id|identities\.provider)/.test(error.message)) return null;
+            throw error;
+        }
+    }
 
     return {
-        async signIn({ id, login }) {
-            const row = await db.prepare(`INSERT INTO users (id, login, created_at, last_login_at) VALUES (?1, ?2, ?3, ?3)
-                ON CONFLICT (id) DO UPDATE SET login = excluded.login, last_login_at = excluded.last_login_at
-                RETURNING id, login, blocked`).bind(id, login, timestamp()).first();
-            return userOf(row);
+        // The account an identity signs in to, made at once for an identity crossbind does not know: { user }, or
+        // { freeFrom } for one unlinked from an account with build seconds this month, which holds it until the 1st.
+        // An account deleted this month comes back under its id, its month spent: while its seconds stay, so do its
+        // identities (migrations/0002's triggers). Never looked up by a GitHub id.
+        async signIn({ provider, subject, login }) {
+            for (let attempt = 0; attempt < MAX_SIGN_IN_ATTEMPTS; attempt += 1) {
+                const identity = await db.prepare('SELECT user_id, unlinked_at FROM identities WHERE provider = ? AND subject = ?').bind(provider, subject).first();
+                if (identity?.unlinked_at === null) {
+                    const row = await db.prepare(`INSERT INTO users (id, login, created_at, last_login_at) VALUES (?1, ?2, ?3, ?3)
+                        ON CONFLICT (id) DO UPDATE SET login = excluded.login, last_login_at = excluded.last_login_at
+                        RETURNING id, login, blocked`).bind(identity.user_id, login, timestamp()).first();
+                    return { user: userOf(row) };
+                }
+                if (identity) {
+                    if (await hasSecondsThisMonth(identity.user_id)) return { freeFrom: firstOfNextMonth(now()) };
+                    await db.prepare('DELETE FROM identities WHERE provider = ? AND subject = ? AND unlinked_at IS NOT NULL').bind(provider, subject).run();
+                }
+                const user = await createAccount({ provider, subject, login });
+                if (user) return { user };
+            }
+            throw new Error(`no account could be made for this ${provider} sign-in`);
         },
 
         // Whether an account still exists, as a session of another browser may outlive it, and whether it is blocked.
@@ -52,7 +110,8 @@ export function createAccounts(db, now = () => Date.now()) {
 
         // The account and its tokens go at once. Its seconds of the current month stay under the bare id until the
         // month ends (prune), so a new sign-in does not bring a fresh month; a blocked account stays as its id, or
-        // deleting it would lift the block.
+        // deleting it would lift the block. Its identities go with the row, or with the last of those seconds
+        // (migrations/0002's triggers).
         async deleteAccount(id) {
             await db.batch([
                 db.prepare('DELETE FROM tokens WHERE user_id = ?').bind(id),
@@ -88,7 +147,7 @@ export function createAccounts(db, now = () => Date.now()) {
         async userOfToken(token) {
             if (!isTokenShaped(token)) return null;
             const hash = await hashOf(token);
-            const row = await db.prepare(`SELECT users.id, users.login, users.blocked, tokens.last_used_at FROM tokens
+            const row = await db.prepare(`SELECT users.id, users.login, users.blocked, tokens.last_used_at, tokens.kind FROM tokens
                 JOIN users ON users.id = tokens.user_id WHERE tokens.hash = ?`).bind(hash).first();
             if (!row) return null;
             const idle = now() - Date.parse(row.last_used_at);
@@ -99,7 +158,7 @@ export function createAccounts(db, now = () => Date.now()) {
             if (idle >= TOUCH_EVERY_MS) {
                 await db.prepare('UPDATE tokens SET last_used_at = ? WHERE hash = ?').bind(timestamp(), hash).run();
             }
-            return userOf(row);
+            return { ...userOf(row), kind: row.kind };
         },
 
         async revokeToken(token) {

@@ -4,7 +4,7 @@ export const SESSION_TTL_MS = 30 * 24 * 3600 * 1000;
 const MIN_SECRET_LENGTH = 32;
 const utf8 = new TextEncoder();
 
-const toBase64Url = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+export const toBase64Url = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 export const fromBase64Url = (text) => Uint8Array.from(atob(text.replace(/-/g, '+').replace(/_/g, '/')), (char) => char.charCodeAt(0));
 export const randomToken = () => toBase64Url(crypto.getRandomValues(new Uint8Array(32)));
 

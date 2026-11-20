@@ -30,15 +30,18 @@ On Cloudflare every container is its own Firecracker microVM, started without in
 
 - `GET /session`: who is signed in, the day's limit and what is left of it, whether GitHub sign-in is set up, and the Turnstile site key.
 - `POST /compile`: from the playground page's origin only. An anonymous visitor passes Turnstile first. A compile seen before comes from the cache without counting (a week for a module, ten minutes for a compile error); otherwise it counts against the visitor's network (an IPv6 /64 is one network) or their account, and against the day's total for everyone.
-- `GET /login/github` and `/callback/github`: GitHub sign-in that asks for no scope; accounts younger than 30 days are turned away. The account is recorded (below), and the session is an HMAC-signed, host-only cookie holding its GitHub id and name.
+- `GET /login/github` and `/callback/github`: GitHub sign-in that asks for no scope; GitHub accounts younger than 30 days are turned away. PKCE (S256) binds GitHub's code to the browser that asked for it: the verifier waits in an HttpOnly cookie beside the state, so a code caught on its way is worth nothing elsewhere. The GitHub account signs in to its crossbind account (below), and the session is an HMAC-signed, host-only cookie holding the account's id and name.
 - `POST /logout`, and `POST /delete-account`, which deletes the signed-in account as `crossbind account delete` does.
 
 The CLI talks to it under `/v1` (`worker/account-api.js`), with a token and without cookies or CORS:
 
-- `POST /v1/login/device` and `POST /v1/login/token`: `crossbind login`, GitHub's device flow. The user enters a code on github.com; the Worker, not the CLI, asks GitHub for the outcome, so no GitHub token leaves it. The CLI polls `/v1/login/token` (202 until the code is approved) and then receives a token of crossbind cloud's own (`cbt_…`).
+- `POST /v1/login/device` and `POST /v1/login/token`: `crossbind login`, GitHub's device flow. The user enters a code on github.com; the Worker, not the CLI, asks GitHub for the outcome, so no GitHub token leaves it. The CLI polls `/v1/login/token` (202 until the code is approved) and then receives a token of crossbind cloud's own (`cbt_…`). A GitHub account crossbind does not know gets its account at once.
 - `GET /v1/usage`: the month's cloud build seconds by toolchain image against the monthly allowance (`BUILD_SECONDS_MONTHLY`), and the day's playground compiles.
+- `GET /v1/account`: the account the token signs in to, `{"id": "…", "name": "…"}`.
 - `DELETE /v1/token` and `DELETE /v1/tokens`: `crossbind logout`, for the token sent or every token of the account.
 - `DELETE /v1/account`: `crossbind account delete`, open to a blocked account too.
+
+Every token has a kind (`tokens.kind`). The CLI's, `cli`, takes every route, the runners' included, and is every token issued so far. The crossbind app's, `app`, takes `GET /v1/account` and the three deletions alone. A route refuses any other kind with 403.
 
 Builds under `RUNNER=REMOTE` talk to it under `/runner/<image>/v1/*`, the runner protocol of `docs/api/remote-runner.md`, with the same token (`worker/runner-api.js`, below).
 
@@ -46,22 +49,23 @@ Every route counts requests per network (an IPv4 address or an IPv6 /64) with Wo
 
 ## Accounts
 
-D1 (`migrations/`, binding `DB`) keeps everyone who signed in with GitHub, on the page or with the CLI: the GitHub id and name and when they signed in, never an email or a GitHub token; their CLI tokens as SHA-256 hashes, the 20 most recently used per account, each dropped after 90 days unused; and their cloud build seconds per month and image, for the current month and the three before it. Blocking an account stops its sign-ins, compiles and tokens. Block by id: a GitHub name passes to someone else after a rename.
+D1 (`migrations/`, binding `DB`) keeps every crossbind account, on the page or with the CLI, and the identities it signs in with: the GitHub user id (`identities`), the GitHub name and when it signed in, never an email or a GitHub token; its CLI tokens as SHA-256 hashes, the 20 most recently used per account, each dropped after 90 days unused; and its cloud build seconds per month and image, for the current month and the three before it. An account made before identities keeps its GitHub id as its id; a new one gets an id of crossbind's own, drawn at random from 2^40 up to 2^53, above every GitHub id, by a plain `INSERT` that draws again when an account, or a deleted account's identities or seconds, name the id. A sign-in finds its account by its identity alone, never by a GitHub id. Blocking an account stops its sign-ins, compiles and tokens. Block by the account's id: a GitHub name passes to someone else after a rename.
 
-Deleting an account removes it and its tokens at once, and its earlier months of build seconds; the current month's stay under the bare id until the month ends, so a new sign-in does not bring a fresh month, and a blocked account stays as its id, or deleting it would lift the block. A cron trigger prunes daily what is kept only for a while (`prune` in `worker/accounts.js`); `landing/src/pages/privacy.js` states the same periods, and a landing test holds the two together.
+Deleting an account removes it and its tokens at once, and its earlier months of build seconds; the current month's stay under the bare id until the month ends, so a new sign-in does not bring a fresh month, and a blocked account stays as its id, or deleting it would lift the block. Its identities stay with those seconds, so that signing in with one brings the same id back with its month spent, and go with the last of them, or at once when there are none (the triggers of `migrations/0002`). An identity unlinked from an account that has build seconds this month signs in to nothing until the 1st. A cron trigger prunes daily what is kept only for a while (`prune` in `worker/accounts.js`); `landing/src/pages/privacy.js` states the same periods, and a landing test holds the two together.
 
-Query it from the repository root: in this package wrangler first validates `wrangler.jsonc`, which fails until a deploy or `pnpm build:image` has assembled the image contexts in `.build/`.
+Query it from the repository root: in this package wrangler first validates `wrangler.jsonc`, which fails until a deploy or `pnpm build:image` has assembled the image contexts in `.build/`. The first finds an account by its GitHub name, the second blocks the account a GitHub account signs in to, and the third lists the accounts no linked identity signs in to, which only a rollback to the Worker before identities makes (each made then under its GitHub id).
 
 ```bash
 tooling/cloud/node_modules/.bin/wrangler d1 execute crossbind-accounts --remote --command "SELECT id, login, last_login_at FROM users WHERE login = '<name>'"
-tooling/cloud/node_modules/.bin/wrangler d1 execute crossbind-accounts --remote --command "UPDATE users SET blocked = 1 WHERE id = <id>"
+tooling/cloud/node_modules/.bin/wrangler d1 execute crossbind-accounts --remote --command "UPDATE users SET blocked = 1 WHERE id = (SELECT user_id FROM identities WHERE provider = 'github' AND subject = '<GitHub id>')"
+tooling/cloud/node_modules/.bin/wrangler d1 execute crossbind-accounts --remote --command "SELECT id, login FROM users WHERE id NOT IN (SELECT user_id FROM identities WHERE unlinked_at IS NULL)"
 ```
 
 GitHub sign-in needs a GitHub OAuth app with its callback at `https://api.crossbind.dev/playground/callback/github` and the device flow enabled; its client id and secret are the `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` secrets.
 
 ## Cloud runners
 
-`worker/runner.js` gives every account a runner of each toolchain image: a Durable Object named after the GitHub id, holding one container. Each container is a Firecracker microVM of its own, so builds of different accounts share nothing.
+`worker/runner.js` gives every account a runner of each toolchain image: a Durable Object named after the account's id, holding one container. Each container is a Firecracker microVM of its own, so builds of different accounts share nothing.
 
 - **Image**: the toolchain image this repository's crossbind pins, with `core/crossbind/src/runner` copied in (`runner/Dockerfile`, assembled into `.build/runner-<image>/` by `scripts/build-image.mjs`). Older crossbind releases pin other images, and the runner turns their builds away with `toolchain mismatch`.
 - **Requests**: the Worker checks the token, then passes the request on with the account's id in `x-crossbind-user` and, of the caller's headers, only the ones the runner protocol reads (`content-type`, and `content-range` and `x-crossbind-upload` for a file sent in parts): no token, no cookies. A token found valid in the last 30 seconds skips the D1 read and counts on the runners' rate; any other counts on the general one first, so made-up tokens cannot spend D1 reads. The runner's own token is derived from `RUNNER_SECRET` (32 characters at least, or every runner route answers 503), the image and the account, so nothing is stored. The entrypoint starts the runner as the image's unprivileged user, with no capabilities and `no_new_privs`. Build steps run as that user and can read the runner's token from its process; it opens nothing, since only the Durable Object reaches the container.

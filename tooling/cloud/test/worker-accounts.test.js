@@ -1,58 +1,213 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createAccounts, MAX_TOKENS_PER_USER, TOKEN_IDLE_DAYS } from '../worker/accounts.js';
+import {
+    createAccounts, randomAccountId, MAX_TOKENS_PER_USER, OWN_IDS_BELOW, OWN_IDS_FROM, TOKEN_IDLE_DAYS,
+} from '../worker/accounts.js';
 import { sqliteD1 } from '../scripts/sqlite-d1.mjs';
 
 const NOW = Date.parse('2026-10-08T12:00:00Z');
+const AT = new Date(NOW).toISOString();
 const MINUTE = 60 * 1000;
 const DAY = 24 * 60 * MINUTE;
+// An account made before identities, under its GitHub id, and that GitHub account as a sign-in hands it over.
 const octocat = { id: '583231', login: 'octocat' };
+const github = { provider: 'github', subject: '583231', login: 'octocat' };
+// A made-up GitHub account that crossbind does not know yet.
+const madeUp = { provider: 'github', subject: '8000000002', login: 'made_up_two' };
+// Ids of crossbind's own, which the tests draw in turn.
+const OWN = [OWN_IDS_FROM + 1, OWN_IDS_FROM + 2, OWN_IDS_FROM + 3];
 
-function setup() {
+function setup({ draws = OWN } = {}) {
     let now = NOW;
     const db = sqliteD1();
-    return { db, accounts: createAccounts(db, () => now), advance: (ms) => { now += ms; } };
+    const next = draws[Symbol.iterator]();
+    return { db, accounts: createAccounts(db, () => now, () => next.next().value), advance: (ms) => { now += ms; } };
 }
 
 const rows = async (db, sql) => (await db.prepare(sql).all()).results;
+// An account as the code before identities made one, under its GitHub id; migrations/0002's trigger gives it the
+// identity the migration gave every account of then.
+const accountOfToday = (db, { id, login }) => db.prepare('INSERT INTO users (id, login, created_at, last_login_at) VALUES (?1, ?2, ?3, ?3)').bind(id, login, AT).run();
+const signedInAs = (id, login, blocked = false) => ({ user: { id: String(id), login, blocked } });
 
-test('records a GitHub account at its first sign-in and keeps its name current', async () => {
+test('makes an account of crossbind\'s own at a GitHub account\'s first sign-in, and keeps its name current', async () => {
     const { db, accounts, advance } = setup();
 
-    assert.deepEqual(await accounts.signIn(octocat), { ...octocat, blocked: false });
+    const first = await accounts.signIn(github);
     advance(MINUTE);
-    await accounts.signIn({ ...octocat, login: 'octocat-renamed' });
+    const again = await accounts.signIn({ ...github, login: 'octocat-renamed' });
 
+    assert.deepEqual([first, again], [signedInAs(OWN[0], 'octocat'), signedInAs(OWN[0], 'octocat-renamed')]);
     assert.deepEqual(await rows(db, 'SELECT * FROM users'), [{
-        id: 583231, login: 'octocat-renamed', created_at: '2026-10-08T12:00:00.000Z', last_login_at: '2026-10-08T12:01:00.000Z', blocked: 0, signed_out_at: null,
+        id: OWN[0], login: 'octocat-renamed', created_at: '2026-10-08T12:00:00.000Z', last_login_at: '2026-10-08T12:01:00.000Z', blocked: 0, signed_out_at: null,
     }]);
+    assert.deepEqual(await rows(db, 'SELECT * FROM identities'), [{
+        provider: 'github', subject: '583231', user_id: OWN[0], created_at: '2026-10-08T12:00:00.000Z', unlinked_at: null,
+    }]);
+});
+
+test('signs an account made before identities in as itself, by its identity and never by a GitHub id', async () => {
+    const { db, accounts } = setup();
+    await accountOfToday(db, octocat);
+    // An account of crossbind's own, and one a rollback to the code before identities made under its GitHub id.
+    await accounts.signIn(madeUp);
+    await accountOfToday(db, { id: madeUp.subject, login: madeUp.login });
+
+    assert.deepEqual(await accounts.signIn(github), signedInAs(octocat.id, 'octocat'));
+    assert.deepEqual(await accounts.signIn(madeUp), signedInAs(OWN[0], 'made_up_two'));
+    assert.deepEqual(await rows(db, 'SELECT subject, user_id FROM identities ORDER BY subject'), [
+        { subject: '583231', user_id: 583231 },
+        { subject: '8000000002', user_id: OWN[0] },
+    ]);
 });
 
 test('reports a blocked account at sign-in and when asked', async () => {
     const { db, accounts } = setup();
-    await accounts.signIn(octocat);
+    await accountOfToday(db, octocat);
     await db.prepare('UPDATE users SET blocked = 1 WHERE id = ?').bind(583231).run();
 
-    assert.deepEqual(await accounts.signIn(octocat), { ...octocat, blocked: true });
+    assert.deepEqual(await accounts.signIn(github), signedInAs(octocat.id, 'octocat', true));
     assert.deepEqual(await accounts.standing('583231'), { exists: true, blocked: true });
     assert.deepEqual(await accounts.standing('1'), { exists: false, blocked: false });
 });
 
+test('draws a new account\'s id again while an account, or a deleted account\'s identity or seconds, name it', async () => {
+    const [live, held, spent] = [OWN_IDS_FROM + 7, OWN_IDS_FROM + 8, OWN_IDS_FROM + 9];
+    const { db, accounts } = setup({ draws: [live, OWN[0], held, OWN[1], spent, OWN[2]] });
+    const identity = (subject, id) => db.prepare("INSERT INTO identities (provider, subject, user_id, created_at) VALUES ('github', ?, ?, ?)").bind(subject, id, AT).run();
+    await db.prepare("INSERT INTO users (id, login, created_at, last_login_at) VALUES (?1, 'made_up_live', ?2, ?2)").bind(live, AT).run();
+    await identity('8000000001', live);
+    await identity('8000000009', held);
+    await db.prepare("INSERT INTO build_usage (user_id, month, image, seconds) VALUES (?, '2026-10', 'web', 60)").bind(spent).run();
+
+    const made = [];
+    for (const subject of ['8000000003', '8000000004', '8000000005']) made.push(await accounts.signIn({ provider: 'github', subject, login: 'made_up_dev' }));
+
+    assert.deepEqual(made, OWN.map((id) => signedInAs(id, 'made_up_dev')));
+    assert.deepEqual(await rows(db, 'SELECT id, login FROM users ORDER BY id'), [...OWN.map((id) => ({ id, login: 'made_up_dev' })), { id: live, login: 'made_up_live' }]);
+    assert.deepEqual(await rows(db, 'SELECT subject, user_id FROM identities ORDER BY subject'), [
+        { subject: '8000000001', user_id: live },
+        { subject: '8000000003', user_id: OWN[0] },
+        { subject: '8000000004', user_id: OWN[1] },
+        { subject: '8000000005', user_id: OWN[2] },
+        { subject: '8000000009', user_id: held },
+    ]);
+});
+
+test('makes no account after three ids drawn are taken', async () => {
+    const live = OWN_IDS_FROM + 7;
+    const { db, accounts } = setup({ draws: [live, live, live, OWN[0]] });
+    await accountOfToday(db, { id: live, login: 'made_up_live' });
+
+    await assert.rejects(accounts.signIn(github), /no account could be made for this github sign-in/);
+    assert.deepEqual(await rows(db, 'SELECT id FROM users'), [{ id: live }]);
+});
+
+test('draws ids of crossbind\'s own evenly, from 2^40 up to and not including 2^53, each exact in JavaScript', async (t) => {
+    const ids = Array.from({ length: 10_000 }, () => randomAccountId());
+    const { user } = await createAccounts(sqliteD1(), () => NOW).signIn(github);
+
+    assert.ok(ids.every((id) => Number.isSafeInteger(id) && id >= OWN_IDS_FROM && id < OWN_IDS_BELOW));
+    assert.equal(new Set(ids).size, ids.length);
+    assert.ok(ids.some((id) => id >= 2 ** 52) && ids.some((id) => id < 2 ** 52));
+    assert.ok(Number(user.id) >= OWN_IDS_FROM && Number(user.id) < OWN_IDS_BELOW, user.id);
+    // The words drawn: below 2^40 again, the highest id, 2^40 - 1 again, and 2^40.
+    const words = [[0, 5], [2 ** 32 - 1, 2 ** 32 - 1], [2 ** 19 - 1, 2 ** 32 - 1], [2 ** 19, 0]];
+    t.mock.method(crypto, 'getRandomValues', (array) => {
+        array.set(words.shift());
+        return array;
+    });
+    assert.deepEqual([randomAccountId(), randomAccountId()], [OWN_IDS_BELOW - 1, OWN_IDS_FROM]);
+});
+
+test('makes one account when two first sign-ins of one GitHub account meet, the later signing in to the other\'s', async () => {
+    const db = sqliteD1();
+    const other = OWN_IDS_FROM + 5;
+    let met = false;
+    // The other sign-in makes the account between this one's look-up and its INSERT.
+    const meeting = {
+        prepare: (sql) => db.prepare(sql),
+        batch: async (statements) => {
+            if (!met) {
+                met = true;
+                await db.batch([
+                    db.prepare("INSERT INTO users (id, login, created_at, last_login_at) VALUES (?1, 'octocat', ?2, ?2)").bind(other, AT),
+                    db.prepare("INSERT INTO identities (provider, subject, user_id, created_at) VALUES ('github', '583231', ?, ?)").bind(other, AT),
+                ]);
+            }
+            return db.batch(statements);
+        },
+    };
+
+    assert.deepEqual(await createAccounts(meeting, () => NOW, () => OWN[0]).signIn(github), signedInAs(other, 'octocat'));
+    assert.deepEqual(await rows(db, 'SELECT id FROM users'), [{ id: other }]);
+    assert.deepEqual(await rows(db, 'SELECT subject, user_id FROM identities'), [{ subject: '583231', user_id: other }]);
+});
+
+test('brings an account deleted this month back under its id while its seconds hold its identity, and frees one without seconds at once', async () => {
+    const { accounts } = setup();
+    const { user: spent } = await accounts.signIn(github);
+    const { user: idle } = await accounts.signIn(madeUp);
+    await accounts.addBuildSeconds(spent.id, NOW, 'web', 600);
+    await accounts.deleteAccount(spent.id);
+    await accounts.deleteAccount(idle.id);
+
+    const back = await accounts.signIn(github);
+    const fresh = await accounts.signIn(madeUp);
+
+    assert.deepEqual(back, signedInAs(OWN[0], 'octocat'));
+    assert.equal((await accounts.buildBudget(spent.id, NOW)).mine, 600);
+    assert.deepEqual(fresh, signedInAs(OWN[2], 'made_up_two'));
+});
+
+test('signs an identity unlinked from an account with build seconds this month in to nothing until the 1st, then makes it an account', async () => {
+    const { db, accounts, advance } = setup({ draws: [OWN[1]] });
+    // An account that unlinked its GitHub account this month, signing in with its Apple ID since.
+    await db.prepare("INSERT INTO users (id, login, created_at, last_login_at) VALUES (?1, '', ?2, ?2)").bind(OWN[0], AT).run();
+    await db.prepare(`INSERT INTO identities (provider, subject, user_id, created_at, unlinked_at)
+        VALUES ('apple', '000123.made-up.0456', ?1, ?2, NULL), ('github', '583231', ?1, ?2, ?2)`).bind(OWN[0], AT).run();
+    await accounts.addBuildSeconds(String(OWN[0]), NOW, 'web', 60);
+
+    const held = await accounts.signIn(github);
+    const whileHeld = await rows(db, 'SELECT id FROM users');
+    advance(Date.parse('2026-11-01T00:00:00Z') - NOW);
+    const free = await accounts.signIn(github);
+
+    assert.deepEqual(held, { freeFrom: '2026-11-01' });
+    assert.deepEqual(whileHeld, [{ id: OWN[0] }]);
+    assert.deepEqual(free, signedInAs(OWN[1], 'octocat'));
+    assert.deepEqual(await rows(db, 'SELECT provider, user_id, unlinked_at FROM identities ORDER BY provider'), [
+        { provider: 'apple', user_id: OWN[0], unlinked_at: null },
+        { provider: 'github', user_id: OWN[1], unlinked_at: null },
+    ]);
+});
+
 test('issues a token it keeps only as a hash, and finds the account by it', async () => {
     const { db, accounts } = setup();
-    await accounts.signIn(octocat);
+    await accountOfToday(db, octocat);
 
     const token = await accounts.issueToken(octocat.id);
 
     assert.match(token, /^cbt_[A-Za-z0-9_-]{43}$/);
     const [stored] = await rows(db, 'SELECT hash FROM tokens');
     assert.match(stored.hash, /^[0-9a-f]{64}$/);
-    assert.deepEqual(await accounts.userOfToken(token), { ...octocat, blocked: false });
+    assert.deepEqual(await accounts.userOfToken(token), { ...octocat, blocked: false, kind: 'cli' });
+});
+
+test('reads a token\'s kind, the CLI\'s for every token it issues', async () => {
+    const { db, accounts } = setup();
+    await accountOfToday(db, octocat);
+    const app = await accounts.issueToken(octocat.id);
+    await db.prepare("UPDATE tokens SET kind = 'app'").run();
+    const cli = await accounts.issueToken(octocat.id);
+
+    assert.deepEqual(await accounts.userOfToken(cli), { ...octocat, blocked: false, kind: 'cli' });
+    assert.deepEqual(await accounts.userOfToken(app), { ...octocat, blocked: false, kind: 'app' });
 });
 
 test('finds no account for an unknown, malformed or revoked token', async () => {
-    const { accounts } = setup();
-    await accounts.signIn(octocat);
+    const { db, accounts } = setup();
+    await accountOfToday(db, octocat);
     const token = await accounts.issueToken(octocat.id);
 
     await accounts.revokeToken(token);
@@ -64,9 +219,9 @@ test('finds no account for an unknown, malformed or revoked token', async () => 
 });
 
 test('revokes every token of one account and no other', async () => {
-    const { accounts } = setup();
-    await accounts.signIn(octocat);
-    await accounts.signIn({ id: '1', login: 'mojombo' });
+    const { db, accounts } = setup();
+    await accountOfToday(db, octocat);
+    await accountOfToday(db, { id: '1', login: 'mojombo' });
     const mine = [await accounts.issueToken(octocat.id), await accounts.issueToken(octocat.id)];
     const theirs = await accounts.issueToken('1');
 
@@ -78,7 +233,7 @@ test('revokes every token of one account and no other', async () => {
 
 test(`keeps the ${MAX_TOKENS_PER_USER} most recently used tokens of an account`, async () => {
     const { db, accounts, advance } = setup();
-    await accounts.signIn(octocat);
+    await accountOfToday(db, octocat);
     const tokens = [];
     for (let count = 0; count <= MAX_TOKENS_PER_USER; count += 1) {
         tokens.push(await accounts.issueToken(octocat.id));
@@ -92,7 +247,7 @@ test(`keeps the ${MAX_TOKENS_PER_USER} most recently used tokens of an account`,
 
 test('notes when a token was last used, at most once an hour', async () => {
     const { db, accounts, advance } = setup();
-    await accounts.signIn(octocat);
+    await accountOfToday(db, octocat);
     const token = await accounts.issueToken(octocat.id);
     const lastUsed = async () => (await rows(db, 'SELECT last_used_at FROM tokens'))[0].last_used_at;
 
@@ -108,7 +263,7 @@ test('notes when a token was last used, at most once an hour', async () => {
 
 test(`forgets a token unused for ${TOKEN_IDLE_DAYS} days, and keeps one in use`, async () => {
     const { db, accounts, advance } = setup();
-    await accounts.signIn(octocat);
+    await accountOfToday(db, octocat);
     const used = await accounts.issueToken(octocat.id);
     const idle = await accounts.issueToken(octocat.id);
 
@@ -138,7 +293,7 @@ test('adds a runner\'s seconds to its user, image and month, and to everyone\'s 
 
 test('deletes an account and every token of it, keeping only the month\'s seconds under the bare id', async () => {
     const { db, accounts } = setup();
-    await accounts.signIn(octocat);
+    await accountOfToday(db, octocat);
     const token = await accounts.issueToken(octocat.id);
     await accounts.addBuildSeconds(octocat.id, NOW, 'web', 60);
     await accounts.addBuildSeconds(octocat.id, Date.parse('2026-08-08T12:00:00Z'), 'web', 30);
@@ -152,21 +307,21 @@ test('deletes an account and every token of it, keeping only the month\'s second
 
 test('keeps a blocked account as its bare id, so deleting it does not lift the block', async () => {
     const { db, accounts } = setup();
-    await accounts.signIn(octocat);
+    await accountOfToday(db, octocat);
     await db.prepare('UPDATE users SET blocked = 1').run();
 
     await accounts.deleteAccount(octocat.id);
     const kept = await rows(db, 'SELECT id, login, blocked FROM users');
-    const again = await accounts.signIn(octocat);
+    const again = await accounts.signIn(github);
 
     assert.deepEqual(kept, [{ id: 583231, login: '', blocked: 1 }]);
-    assert.equal(again.blocked, true);
+    assert.equal(again.user.blocked, true);
 });
 
 test('prunes tokens unused for 90 days, seconds older than three months, and a deleted account\'s seconds once its month ends', async () => {
     const { db, accounts, advance } = setup();
-    await accounts.signIn(octocat);
-    await accounts.signIn({ id: '1', login: 'mojombo' });
+    await accountOfToday(db, octocat);
+    await accountOfToday(db, { id: '1', login: 'mojombo' });
     const stale = await accounts.issueToken(octocat.id);
     advance(91 * DAY);
     const fresh = await accounts.issueToken(octocat.id);

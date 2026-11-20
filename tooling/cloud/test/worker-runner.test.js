@@ -234,7 +234,7 @@ test('destroys a running runner within a minute of a pause or a block', async ()
     const paused = setup();
     const blocked = setup();
     await Promise.all([paused.settled(), blocked.settled()]);
-    await blocked.accounts.signIn({ id: '42', login: 'octocat' });
+    await blocked.accounts.signIn({ provider: 'github', subject: '42', login: 'octocat' });
     await ask(paused);
     await ask(blocked);
 

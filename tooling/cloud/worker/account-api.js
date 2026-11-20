@@ -6,14 +6,21 @@ import {
     isDeviceLoginConfigured, minAccountDays, pollDeviceCode, requestDeviceCode,
 } from './oauth.js';
 
-// The API of `crossbind login`, `logout` and `usage`, under /v1. No browser calls it: it sends no CORS headers and
-// reads no cookies, only the token in the Authorization header.
+// The API of `crossbind login`, `logout` and `usage`, and the account's own, under /v1. No browser calls it: it sends
+// no CORS headers and reads no cookies, only the token in the Authorization header.
 
 const MAX_BODY_BYTES = 1024;
 const MAX_DEVICE_CODE_LENGTH = 128;
+// The kinds of token a route takes (tokens.kind): builds and usage take the CLI's alone, the account itself any.
+const CLI_ONLY = Object.freeze(['cli']);
+const EVERY_KIND = Object.freeze(['cli', 'app']);
 
 const now = (deps) => (deps.now ?? Date.now)();
 const noContent = () => new Response(null, { status: 204, headers: SECURITY_HEADERS });
+// 2026-12-01 as "1 December 2026".
+const dayWords = (day) => new Date(`${day}T00:00:00Z`).toLocaleDateString('en-GB', {
+    day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
+});
 
 function githubUnreachable(error) {
     log({ event: 'github-unreachable', message: error.message });
@@ -65,7 +72,13 @@ async function tokenRoute({ request, env, deps }) {
         const [status, message] = failures(env)[outcome.failure];
         return jsonResponse(status, { error: message });
     }
-    const user = await deps.accounts.signIn(outcome.account);
+    // An identity crossbind does not know makes its account at once here: this flow has no page to ask on.
+    const { user, freeFrom } = await deps.accounts.signIn(outcome.identity);
+    if (freeFrom) {
+        return jsonResponse(403, {
+            error: `This GitHub account was unlinked from a crossbind account this month: it signs in again from ${dayWords(freeFrom)}, and can be linked back to that account now.`,
+        });
+    }
     if (user.blocked) {
         log({ event: 'blocked-sign-in', who: userKey(user.id) });
         return jsonResponse(403, { error: ACCOUNT_BLOCKED });
@@ -86,11 +99,13 @@ async function usageRoute({ deps, settings }, user) {
     });
 }
 
-// The account a request's token belongs to, or the answer to give instead; the runners use it too.
-export async function authenticate(request, accounts, { allowBlocked = false } = {}) {
+// The account a request's token belongs to, or the answer to give instead; the runners use it too. A route takes the
+// CLI's tokens alone unless it names the kinds it takes.
+export async function authenticate(request, accounts, { allowBlocked = false, kinds = CLI_ONLY } = {}) {
     const token = bearerToken(request);
     const user = await accounts.userOfToken(token);
     if (!user) return { answer: jsonResponse(401, { error: 'Sign in with crossbind login.' }, { 'www-authenticate': 'Bearer' }) };
+    if (!kinds.includes(user.kind)) return { answer: jsonResponse(403, { error: 'This token cannot be used here.' }) };
     if (user.blocked && !allowBlocked) return { answer: jsonResponse(403, { error: ACCOUNT_BLOCKED }) };
     return { user, token };
 }
@@ -104,22 +119,23 @@ const ROUTES = Object.freeze({
     'POST /v1/login/device': deviceRoute,
     'POST /v1/login/token': tokenRoute,
     'GET /v1/usage': authenticated(usageRoute),
+    'GET /v1/account': authenticated((context, user) => jsonResponse(200, { id: user.id, name: user.login }), { kinds: EVERY_KIND }),
     'DELETE /v1/token': authenticated(async ({ deps }, user, token) => {
         await deps.accounts.revokeToken(token);
         log({ event: 'token-revoked', who: userKey(user.id), all: false });
         return noContent();
-    }),
+    }, { kinds: EVERY_KIND }),
     'DELETE /v1/tokens': authenticated(async ({ deps }, user) => {
         await deps.accounts.revokeTokens(user.id);
         log({ event: 'token-revoked', who: userKey(user.id), all: true });
         return noContent();
-    }),
+    }, { kinds: EVERY_KIND }),
     // A blocked account may delete itself too; what stays of it keeps the block (worker/accounts.js).
     'DELETE /v1/account': authenticated(async ({ deps }, user) => {
         await deps.accounts.deleteAccount(user.id);
         log({ event: 'account-deleted', who: userKey(user.id) });
         return noContent();
-    }, { allowBlocked: true }),
+    }, { allowBlocked: true, kinds: EVERY_KIND }),
 });
 
 // context: the request, env, deps, settings and caller's network of worker/api.js.
