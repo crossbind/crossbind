@@ -5,9 +5,7 @@ import { buildsOpenOn, userKey } from './accounts.js';
 import {
     BodyTooLarge, SECURITY_HEADERS, jsonResponse, log, networkOf, readLimited,
 } from './http.js';
-import {
-    finishLogin, minAccountDays, signInProviders, startLogin,
-} from './oauth.js';
+import { finishLogin, minAccountDays, signInProviders } from './oauth.js';
 import { handleRunnerRequest } from './runner-api.js';
 import { readSignedIn, clearCookie, SESSION_COOKIE } from './session.js';
 import { settingsOf } from './settings.js';
@@ -196,19 +194,6 @@ function logoutRoute({ corsOrigin, respond }) {
     return signedOut(corsOrigin);
 }
 
-// The same account `crossbind account delete` deletes: the CLI's tokens go with it. Kept until no page of the site
-// calls it: the playground's Delete account now leads to the account's page.
-async function deleteAccountRoute({
-    request, env, deps, corsOrigin, respond,
-}) {
-    if (!corsOrigin) return respond(403, { error: 'Delete your account from the playground page.' });
-    const { user } = await readSignedIn(request, env.SESSION_SECRET, deps.accounts, (deps.now ?? Date.now)());
-    if (!user) return respond(401, { error: 'Sign in to delete your account.' });
-    await deps.accounts.deleteAccount(user.id);
-    log({ event: 'account-deleted', who: userKey(user.id) });
-    return signedOut(corsOrigin);
-}
-
 // A provider sends the browser back here, to the callback it lists for this origin.
 const callback = (provider) => ({ request, env, deps }) => finishLogin(request, env, {
     provider, fetcher: deps.fetcher, accounts: deps.accounts, now: (deps.now ?? Date.now)(),
@@ -222,12 +207,12 @@ function preflight({ corsOrigin }) {
     }), corsOrigin);
 }
 
+// An account signs in and changes on the cloud's own pages (worker/account-page.js), and the providers send a sign-in
+// back to the callbacks here, which they list.
 const PLAYGROUND_ROUTES = Object.freeze({
     'GET /session': sessionRoute,
     'POST /compile': compileRoute,
     'POST /logout': logoutRoute,
-    'POST /delete-account': deleteAccountRoute,
-    'GET /login/github': ({ request, env }) => startLogin(request, env),
     'GET /callback/github': callback('github'),
     'GET /callback/apple': callback('apple'),
 });

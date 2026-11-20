@@ -315,21 +315,18 @@ test('signs a cookie in only while its account is there, not blocked, and not si
     for (const [name, standing] of Object.entries(rows)) {
         const { deps, calls } = setup({ standing });
         deps.now = () => madeAt + 60_000;
-        const deleted = [];
-        deps.accounts.deleteAccount = async (id) => { deleted.push(id); };
         const session = await (await handleRequest(new Request(`${API}/session`, { headers: { origin: PAGE, cookie } }), env, deps)).json();
         const compile = await handleRequest(compileRequest({ cookie, body: { files } }), env, deps);
-        const remove = await handleRequest(new Request(`${API}/delete-account`, { method: 'POST', headers: { origin: PAGE, cookie } }), env, deps);
         answers[name] = {
-            user: session.user?.name ?? null, compile: compile.status, error: (await compile.json()).error ?? null, compiled: calls.compile.length, remove: remove.status, deleted,
+            user: session.user?.name ?? null, compile: compile.status, error: (await compile.json()).error ?? null, compiled: calls.compile.length,
         };
     }
 
     const refused = (compile, error) => ({
-        user: null, compile, error, compiled: 0, remove: 401, deleted: [],
+        user: null, compile, error, compiled: 0,
     });
     const taken = {
-        user: 'octocat', compile: 200, error: null, compiled: 1, remove: 204, deleted: ['583231'],
+        user: 'octocat', compile: 200, error: null, compiled: 1,
     };
     assert.deepEqual(answers, {
         live: taken,
@@ -341,23 +338,18 @@ test('signs a cookie in only while its account is there, not blocked, and not si
     });
 });
 
-test('deletes the signed-in account from the playground page only, and signs it out', async () => {
+test('deletes no account and starts no sign-in on the routes the site of before called, which the account\'s pages replace', async () => {
     const deleted = [];
     const { deps } = setup();
     deps.accounts.deleteAccount = async (id) => { deleted.push(id); };
-    const session = await signSession({ id: '583231', name: 'octocat' }, env.SESSION_SECRET);
-    const remove = (origin, cookie) => handleRequest(new Request(`${API}/delete-account`, {
-        method: 'POST', headers: { origin, ...(cookie ? { cookie: `${SESSION_COOKIE}=${cookie}` } : {}) },
-    }), env, deps);
+    const cookie = `${SESSION_COOKIE}=${await signSession({ id: '583231', name: 'octocat' }, env.SESSION_SECRET)}`;
 
-    const foreign = await remove('https://evil.example', session);
-    const anonymous = await remove(PAGE);
-    const response = await remove(PAGE, session);
+    const remove = await handleRequest(new Request(`${API}/delete-account`, { method: 'POST', headers: { origin: PAGE, cookie } }), env, deps);
+    const start = await handleRequest(new Request(`${API}/login/github`), env, deps);
 
-    assert.deepEqual([foreign.status, anonymous.status, response.status], [403, 401, 204]);
-    assert.deepEqual(deleted, ['583231']);
-    assert.match(response.headers.get('set-cookie'), new RegExp(`^${SESSION_COOKIE}=; Max-Age=0`));
-    assert.equal(response.headers.get('access-control-allow-origin'), PAGE);
+    assert.deepEqual([remove.status, start.status], [404, 404]);
+    assert.deepEqual([remove.headers.get('set-cookie'), start.headers.get('location'), start.headers.get('set-cookie')], [null, null, null]);
+    assert.deepEqual(deleted, []);
 });
 
 test('signs out by clearing the session cookie, from the playground page only', async () => {
