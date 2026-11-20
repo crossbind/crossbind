@@ -121,10 +121,11 @@ test('/login and /login/ lead to the account\'s page on crossbind cloud', () => 
     ]);
 });
 
-test('the playground signs in through crossbind cloud\'s start, which comes back to it, and deletes the account on the cloud\'s page', () => {
+test('the playground signs in on crossbind cloud\'s account page, which offers each way in and comes back to it, and deletes the account there', () => {
     const client = source('../src/playground/client.js');
 
-    assert.ok(client.includes('export const LOGIN_URL = `${CLOUD_URL}/account/login/github?next=playground`;'));
+    assert.ok(client.includes('export const LOGIN_URL = `${CLOUD_URL}/login?next=playground`;'));
+    assert.ok(source('../src/playground/parts.jsx').includes("{away ? 'Sign in on the playground' : 'Sign in'}"));
     assert.ok(client.includes('export const ACCOUNT_URL = `${CLOUD_URL}/login`;'));
     assert.ok(!client.includes('delete-account'));
     assert.match(source('../src/playground/parts.jsx'), /<a href=\{ACCOUNT_URL\}[^>]*>Delete account<\/a>/);

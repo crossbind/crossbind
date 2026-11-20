@@ -20,10 +20,10 @@ export const requestCompile = ({ files, packages }, turnstile) => call('/compile
 
 export const signOut = () => fetch(`${API_URL}/logout`, { method: 'POST', credentials: 'include' });
 
-// Signing in starts on crossbind cloud's own origin and comes back here; the account's page, where it is deleted, is
-// the cloud's own too.
+// Signing in starts on crossbind cloud's own account page, which offers GitHub and Apple and comes back here signed in;
+// the account is deleted on that page too.
 const CLOUD_URL = new URL(API_URL).origin;
-export const LOGIN_URL = `${CLOUD_URL}/account/login/github?next=playground`;
+export const LOGIN_URL = `${CLOUD_URL}/login?next=playground`;
 export const ACCOUNT_URL = `${CLOUD_URL}/login`;
 
 let turnstileScript = null;

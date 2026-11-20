@@ -31,12 +31,12 @@ export function statusText(phase, session, prebuilt) {
 // `lead` is left out where the text sits on a narrow window's frame, beside its title.
 export const runInfo = (lastRun, lead = 'Ran in ') => (lastRun ? `${lead}${lastRun.seconds.toFixed(1)} s · ${lastRun.prebuilt ? 'prebuilt' : 'compiled'}` : '');
 
-// Signing in always returns to the playground page (tooling/cloud/worker/oauth.js), so a page elsewhere (`away`)
-// sends the visitor there to do it.
+// Signing in from the playground returns to the playground page (tooling/cloud/worker/oauth.js), so a page elsewhere
+// (`away`) sends the visitor there to do it. The account's page offers each way in.
 function SignInLink({ tokens, away }) {
     return (
         <a href={away ? PLAYGROUND_URL : LOGIN_URL} className="tap-target" style={{ color: tokens.accentText, fontWeight: 500, textDecoration: 'none' }}>
-            {away ? 'Sign in on the playground' : 'Sign in with GitHub'}
+            {away ? 'Sign in on the playground' : 'Sign in'}
         </a>
     );
 }

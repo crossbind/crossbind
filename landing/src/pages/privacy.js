@@ -10,7 +10,7 @@ export default {
     slug: 'privacy',
     title: 'Privacy',
     description: 'What crossbind.dev, the playground and crossbind cloud keep about you, for how long, how to delete it, and where a Google sign-in for publishing stays.',
-    lede: 'crossbind.dev has no analytics and sets no tracking cookies. The playground and crossbind cloud keep what they need to run and to stop abuse: your GitHub id and name once you sign in, and how much you used. No email, no GitHub token, nothing to pay with. A Google sign-in for publishing to Google Play stays on your machine. Last changed 29 October 2026.',
+    lede: 'crossbind.dev has no analytics and sets no tracking cookies. The playground and crossbind cloud keep what they need to run and to stop abuse: your GitHub id and name, or Apple\'s id for you, once you sign in, and how much you used. No email, no GitHub or Apple token, nothing to pay with. A Google sign-in for publishing to Google Play stays on your machine. Last changed 20 November 2026.',
     section: 'Privacy',
     path: '/privacy',
     href: '/privacy/',
@@ -27,7 +27,8 @@ export default {
             items: [
                 'An unedited sample runs a module built along with this site and sends nothing. Once its native files, packages or imports change, Run sends the project to the playground compiler: `main.js`, the files under `native/` and the names of its packages. It builds them in a sandbox without network access, reads `main.js` only for its imports, and deletes them afterwards. The result, the module with its build log, is cached under a hash of the project for up to a week, or ten minutes when the build failed, so the same code compiles once.',
                 'Compiles count per network (your IP address, or the /64 an IPv6 address belongs to) or per account, for the day. Without an account, Cloudflare Turnstile checks your browser before a compile.',
-                'Signing in with GitHub asks for no permission. It records your GitHub id and name, and sets a cookie that keeps you signed in for 30 days or until you sign out.',
+                'Signing in, with GitHub or with Apple, asks for no permission, no name and no email. It records your GitHub id and name, or Apple\'s id for you, and sets a cookie that keeps you signed in for 30 days or until you sign out.',
+                'An account with no GitHub account linked, one made by signing in with Apple, compiles 20 a day of its own, with no browser check, and has no cloud build minutes for its first 30 days, or until it links a GitHub account.',
                 '`main.js` runs only in your browser, in a sandboxed frame.',
             ],
         },
@@ -39,6 +40,17 @@ export default {
                 '`crossbind login` signs in with GitHub, asking for no permission. crossbind cloud keeps your GitHub id and name and when you signed in, and gives your machine a token of its own, which it keeps only as a hash and your machine keeps in `~/.crossbind/credentials.json`.',
                 'A cloud build sends your native sources and build files to a runner of your own, a virtual machine that only your builds use. It reaches crates.io, ConanCenter and GitHub, and only to download. It is stopped and wiped a minute after your last step; the files a step produces come back to your machine.',
                 'crossbind cloud records how long your runners were up, per month and toolchain image, against your monthly minutes; `crossbind usage` shows it.',
+            ],
+        },
+
+        { type: 'h2', id: 'sign-ins', text: 'Your account\'s sign-ins' },
+        {
+            type: 'ul',
+            items: [
+                'Your account is crossbind\'s own. You sign in to it, on its page at [api.crossbind.dev/login](https://api.crossbind.dev/login), with a GitHub account, an Apple ID or both: one of each can be linked to it, and one unlinked as long as another is left.',
+                'A first sign-in with a GitHub account or an Apple ID that crossbind does not know makes no account until you say so on that page. What the sign-in confirmed waits in your browser alone, for ten minutes.',
+                'Sign in with Apple asks Apple for no name and no email. crossbind keeps Apple\'s id for you, which Apple makes for crossbind alone, and no Apple token: the one a sign-in gives is revoked at once. To end it, unlink the Apple ID on your account\'s page or delete the account.',
+                'A sign-in unlinked from an account that has used cloud build minutes this month stays with that account until the month ends, so that it cannot start a fresh month of minutes elsewhere: until then it signs in to nothing, and can be linked back. Unlinked from an account without them, it is deleted at once.',
             ],
         },
 
@@ -65,6 +77,10 @@ export default {
                 ['Compile results and build logs', 'Up to a week, under a hash of the sources'],
                 ['Compile counts per network and per account', 'A day or two'],
                 ['Your GitHub id, name and sign-in times', 'Until you delete your account'],
+                ["Apple's id for you", 'Until you unlink it or delete your account'],
+                ['A sign-in unlinked from an account with build minutes this month', 'Until the month ends'],
+                ['A first sign-in waiting for your answer', 'Ten minutes, in your browser alone'],
+                ["Apple's tokens", 'None: each is revoked at once'],
                 ['CLI tokens, as hashes', 'Until you sign out, or 90 days unused'],
                 ['Your Google sign-in for Google Play', "In your machine's keychain alone, until you end it"],
                 ['Cloud build minutes per month and image', 'The current month and the three before it'],
@@ -82,13 +98,13 @@ export default {
         { type: 'code', file: 'shell', code: 'crossbind account delete --yes' },
         {
             type: 'p',
-            text: 'Or sign in on the [playground](/playground/) and press Delete account. Either deletes your account and signs out every machine at once. Two things stay after it, under your GitHub id alone: this month\'s build minutes, until the month ends, so that signing in again does not bring a fresh month; and, for an account blocked for abuse, the block. To also remove crossbind from your GitHub account, revoke it under Settings, Applications, Authorized OAuth Apps.',
+            text: 'Or sign in on [your account\'s page](https://api.crossbind.dev/login) and press Delete account. Either deletes your account and signs out every machine at once. Two things stay after it, under your account\'s id with the GitHub account or Apple ID it signed in with: this month\'s build minutes, until the month ends, so that signing in again does not bring a fresh month; and, for an account blocked for abuse, the block. To also remove crossbind from your GitHub account, revoke it under Settings, Applications, Authorized OAuth Apps.',
         },
 
         { type: 'h2', id: 'who', text: 'Who runs it' },
         {
             type: 'p',
-            text: `crossbind and crossbind cloud are run by the crossbind open-source project, on Cloudflare (hosting, the compiler and the runners, Turnstile, logs) with GitHub for signing in; each handles what passes through it under its own privacy policy. For anything about your data, write to [${PRIVACY_EMAIL}](mailto:${PRIVACY_EMAIL}). General questions go to [GitHub Discussions](${DISCUSSIONS_URL}), without personal details there.`,
+            text: `crossbind and crossbind cloud are run by the crossbind open-source project, on Cloudflare (hosting, the compiler and the runners, Turnstile, logs) with GitHub and Apple for signing in; each handles what passes through it under its own privacy policy. For anything about your data, write to [${PRIVACY_EMAIL}](mailto:${PRIVACY_EMAIL}). General questions go to [GitHub Discussions](${DISCUSSIONS_URL}), without personal details there.`,
         },
     ],
 };

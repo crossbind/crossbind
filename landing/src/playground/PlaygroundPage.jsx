@@ -26,12 +26,9 @@ import { shortName } from './workspace.jsx';
 const SKIN = 'turbo';
 const SAMPLE_PARAM = 'sample';
 const RESET_QUESTION = 'Discard your changes to this sample?';
+// A sign-in started here comes back signed in; any other outcome stays on crossbind cloud's account page, which says it.
 const LOGIN_NOTICES = Object.freeze({
     ok: 'Signed in.',
-    'too-new': 'This GitHub account is too new to sign in here yet.',
-    blocked: 'This GitHub account may not use the playground.',
-    failed: 'Signing in did not work; try again.',
-    cancelled: 'Signing in was cancelled.',
 });
 
 // ?sample=<id> opens that sample, and the address follows the picker, so every sample can be linked to.
