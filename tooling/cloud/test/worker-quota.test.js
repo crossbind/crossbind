@@ -46,6 +46,26 @@ test('gives back a compile the compiler turned away, and tells what is left with
     assert.equal(await quota.remaining(anonymous), 2);
 });
 
+test('counts the sign-ins everyone starts in a minute exactly, starts over each minute, and keeps the count through the daily prune', async () => {
+    const storage = memoryStorage();
+    const quota = createQuota(storage, now);
+    const minuteStart = clock;
+
+    const counted = [];
+    for (let count = 0; count < 4; count += 1) counted.push(await quota.startSignIn({ limit: 3 }));
+    clock += 59 * 1000;
+    const sameMinute = await quota.startSignIn({ limit: 3 });
+    clock += 1000;
+    const nextMinute = await quota.startSignIn({ limit: 3 });
+    await quota.prune();
+
+    assert.deepEqual(counted, [true, true, true, false]);
+    assert.equal(sameMinute, false);
+    assert.equal(nextMinute, true);
+    assert.deepEqual(storage.data.get('starts'), { minute: '2026-10-07T10:01', count: 1 });
+    clock = minuteStart;
+});
+
 test('removes the counts of earlier days only', async () => {
     const storage = memoryStorage();
     const quota = createQuota(storage, now);

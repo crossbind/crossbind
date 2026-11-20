@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { createAccounts } from './accounts.js';
 import { handleRequest } from './api.js';
+import { createDeviceCodes } from './devices.js';
 import { createQuota } from './quota.js';
 
 // The runners' outbound traffic goes through ContainerProxy, which holds it to their allowed hosts.
@@ -99,6 +100,10 @@ export class PlaygroundQuota extends DurableObject {
         return this.quota.remaining(args);
     }
 
+    startSignIn(args) {
+        return this.quota.startSignIn(args);
+    }
+
     async alarm() {
         await this.quota.prune();
     }
@@ -107,8 +112,11 @@ export class PlaygroundQuota extends DurableObject {
 export default {
     fetch(request, env, ctx) {
         return handleRequest(request, env, {
-            limits: { api: env.API_LIMITER, login: env.LOGIN_LIMITER, runner: env.RUNNER_LIMITER },
+            limits: {
+                api: env.API_LIMITER, login: env.LOGIN_LIMITER, runner: env.RUNNER_LIMITER, starts: env.STARTS_LIMITER, poll: env.POLL_LIMITER, code: env.CODE_LIMITER,
+            },
             accounts: createAccounts(env.DB),
+            devices: createDeviceCodes(env.DB),
             runner: (image, userId) => env[`RUNNER_${image.toUpperCase()}`].getByName(userId),
             recentTokens,
             quota: env.QUOTA.getByName('quota'),
@@ -119,8 +127,9 @@ export default {
         });
     },
 
-    // Daily (`triggers` in wrangler.jsonc): what accounts keep only for a while goes (worker/accounts.js).
+    // Daily (`triggers` in wrangler.jsonc): what accounts keep only for a while goes (worker/accounts.js), and the devices'
+    // sign-in codes past their ten minutes (worker/devices.js).
     scheduled(controller, env, ctx) {
-        ctx.waitUntil(createAccounts(env.DB).prune());
+        ctx.waitUntil(Promise.all([createAccounts(env.DB).prune(), createDeviceCodes(env.DB).prune()]));
     },
 };

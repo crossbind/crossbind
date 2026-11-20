@@ -1,18 +1,25 @@
 import {
     ACCOUNT_BLOCKED, DEVICE_REF_LENGTH, dayWords, nameOf, userKey,
 } from './accounts.js';
+import { typedCode } from './devices.js';
 import {
     BodyTooLarge, SECURITY_HEADERS, jsonResponse, log, readLimited,
 } from './http.js';
-import { minAccountDays, signInProviders, startLogin } from './oauth.js';
+import {
+    minAccountDays, returnPage, signedInPage, signInProviders, startLogin,
+} from './oauth.js';
 import {
     clearCookie, noticeCookie, readNotice, readPending, readSignedIn, sessionCookie, signSession, NOTICE_COOKIE, PENDING_COOKIE, SESSION_COOKIE, SESSION_TTL_MS,
 } from './session.js';
 
-// The account's own page, /login on this API's origin, and the routes under /account/ that its forms post to. Those
-// take a request from this origin alone, so no other site, crossbind.dev included, can change an account through them.
+// The account's own pages on this API's origin, /login and the device page /device, and the routes under /account/ that
+// their forms and script post to. Those take a request from this origin alone, so no other site, crossbind.dev
+// included, can change an account or approve a device through them.
 
 const MAX_FORM_BYTES = 1024;
+const MAX_ENTRY_BYTES = 256;
+const NO_DEVICE = 'No device is waiting for this code: check it, or start again on the device.';
+const ENTER_CODE = 'Enter the eight letters your device shows.';
 const DEVICE_REF = new RegExp(`^[0-9a-f]{${DEVICE_REF_LENGTH}}$`);
 // same-origin and not no-referrer: a form's POST from a no-referrer page carries `Origin: null`, which the origin rule
 // refuses. Chromium holds a form's POST whose redirect leaves `form-action`: linking goes on to the providers, and
@@ -73,10 +80,67 @@ function wordsOf(notice, env) {
     return word(notice, env);
 }
 
+// The pages' one script: the notice the address names, and the device page's steps, whose words it writes as text.
 const SCRIPT = `const shown = [...document.querySelectorAll('[data-notice]')].find((notice) => '#' + notice.dataset.notice === location.hash);
 if (shown) {
     shown.hidden = false;
     history.replaceState(null, '', location.pathname + location.search);
+}
+
+const entry = document.getElementById('device-code');
+if (entry) {
+    const asked = document.getElementById('device-asked');
+    const said = document.getElementById('device-said');
+    const decisions = [...asked.querySelectorAll('button')];
+    let code = '';
+    const say = (words) => {
+        said.textContent = words;
+        said.hidden = false;
+    };
+    const ago = (time) => {
+        const minutes = Math.max(0, Math.round((Date.now() - Date.parse(time)) / 60000));
+        return minutes === 0 ? 'just now' : minutes === 1 ? 'a minute ago' : minutes + ' minutes ago';
+    };
+    const countryName = (region) => {
+        try {
+            return new Intl.DisplayNames(['en'], { type: 'region' }).of(region);
+        } catch {
+            return region;
+        }
+    };
+    // A request whose cookie no longer counts reloads the page, which then offers to sign in.
+    const send = async (path, body) => {
+        const answer = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+        if (answer.status === 401) {
+            location.reload();
+            return null;
+        }
+        const read = await answer.json().catch(() => ({}));
+        if (!answer.ok) say(read.error || 'That did not work; try again.');
+        return answer.ok ? read : null;
+    };
+    entry.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        said.hidden = true;
+        asked.hidden = true;
+        code = entry.elements.user_code.value;
+        const found = await send('/account/device/lookup', { user_code: code });
+        if (!found) return;
+        document.getElementById('device-words').textContent = 'The ' + found.label + ' asked ' + ago(found.asked)
+            + (found.country ? ', from ' + countryName(found.country) : '') + ', to sign in as ' + found.account + '.';
+        decisions.forEach((button) => { button.disabled = false; });
+        asked.hidden = false;
+    });
+    // The code approved or denied is the one looked up, whatever the field holds since.
+    decisions.forEach((button) => button.addEventListener('click', async () => {
+        decisions.forEach((each) => { each.disabled = true; });
+        const approve = button.value === 'approve';
+        const done = await send('/account/device/approve', { user_code: code, approve });
+        if (!done) return;
+        asked.hidden = true;
+        entry.hidden = true;
+        say(approve ? 'Type ' + done.match + ' on your device. It gets one try.' : 'Denied. That code no longer works.');
+    }));
 }
 `;
 
@@ -93,6 +157,9 @@ h2 { font-size: 1.15rem; margin-top: 2rem; }
 form { margin: 0.5rem 0; }
 .devices form, .sign-ins form { margin: 0; }
 button, .button { font: inherit; padding: 0.3rem 0.8rem; color: inherit; background: none; border: 1px solid; border-radius: 6px; cursor: pointer; text-decoration: none; }
+.device-code { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.device-code label { flex-basis: 100%; }
+.device-code input { font: inherit; padding: 0.3rem 0.5rem; width: 10rem; color: inherit; background: none; border: 1px solid; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.1em; }
 `;
 
 const escape = (text) => String(text).replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
@@ -130,7 +197,7 @@ function signedInPart(env, {
 <form method="post" action="/account/logout"><button type="submit">Sign out</button></form>
 ${signInsPart(env, providers, login)}
 <h2>Devices</h2>
-<p>The machines signed in with crossbind login.</p>
+<p>The machines signed in with crossbind login, and the crossbind app on each device.</p>
 ${list}
 <h2>Sign out everywhere</h2>
 <p>Signs out every device and every browser, this one included.</p>
@@ -159,19 +226,36 @@ ${answers.join('\n')}
 </section>`;
 }
 
-// `next`: where a sign-in started here returns, the playground when this page was opened from it.
-function signedOutPart(env, next) {
-    const query = next === 'playground' ? '?next=playground' : '';
+// `next`: where a sign-in started here returns, the account's page, the device page or the playground.
+function signInLinks(env, next) {
+    const query = next === 'account' ? '' : `?next=${next}`;
     const providers = signInProviders(env);
-    const signIn = providers.length === 0
+    return providers.length === 0
         ? '<p>Signing in is not set up.</p>'
         : `<p class="sign-in">${providers.map((provider) => `<a class="button" href="/account/login/${provider}${query}">Sign in with ${PROVIDER_NAMES[provider]}</a>`).join(' ')}</p>`;
-    return `<p>Sign in to see the devices signed in to your crossbind account, sign them out, or delete the account.</p>\n${signIn}`;
 }
 
-function page(env, {
-    user, devices, providers, login, said, next, pending,
-}) {
+const signedOutPart = (env, next) => `<p>Sign in to see the devices signed in to your crossbind account, sign them out, or delete the account.</p>\n${signInLinks(env, next)}`;
+
+// The device page's part while signed in: the code typed, then what asked with Approve and Deny, then the number or the
+// denial, which the script shows. A form posted, never a link, so that no code reaches an address.
+function deviceSignedInPart(user) {
+    return `<p>Signed in as <strong>${escape(user.name)}</strong>.</p>
+<form method="post" action="/account/logout"><input type="hidden" name="next" value="device"><button type="submit">Sign out</button></form>
+<form method="post" id="device-code" class="device-code">
+<label for="user-code">Enter the code your device shows</label>
+<input id="user-code" name="user_code" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="32" required>
+<button type="submit">Continue</button>
+</form>
+<section id="device-asked" class="question" hidden>
+<p id="device-words"></p>
+<p>Approve only a code you started yourself, on a device in front of you.</p>
+<button type="button" value="approve">Approve</button> <button type="button" value="deny">Deny</button>
+</section>
+<p id="device-said" class="notice" role="status" hidden></p>`;
+}
+
+function frame(env, { title, main, said }) {
     const shown = Object.entries(notices(env)).map(([key, words]) => `<p class="notice" data-notice="${key}" hidden>${escape(words)}</p>`);
     if (said) shown.unshift(`<p class="notice" role="status">${escape(said)}</p>`);
     return `<!doctype html>
@@ -179,22 +263,32 @@ function page(env, {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>crossbind account</title>
+<title>${title}</title>
 <link rel="stylesheet" href="/account.css">
 <script src="/account.js" defer></script>
 </head>
 <body>
 <main>
-<h1>crossbind account</h1>
+<h1>${title}</h1>
 ${shown.join('\n')}
-${pending && Object.hasOwn(IDENTITY_WORDS, pending.provider) ? questionPart(env, pending, Boolean(user)) : ''}
-${user ? signedInPart(env, {
-        user, devices, providers, login,
-    }) : signedOutPart(env, next)}
+${main}
 </main>
 </body>
 </html>
 `;
+}
+
+function page(env, {
+    user, devices, providers, login, said, next, pending,
+}) {
+    return frame(env, {
+        title: 'crossbind account',
+        said,
+        main: `${pending && Object.hasOwn(IDENTITY_WORDS, pending.provider) ? questionPart(env, pending, Boolean(user)) : ''}
+${user ? signedInPart(env, {
+        user, devices, providers, login,
+    }) : signedOutPart(env, next)}`,
+    });
 }
 
 const asset = (body, type) => new Response(body, { headers: { ...SECURITY_HEADERS, 'content-type': type } });
@@ -218,7 +312,11 @@ async function readForm(request) {
 
 const signedInUser = async ({ request, env, deps }) => (await readSignedIn(request, env.SESSION_SECRET, deps.accounts, (deps.now ?? Date.now)())).user;
 
-const nextOf = (request) => (new URL(request.url).searchParams.get('next') === 'playground' ? 'playground' : 'account');
+// Where a sign-in started on the page returns: a name of the three, never an address the request gives.
+const nextOf = (request) => {
+    const next = new URL(request.url).searchParams.get('next');
+    return next === 'playground' || next === 'device' ? next : 'account';
+};
 
 // A notice that came in its cookie is shown once: the page that shows it clears it.
 async function loginPage({ request, env, deps }) {
@@ -251,6 +349,70 @@ const signedIn = (route) => async (context) => {
     return user ? route(context, user) : seeOther(context.request, '/login');
 };
 
+// A request of the device page's script whose cookie no longer counts: the script then reloads the page, which offers
+// to sign in.
+const signedInScript = (route) => async (context) => {
+    const user = await signedInUser(context);
+    return user ? route(context, user) : jsonResponse(401, { error: 'Sign in to approve a device.' });
+};
+
+// Signs this browser out, and from the device page comes back to it: a name of the two, never an address.
+async function logoutRoute({ request }) {
+    const { form, error } = await readForm(request);
+    if (error) return error;
+    return seeOther(request, form.get('next') === 'device' ? '/device' : '/login', [clearCookie(SESSION_COOKIE)]);
+}
+
+// The device page (worker/devices.js): signed out, a sign-in of each provider that comes back to it; signed in, the code
+// to enter. It takes no code from its address, and the sign-in it offers is a device's own (RFC 8628 5.4).
+async function devicePage({ request, env, deps }) {
+    const { user } = await readSignedIn(request, env.SESSION_SECRET, deps.accounts, (deps.now ?? Date.now)());
+    const main = user ? deviceSignedInPart(user) : `<p>Sign in to approve a device.</p>\n${signInLinks(env, 'device')}`;
+    return new Response(frame(env, { title: 'Approve a device', main }), { headers: pageHeaders(env) });
+}
+
+// A code entered on the device page, to look up or to approve: ten a minute for an account and for a network, which
+// bounds guessing at codes (RFC 8628 5.1), then a body of its code in any case, dashes and spaces aside.
+async function readEntry({ request, deps, network }, user) {
+    const counted = await Promise.all([userKey(user.id), network].map((key) => deps.limits.code.limit({ key })));
+    if (counted.some((each) => !each.success)) return { error: jsonResponse(429, { error: 'Too many codes entered; try again in a minute.' }) };
+    let entry;
+    try {
+        entry = JSON.parse(await readLimited(request, MAX_ENTRY_BYTES));
+    } catch (error) {
+        if (!(error instanceof BodyTooLarge || error instanceof SyntaxError)) throw error;
+    }
+    const code = typedCode(entry?.user_code);
+    return code ? { entry, code } : { error: jsonResponse(400, { error: ENTER_CODE }) };
+}
+
+async function lookupRoute(context, user) {
+    const { code, error } = await readEntry(context, user);
+    if (error) return error;
+    const waiting = await context.deps.devices.waiting(code);
+    if (!waiting) return jsonResponse(404, { error: NO_DEVICE });
+    return jsonResponse(200, {
+        client: waiting.client, label: waiting.label, country: waiting.country, asked: waiting.createdAt, account: user.name,
+    });
+}
+
+// Approved, the code waits for the device to give the number, which this answer alone carries; denied, it ends.
+async function approveRoute(context, user) {
+    const { entry, code, error } = await readEntry(context, user);
+    if (error) return error;
+    if (typeof entry.approve !== 'boolean') return jsonResponse(400, { error: 'Approve or deny the code on the device page.' });
+    const { devices } = context.deps;
+    if (!entry.approve) {
+        if (!(await devices.deny(code))) return jsonResponse(404, { error: NO_DEVICE });
+        log({ event: 'device-denied', who: userKey(user.id) });
+        return jsonResponse(200, { denied: true });
+    }
+    const approved = await devices.approve(code, user.id);
+    if (!approved) return jsonResponse(404, { error: NO_DEVICE });
+    log({ event: 'device-approved', who: userKey(user.id) });
+    return jsonResponse(200, { match: approved.match, label: approved.label });
+}
+
 async function revokeRoute({ request, deps }, user) {
     const { form, error } = await readForm(request);
     if (error) return error;
@@ -281,17 +443,17 @@ async function newAccountRoute({ request, env, deps }) {
     const now = (deps.now ?? Date.now)();
     const pending = await readPending(request, env.SESSION_SECRET, now);
     if (!pending) return seeOther(request, '/login#waited');
-    const page = pending.next === 'playground' ? '/login?next=playground' : '/login';
+    const { origin } = new URL(request.url);
+    const page = returnPage(origin, pending.next);
     const cleared = clearCookie(PENDING_COOKIE);
     const { user, freeFrom } = await deps.accounts.signIn(pending);
-    if (freeFrom) return seeOther(request, page, [cleared, noticeCookie({ said: 'held', provider: pending.provider, day: freeFrom })]);
+    if (freeFrom) return redirectAfterPost(page, [cleared, noticeCookie({ said: 'held', provider: pending.provider, day: freeFrom })]);
     if (user.blocked) {
         log({ event: 'blocked-sign-in', who: userKey(user.id) });
-        return seeOther(request, `${page}#login=blocked`, [cleared]);
+        return redirectAfterPost(`${page}#login=blocked`, [cleared]);
     }
     const session = await signSession({ id: user.id, name: nameOf(user) }, env.SESSION_SECRET, now);
-    const target = pending.next === 'playground' ? env.PLAYGROUND_URL : `${new URL(request.url).origin}/login`;
-    return redirectAfterPost(`${target}#login=ok`, [cleared, sessionCookie(SESSION_COOKIE, session, SESSION_TTL_MS / 1000)]);
+    return redirectAfterPost(`${signedInPage(origin, pending.next, env)}#login=ok`, [cleared, sessionCookie(SESSION_COOKIE, session, SESSION_TTL_MS / 1000)]);
 }
 
 // Linking starts as a sign-in does, with a navigation the Worker sends to the provider, from the page's form: the state,
@@ -327,11 +489,14 @@ async function linkPendingRoute({ request, env, deps }, user) {
 
 const ROUTES = Object.freeze({
     'GET /login': loginPage,
+    'GET /device': devicePage,
     'GET /account.css': () => asset(STYLE, 'text/css; charset=utf-8'),
     'GET /account.js': () => asset(SCRIPT, 'text/javascript; charset=utf-8'),
     'GET /account/login/github': signInRoute('github'),
     'GET /account/login/apple': signInRoute('apple'),
-    'POST /account/logout': fromThePage(({ request }) => seeOther(request, '/login', [clearCookie(SESSION_COOKIE)])),
+    'POST /account/logout': fromThePage(logoutRoute),
+    'POST /account/device/lookup': fromThePage(signedInScript(lookupRoute)),
+    'POST /account/device/approve': fromThePage(signedInScript(approveRoute)),
     'POST /account/tokens/revoke': fromThePage(signedIn(revokeRoute)),
     'POST /account/logout-everywhere': fromThePage(signedIn(everywhereRoute)),
     'POST /account/delete': fromThePage(signedIn(deleteRoute)),
@@ -342,7 +507,7 @@ const ROUTES = Object.freeze({
     'POST /account/unlink': fromThePage(signedIn(unlinkRoute)),
 });
 
-export const isAccountPath = (pathname) => ['/login', '/account.css', '/account.js'].includes(pathname) || pathname.startsWith('/account/');
+export const isAccountPath = (pathname) => ['/login', '/device', '/account.css', '/account.js'].includes(pathname) || pathname.startsWith('/account/');
 
 // context: the request, env and deps of worker/api.js.
 export function handleAccountPage(context) {

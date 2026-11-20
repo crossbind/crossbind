@@ -1,6 +1,9 @@
 import { randomToken } from './session.js';
 
 export const MAX_TOKENS_PER_USER = 20;
+// The crossbind app's tokens an account keeps, one for each device signed in with a code, as the CLI's 20 are kept.
+export const MAX_APP_TOKENS_PER_USER = 10;
+const TOKENS_KEPT = Object.freeze({ cli: MAX_TOKENS_PER_USER, app: MAX_APP_TOKENS_PER_USER });
 // A token left behind (an old machine, a CI log) stops working on its own.
 export const TOKEN_IDLE_DAYS = 90;
 
@@ -21,7 +24,8 @@ export const OWN_IDS_BELOW = 2 ** 53;
 const MAX_SIGN_IN_ATTEMPTS = 3;
 
 const hex = (bytes) => [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
-const hashOf = async (token) => hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token)));
+// A token, or a device's sign-in code, is kept as this alone.
+export const hashOf = async (token) => hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token)));
 const userOf = (row) => ({ id: String(row.id), login: row.login, blocked: row.blocked === 1 });
 // The month (YYYY-MM) and the day (YYYY-MM-DD) of a moment, in UTC.
 const periodsOf = (at) => {
@@ -238,14 +242,15 @@ export function createAccounts(db, now = () => Date.now(), drawId = randomAccoun
             ]);
         },
 
-        // The token is shown once and only its hash is kept. An account keeps its most recently used tokens.
-        async issueToken(userId) {
+        // The token is shown once and only its hash is kept, with its kind, `cli` or `app`, and the words its account sees
+        // it by. An account keeps its most recently used tokens of each kind.
+        async issueToken(userId, { kind = 'cli', label = 'crossbind CLI' } = {}) {
             const token = `cbt_${randomToken()}`;
             const at = timestamp();
             await db.batch([
-                db.prepare('INSERT INTO tokens (hash, user_id, created_at, last_used_at) VALUES (?, ?, ?, ?)').bind(await hashOf(token), userId, at, at),
-                db.prepare(`DELETE FROM tokens WHERE user_id = ?1 AND hash NOT IN
-                    (SELECT hash FROM tokens WHERE user_id = ?1 ORDER BY last_used_at DESC, created_at DESC LIMIT ?2)`).bind(userId, MAX_TOKENS_PER_USER),
+                db.prepare('INSERT INTO tokens (hash, user_id, created_at, last_used_at, kind, label) VALUES (?, ?, ?, ?, ?, ?)').bind(await hashOf(token), userId, at, at, kind, label),
+                db.prepare(`DELETE FROM tokens WHERE user_id = ?1 AND kind = ?2 AND hash NOT IN
+                    (SELECT hash FROM tokens WHERE user_id = ?1 AND kind = ?2 ORDER BY last_used_at DESC, created_at DESC LIMIT ?3)`).bind(userId, kind, TOKENS_KEPT[kind]),
             ]);
             return token;
         },

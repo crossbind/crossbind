@@ -64,7 +64,7 @@ export async function readPending(request, secret, now = Date.now()) {
     const pending = await unseal(PENDING_COOKIE, readCookie(request, PENDING_COOKIE), secret);
     if (!pending || !(pending.exp > now) || ![pending.provider, pending.subject, pending.login].every((field) => typeof field === 'string')) return null;
     return {
-        provider: pending.provider, subject: pending.subject, login: pending.login, next: pending.next === 'playground' ? 'playground' : 'account',
+        provider: pending.provider, subject: pending.subject, login: pending.login, next: pending.next === 'playground' || pending.next === 'device' ? pending.next : 'account',
     };
 }
 
