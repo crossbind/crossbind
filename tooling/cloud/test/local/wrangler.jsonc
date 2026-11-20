@@ -1,5 +1,6 @@
 // The Worker of test/local/run.mjs under `wrangler dev`: no container, a local D1 the run makes and the migrations of
-// this package, and a stand-in for GitHub (worker.js). Made-up values alone; never deployed.
+// this package, and stand-ins for GitHub and Apple (worker.js). Made-up values alone; never deployed. Apple's key and the
+// public key its stand-in checks the client secret with are made for each run (`--var`).
 {
     "name": "crossbind-cloud-local",
     "main": "worker.js",
@@ -12,8 +13,10 @@
             "migrations_dir": "../../migrations"
         }
     ],
+    // Every route's limit is ten times the Worker's: the run's browsers load the page, its style and its script many
+    // times a minute from one network, and the limit is no part of what it checks.
     "ratelimits": [
-        { "name": "API_LIMITER", "namespace_id": "1901", "simple": { "limit": 120, "period": 60 } },
+        { "name": "API_LIMITER", "namespace_id": "1901", "simple": { "limit": 1200, "period": 60 } },
         { "name": "LOGIN_LIMITER", "namespace_id": "1902", "simple": { "limit": 10, "period": 60 } },
         { "name": "RUNNER_LIMITER", "namespace_id": "1903", "simple": { "limit": 1200, "period": 60 } }
     ],
@@ -27,6 +30,10 @@
         "GITHUB_CLIENT_SECRET": "made-up-client-secret",
         "MIN_GITHUB_ACCOUNT_DAYS": "30",
         "STANDIN_GITHUB_ID": "8000000101",
-        "STANDIN_GITHUB_LOGIN": "made_up_local"
+        "STANDIN_GITHUB_LOGIN": "made_up_local",
+        "APPLE_SERVICES_ID": "dev.made-up.local",
+        "APPLE_TEAM_ID": "MADEUPTEAM",
+        "APPLE_KEY_ID": "MADEUPKEY1",
+        "STANDIN_APPLE_SUB": "000123.made0up0apple0id0local0000.0101"
     }
 }
