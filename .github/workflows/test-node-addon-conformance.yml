@@ -17,6 +17,7 @@ on:
             - e2e/desktop-app/**
             - e2e/app-page-requests/**
             - e2e/app-bare/**
+            - e2e/app-preview/**
             - e2e/conformance/**
             - e2e/conformance-rust/**
             - tooling/bridge-tools/**
@@ -40,6 +41,7 @@ on:
             - e2e/desktop-app/**
             - e2e/app-page-requests/**
             - e2e/app-bare/**
+            - e2e/app-preview/**
             - e2e/conformance/**
             - e2e/conformance-rust/**
             - tooling/bridge-tools/**
@@ -231,6 +233,8 @@ jobs:
                   retention-days: 1
             - name: Run the conformance suite in the app as its disk image holds it
               run: node e2e/desktop-app/e2e/run.mjs --installed
+            - name: Open a page of JavaScript alone in the app as a preview
+              run: pnpm --filter=@crossbind/e2e-desktop-app run e2e:preview ../app-preview
             # The e2e app above has app.updater, whose extension links what an app without it would lack.
             - name: Build an app without the host's optional extensions
               run: pnpm --filter=@crossbind/e2e-app-page-requests run build
@@ -482,6 +486,11 @@ jobs:
               run: |
                   xvfb-run -a pnpm --filter=@crossbind/e2e-desktop-app run e2e:prod
                   xvfb-run -a node e2e/desktop-app/e2e/run.mjs --installed
+            - name: Open a page of JavaScript alone in the app as a preview
+              env:
+                  WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: '1'
+                  WEBKIT_DISABLE_COMPOSITING_MODE: '1'
+              run: xvfb-run -a pnpm --filter=@crossbind/e2e-desktop-app run e2e:preview ../app-preview
             - name: Answer the host's own page dialogs as the app's user would
               env:
                   WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: '1'
@@ -601,9 +610,9 @@ jobs:
                   # The runner opens the app of Node's arch: an emulated x64 Node.js would open the x64 app on the
                   # arm64 runner.
                   architecture: ${{ matrix.arch }}
-            - name: Install the conformance kit
+            - name: Install the conformance kit, and what previews e2e/app-preview
               # The leg's config imports the kit; nothing is built on these runners.
-              run: pnpm install --frozen-lockfile --prod --filter "@crossbind/e2e-desktop-app..."
+              run: pnpm install --frozen-lockfile --prod --filter "@crossbind/e2e-desktop-app..." --filter "@crossbind/e2e-app-preview..."
             - name: Restore the app
               uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
               with:
@@ -628,6 +637,8 @@ jobs:
                   Set-NetFirewallProfile -All -NotifyOnListen False
             - name: Run the conformance suite in the app
               run: node e2e/desktop-app/e2e/run.mjs
+            - name: Open a page of JavaScript alone in the app as a preview
+              run: node e2e/desktop-app/e2e/preview.mjs e2e/app-preview
             - name: Restore e2e/app-page-requests
               uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
               with:

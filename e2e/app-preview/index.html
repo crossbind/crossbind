@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>crossbind e2e preview</title>
+    <script>
+        // A module that does not load runs nothing that could say so: this says it in the preview's terminal.
+        addEventListener('error', (event) => {
+            if (event.target instanceof HTMLScriptElement) console.error(`PREVIEW ERR: ${event.target.src} did not load`);
+        }, true);
+    </script>
+</head>
+<body>
+    <p>crossbind e2e preview</p>
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html>
