@@ -250,17 +250,19 @@ test('takes the CLI\'s tokens on every route, the crossbind app\'s on the accoun
     assert.equal((await refused.db.prepare('SELECT count(1) AS tokens FROM tokens').first('tokens')), 2);
 });
 
-test('revokes the token it was sent, or every token of the account', async () => {
+test('revokes the token it was sent, or every token of the account and every cookie made before', async () => {
     const { call, accounts, token } = await signedIn();
     const other = await accounts.issueToken('583231');
     const third = await accounts.issueToken('583231');
 
     const one = await call('DELETE', '/token', { token });
+    const kept = (await accounts.standing('583231')).signedOutAt;
     const all = await call('DELETE', '/tokens', { token: other });
 
     assert.deepEqual([one.status, all.status], [204, 204]);
     assert.deepEqual(await Promise.all([token, other, third].map((each) => accounts.userOfToken(each))), [null, null, null]);
     assert.equal((await call('DELETE', '/token', { token })).status, 401);
+    assert.deepEqual([kept, (await accounts.standing('583231')).signedOutAt], [null, new Date(NOW).toISOString()]);
 });
 
 test('lets a network start only a few CLI sign-ins a minute, and still poll the one it started', async () => {

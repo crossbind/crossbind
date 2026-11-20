@@ -21,12 +21,13 @@ const DEVICE_GRANT = 'urn:ietf:params:oauth:grant-type:device_code';
 const setCookies = (response) => response.headers.getSetCookie();
 const stateFrom = (response) => setCookies(response).find((c) => c.startsWith(`${STATE_COOKIE}=`)).split(';')[0].slice(STATE_COOKIE.length + 1);
 
+// `next` is where the start sent the sign-in back to; a cookie made before the account's page has none.
 function callback({
-    state, cookieState = state, verifier = 'v1', query = {},
+    state, cookieState = state, verifier = 'v1', next, query = {},
 }) {
     const url = new URL(`${API}/playground/callback/github`);
     Object.entries({ code: 'the-code', state, ...query }).forEach(([k, v]) => url.searchParams.set(k, v));
-    return new Request(url, { headers: { cookie: `${STATE_COOKIE}=${cookieState}.${verifier}` } });
+    return new Request(url, { headers: { cookie: `${STATE_COOKIE}=${cookieState}.${verifier}${next === undefined ? '' : `.${next}`}` } });
 }
 
 const challengeOf = (verifier) => createHash('sha256').update(verifier).digest('base64url');
@@ -93,8 +94,33 @@ test('signs the GitHub account in to its account, whose id the session holds, an
     assert.equal(response.headers.get('location'), 'https://crossbind.dev/playground/#login=ok');
     assert.deepEqual(accounts.signedIn, [{ provider: 'github', subject: '583231', login: 'octocat' }]);
     const session = setCookies(response).find((c) => c.startsWith(`${SESSION_COOKIE}=`)).split(';')[0];
-    assert.deepEqual(await readSession(new Request(API, { headers: { cookie: session } }), env.SESSION_SECRET, NOW), { id: ACCOUNT_ID, name: 'octocat' });
+    assert.deepEqual(await readSession(new Request(API, { headers: { cookie: session } }), env.SESSION_SECRET, NOW), { id: ACCOUNT_ID, name: 'octocat', madeAt: NOW });
     assert.ok(setCookies(response).some((c) => c.startsWith(`${STATE_COOKIE}=; Max-Age=0`)));
+});
+
+test('returns to the account\'s page or the playground, as its start chose, and to the playground from a start of before', async () => {
+    const kept = [];
+    for (const start of [() => startLogin(new Request(`${API}/account/login/github`), env, 'account'), () => startLogin(new Request(`${API}/playground/login/github`), env)]) {
+        kept.push(stateFrom(await start()).split('.')[2]);
+    }
+    const back = async (options) => (await finish(callback({ state: 's1', ...options }))).headers.get('location');
+
+    const outcomes = [
+        await back({ next: 'account' }),
+        await back({ next: 'account', query: { error: 'access_denied' } }),
+        await back({ next: 'playground' }),
+        await back({}),
+        await back({ next: 'elsewhere' }),
+    ];
+
+    assert.deepEqual(kept, ['account', 'playground']);
+    assert.deepEqual(outcomes, [
+        `${API}/login#login=ok`,
+        `${API}/login#login=cancelled`,
+        'https://crossbind.dev/playground/#login=ok',
+        'https://crossbind.dev/playground/#login=ok',
+        'https://crossbind.dev/playground/#login=ok',
+    ]);
 });
 
 test('binds GitHub\'s code to the browser that asked for it: with another verifier, or none, it signs nobody in', async () => {

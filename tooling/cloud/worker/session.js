@@ -35,7 +35,8 @@ export async function signSession({ id, name }, secret, now = Date.now()) {
     return `${payload}.${toBase64Url(signature)}`;
 }
 
-// Any cookie that does not verify, and any session without a configured secret, reads as signed out.
+// Any cookie that does not verify, and any session without a configured secret, reads as signed out. A cookie was made
+// SESSION_TTL_MS before it expires.
 export async function readSession(request, secret, now = Date.now()) {
     const [payload, signature, extra] = readCookie(request, SESSION_COOKIE)?.split('.') ?? [];
     if (!payload || !signature || extra !== undefined) return null;
@@ -43,8 +44,20 @@ export async function readSession(request, secret, now = Date.now()) {
         if (!(await crypto.subtle.verify('HMAC', await hmacKey(secret), fromBase64Url(signature), utf8.encode(payload)))) return null;
         const { id, n, exp } = JSON.parse(new TextDecoder().decode(fromBase64Url(payload)));
         if (typeof id !== 'string' || typeof n !== 'string' || !(exp > now)) return null;
-        return { id, name: n };
+        return { id, name: n, madeAt: exp - SESSION_TTL_MS };
     } catch {
         return null;
     }
+}
+
+// Every route that takes the cookie reads the account's row (accounts.standing): a cookie of an account deleted or
+// blocked since, or made before the account signed out everywhere, signs in nothing. `session` is the cookie's
+// account, `user` the one it signs in.
+export async function readSignedIn(request, secret, accounts, now = Date.now()) {
+    const session = await readSession(request, secret, now);
+    if (!session) return { session: null, standing: null, user: null };
+    const standing = await accounts.standing(session.id);
+    const signedOut = standing.signedOutAt !== null && session.madeAt <= Date.parse(standing.signedOutAt);
+    const signsIn = standing.exists && !standing.blocked && !signedOut;
+    return { session, standing, user: signsIn ? { id: session.id, name: standing.login } : null };
 }

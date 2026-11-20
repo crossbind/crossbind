@@ -31,14 +31,21 @@ On Cloudflare every container is its own Firecracker microVM, started without in
 - `GET /session`: who is signed in, the day's limit and what is left of it, whether GitHub sign-in is set up, and the Turnstile site key.
 - `POST /compile`: from the playground page's origin only. An anonymous visitor passes Turnstile first. A compile seen before comes from the cache without counting (a week for a module, ten minutes for a compile error); otherwise it counts against the visitor's network (an IPv6 /64 is one network) or their account, and against the day's total for everyone.
 - `GET /login/github` and `/callback/github`: GitHub sign-in that asks for no scope; GitHub accounts younger than 30 days are turned away. PKCE (S256) binds GitHub's code to the browser that asked for it: the verifier waits in an HttpOnly cookie beside the state, so a code caught on its way is worth nothing elsewhere. The GitHub account signs in to its crossbind account (below), and the session is an HMAC-signed, host-only cookie holding the account's id and name.
-- `POST /logout`, and `POST /delete-account`, which deletes the signed-in account as `crossbind account delete` does.
+- `POST /logout`, and `POST /delete-account`, which deletes the signed-in account as `crossbind account delete` does. The site's playground now signs in through the account's start below and deletes on the account's page; `GET /login/github` and `POST /delete-account` stay for the site of the day before, until a later release removes them.
+
+The account's own page is the Worker's, on this same origin (`worker/account-page.js`), so that no other site, crossbind.dev included, can change an account:
+
+- `GET /login`: signed out, "Sign in with GitHub"; signed in, the account's name, its devices (its tokens, by label and first and last use) each with Sign out, "Sign out everywhere", Delete account behind a box to tick, and Sign out. Plain HTML with `/account.css` and `/account.js`, under `Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`, `Referrer-Policy: same-origin` (under `no-referrer` a form's POST carries `Origin: null`) and `Cache-Control: no-store`. `crossbind.dev/login/` leads here.
+- `GET /account/login/github`: the sign-in's start, a link; it comes back to the page, or to `PLAYGROUND_URL` with `?next=playground`, and sends GitHub the playground's callback, `/playground/callback/github`, the one the OAuth app lists.
+- `POST /account/logout`, `/account/tokens/revoke` (`ref`: the first 16 hex digits of the token's hash, as the page lists it), `/account/logout-everywhere` and `/account/delete` (`confirm=yes`): the page's forms, which take a request whose `Origin` is this origin alone. Any other, crossbind.dev's too, and none or `null`, get 403; a form whose cookie no longer counts goes back to the page.
+- Signing out everywhere, here or with `crossbind logout --all`, deletes every token of the account and sets `users.signed_out_at`, before which no cookie counts. Every route that reads the cookie reads the account's row: a cookie of an account deleted or blocked since, or made before it signed out everywhere, signs in nothing.
 
 The CLI talks to it under `/v1` (`worker/account-api.js`), with a token and without cookies or CORS:
 
 - `POST /v1/login/device` and `POST /v1/login/token`: `crossbind login`, GitHub's device flow. The user enters a code on github.com; the Worker, not the CLI, asks GitHub for the outcome, so no GitHub token leaves it. The CLI polls `/v1/login/token` (202 until the code is approved) and then receives a token of crossbind cloud's own (`cbt_…`). A GitHub account crossbind does not know gets its account at once.
 - `GET /v1/usage`: the month's cloud build seconds by toolchain image against the monthly allowance (`BUILD_SECONDS_MONTHLY`), and the day's playground compiles.
 - `GET /v1/account`: the account the token signs in to, `{"id": "…", "name": "…"}`.
-- `DELETE /v1/token` and `DELETE /v1/tokens`: `crossbind logout`, for the token sent or every token of the account.
+- `DELETE /v1/token` and `DELETE /v1/tokens`: `crossbind logout`, for the token sent, or `--all`, which signs the account out everywhere as its page does.
 - `DELETE /v1/account`: `crossbind account delete`, open to a blocked account too.
 
 Every token has a kind (`tokens.kind`). The CLI's, `cli`, takes every route, the runners' included, and is every token issued so far. The crossbind app's, `app`, takes `GET /v1/account` and the three deletions alone. A route refuses any other kind with 403.
@@ -61,7 +68,7 @@ tooling/cloud/node_modules/.bin/wrangler d1 execute crossbind-accounts --remote 
 tooling/cloud/node_modules/.bin/wrangler d1 execute crossbind-accounts --remote --command "SELECT id, login FROM users WHERE id NOT IN (SELECT user_id FROM identities WHERE unlinked_at IS NULL)"
 ```
 
-GitHub sign-in needs a GitHub OAuth app with its callback at `https://api.crossbind.dev/playground/callback/github` and the device flow enabled; its client id and secret are the `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` secrets.
+GitHub sign-in needs a GitHub OAuth app with its callback at `https://api.crossbind.dev/playground/callback/github` and the device flow enabled; its client id and secret are the `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` secrets. The account's page signs in through the same callback.
 
 ## Cloud runners
 

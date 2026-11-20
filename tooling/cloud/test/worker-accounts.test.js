@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import {
-    createAccounts, randomAccountId, MAX_TOKENS_PER_USER, OWN_IDS_BELOW, OWN_IDS_FROM, TOKEN_IDLE_DAYS,
+    createAccounts, randomAccountId, DEVICE_REF_LENGTH, MAX_TOKENS_PER_USER, OWN_IDS_BELOW, OWN_IDS_FROM, TOKEN_IDLE_DAYS,
 } from '../worker/accounts.js';
 import { sqliteD1 } from '../scripts/sqlite-d1.mjs';
 
@@ -71,8 +72,12 @@ test('reports a blocked account at sign-in and when asked', async () => {
     await db.prepare('UPDATE users SET blocked = 1 WHERE id = ?').bind(583231).run();
 
     assert.deepEqual(await accounts.signIn(github), signedInAs(octocat.id, 'octocat', true));
-    assert.deepEqual(await accounts.standing('583231'), { exists: true, blocked: true });
-    assert.deepEqual(await accounts.standing('1'), { exists: false, blocked: false });
+    assert.deepEqual(await accounts.standing('583231'), {
+        exists: true, blocked: true, login: 'octocat', signedOutAt: null,
+    });
+    assert.deepEqual(await accounts.standing('1'), {
+        exists: false, blocked: false, login: '', signedOutAt: null,
+    });
 });
 
 test('draws a new account\'s id again while an account, or a deleted account\'s identity or seconds, name it', async () => {
@@ -222,17 +227,40 @@ test('finds no account for an unknown, malformed or revoked token', async () => 
     assert.equal(await accounts.userOfToken(undefined), null);
 });
 
-test('revokes every token of one account and no other', async () => {
-    const { db, accounts } = setup();
+test('signs one account out everywhere, every token and the cookies made before that moment, and no other', async () => {
+    const { db, accounts, advance } = setup();
     await accountOfToday(db, octocat);
     await accountOfToday(db, { id: '1', login: 'mojombo' });
     const mine = [await accounts.issueToken(octocat.id), await accounts.issueToken(octocat.id)];
     const theirs = await accounts.issueToken('1');
+    advance(MINUTE);
 
-    await accounts.revokeTokens(octocat.id);
+    await accounts.signOutEverywhere(octocat.id);
 
     assert.deepEqual(await Promise.all(mine.map((token) => accounts.userOfToken(token))), [null, null]);
     assert.equal((await accounts.userOfToken(theirs)).login, 'mojombo');
+    assert.deepEqual([(await accounts.standing(octocat.id)).signedOutAt, (await accounts.standing('1')).signedOutAt], ['2026-10-08T12:01:00.000Z', null]);
+});
+
+test('lists an account\'s devices by their last use, each by the start of its token\'s hash, and signs out its own alone', async () => {
+    const { db, accounts, advance } = setup();
+    await accountOfToday(db, octocat);
+    await accountOfToday(db, { id: '1', login: 'mojombo' });
+    const older = await accounts.issueToken(octocat.id);
+    advance(DAY);
+    const newer = await accounts.issueToken(octocat.id);
+    const theirs = await accounts.issueToken('1');
+    const refOf = (token) => createHash('sha256').update(token).digest('hex').slice(0, DEVICE_REF_LENGTH);
+
+    const devices = await accounts.devices(octocat.id);
+    const outcomes = [await accounts.revokeDevice(octocat.id, refOf(theirs)), await accounts.revokeDevice(octocat.id, refOf(older))];
+
+    assert.deepEqual(devices, [
+        { ref: refOf(newer), kind: 'cli', label: 'crossbind CLI', createdAt: '2026-10-09T12:00:00.000Z', lastUsedAt: '2026-10-09T12:00:00.000Z' },
+        { ref: refOf(older), kind: 'cli', label: 'crossbind CLI', createdAt: AT, lastUsedAt: AT },
+    ]);
+    assert.deepEqual(outcomes, [false, true]);
+    assert.deepEqual(await Promise.all([older, newer, theirs].map(async (token) => (await accounts.userOfToken(token))?.login ?? null)), [null, 'octocat', 'mojombo']);
 });
 
 test(`keeps the ${MAX_TOKENS_PER_USER} most recently used tokens of an account`, async () => {
@@ -309,17 +337,19 @@ test('deletes an account and every token of it, keeping only the month\'s second
     assert.deepEqual(await rows(db, 'SELECT user_id, month, seconds FROM build_usage'), [{ user_id: 583231, month: '2026-10', seconds: 60 }]);
 });
 
-test('keeps a blocked account as its bare id, so deleting it does not lift the block', async () => {
-    const { db, accounts } = setup();
+test('keeps a blocked account as its bare id, so deleting it does not lift the block, and its refused sign-in writes nothing', async () => {
+    const { db, accounts, advance } = setup();
     await accountOfToday(db, octocat);
     await db.prepare('UPDATE users SET blocked = 1').run();
 
     await accounts.deleteAccount(octocat.id);
-    const kept = await rows(db, 'SELECT id, login, blocked FROM users');
+    const kept = await rows(db, 'SELECT id, login, last_login_at, blocked FROM users');
+    advance(MINUTE);
     const again = await accounts.signIn(github);
 
-    assert.deepEqual(kept, [{ id: 583231, login: '', blocked: 1 }]);
+    assert.deepEqual(kept, [{ id: 583231, login: '', last_login_at: AT, blocked: 1 }]);
     assert.equal(again.user.blocked, true);
+    assert.deepEqual(await rows(db, 'SELECT id, login, last_login_at, blocked FROM users'), kept);
 });
 
 test('prunes tokens unused for 90 days, seconds older than three months, and a deleted account\'s seconds once its month ends', async () => {

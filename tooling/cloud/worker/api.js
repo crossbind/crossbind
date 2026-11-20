@@ -1,12 +1,13 @@
 import { validateRequest, InvalidRequest, MAX_BODY_BYTES } from '../compiler/validate.js';
 import { handleAccountRequest } from './account-api.js';
+import { handleAccountPage, isAccountPath } from './account-page.js';
 import { userKey } from './accounts.js';
 import {
     BodyTooLarge, SECURITY_HEADERS, jsonResponse, log, networkOf, readLimited,
 } from './http.js';
 import { startLogin, finishLogin, isLoginConfigured } from './oauth.js';
 import { handleRunnerRequest } from './runner-api.js';
-import { readSession, clearCookie, SESSION_COOKIE } from './session.js';
+import { readSignedIn, clearCookie, SESSION_COOKIE } from './session.js';
 import { settingsOf } from './settings.js';
 
 const PREFIX = 'playground';
@@ -48,11 +49,14 @@ async function cacheUrl(version, project) {
     return `${CACHE_ORIGIN}/${[...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')}`;
 }
 
+// `session` is the account the cookie names, with `standing` its row; `user` is the account it signs in, if any.
 async function callerOf({
-    request, env, settings, ip, network,
+    request, env, deps, settings, ip, network,
 }) {
-    const user = await readSession(request, env.SESSION_SECRET);
+    const { session, standing, user } = await readSignedIn(request, env.SESSION_SECRET, deps.accounts, (deps.now ?? Date.now)());
     return {
+        session,
+        standing,
         user,
         ip,
         key: user ? userKey(user.id) : `ip:${network}`,
@@ -118,9 +122,10 @@ async function compileRoute(context) {
     if (error) return error;
     const caller = await callerOf(context);
     // Accounts are blocked in D1; a blocked network still compiles for whoever signs in, who can be blocked in turn.
-    const standing = caller.user ? await deps.accounts.standing(caller.user.id) : { exists: true, blocked: settings.blockedNetworks.has(context.network) };
+    const standing = caller.session ? caller.standing : { exists: true, blocked: settings.blockedNetworks.has(context.network) };
     if (!standing.exists) return respond(401, { error: 'This account was deleted; sign in again to make a new one.', login: true });
     if (standing.blocked) return respond(403, { error: 'This account or network may not compile here.' });
+    if (caller.session && !caller.user) return respond(401, { error: 'This account was signed out everywhere; sign in again.', login: true });
     if (!caller.user && !(await verifyTurnstile(turnstile, { secret: env.TURNSTILE_SECRET, ip: caller.ip, hostnames: settings.turnstileHostnames, fetcher: deps.fetcher }))) {
         return respond(403, { error: 'The browser check did not pass; reload the page and try again.', turnstile: true });
     }
@@ -161,12 +166,13 @@ function logoutRoute({ corsOrigin, respond }) {
     return signedOut(corsOrigin);
 }
 
-// The same account `crossbind account delete` deletes: the CLI's tokens go with it.
+// The same account `crossbind account delete` deletes: the CLI's tokens go with it. Kept until no page of the site
+// calls it: the playground's Delete account now leads to the account's page.
 async function deleteAccountRoute({
     request, env, deps, corsOrigin, respond,
 }) {
     if (!corsOrigin) return respond(403, { error: 'Delete your account from the playground page.' });
-    const user = await readSession(request, env.SESSION_SECRET);
+    const { user } = await readSignedIn(request, env.SESSION_SECRET, deps.accounts, (deps.now ?? Date.now)());
     if (!user) return respond(401, { error: 'Sign in to delete your account.' });
     await deps.accounts.deleteAccount(user.id);
     log({ event: 'account-deleted', who: userKey(user.id) });
@@ -208,6 +214,7 @@ export async function handleRequest(request, env, deps) {
     // Before anything that costs: a session, an account, the quota, GitHub or the compiler.
     if (!(await deps.limits.api.limit({ key: network })).success) return respond(429, { error: 'Too many requests from this network; try again in a minute.' });
     if (pathname.startsWith('/v1/')) return handleAccountRequest(context);
+    if (isAccountPath(pathname)) return handleAccountPage(context);
     if (!pathname.startsWith(`/${PREFIX}/`)) return respond(404, { error: 'Not found.' });
     if (request.method === 'OPTIONS') return preflight(context);
     const route = PLAYGROUND_ROUTES[`${request.method} ${pathname.slice(PREFIX.length + 1)}`];

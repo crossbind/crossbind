@@ -8,10 +8,10 @@ const NOW = Date.parse('2026-10-07T12:00:00Z');
 
 const requestWith = (cookie) => new Request('https://api.example/playground/session', { headers: { cookie } });
 
-test('reads back the user a session was signed for', async () => {
+test('reads back the user a session was signed for, and when it was made', async () => {
     const value = await signSession(user, SECRET, NOW);
 
-    assert.deepEqual(await readSession(requestWith(`other=1; ${SESSION_COOKIE}=${value}`), SECRET, NOW), user);
+    assert.deepEqual(await readSession(requestWith(`other=1; ${SESSION_COOKIE}=${value}`), SECRET, NOW + 1000), { ...user, madeAt: NOW });
 });
 
 test('ignores a session whose payload, signature or secret does not match', async () => {

@@ -57,8 +57,9 @@ function redirect(location, cookies) {
 }
 
 // PKCE (S256) binds GitHub's code to this browser: the verifier waits in its HttpOnly cookie beside the state, so a code
-// caught on its way is worth nothing in another browser.
-export async function startLogin(request, env) {
+// caught on its way is worth nothing in another browser. The cookie also keeps where the sign-in returns: `account`, the
+// account's page, or `playground`.
+export async function startLogin(request, env, next = 'playground') {
     if (!isLoginConfigured(env)) return Response.json({ error: 'Signing in with GitHub is not set up.' }, { status: 503 });
     const state = randomToken();
     const verifier = randomToken();
@@ -67,16 +68,18 @@ export async function startLogin(request, env) {
     Object.entries({
         client_id: env.GITHUB_CLIENT_ID, redirect_uri: callbackUrl(request), state, code_challenge: challenge, code_challenge_method: 'S256',
     }).forEach(([key, value]) => url.searchParams.set(key, value));
-    return redirect(url.href, [sessionCookie(STATE_COOKIE, `${state}.${verifier}`, STATE_TTL_SECONDS)]);
+    return redirect(url.href, [sessionCookie(STATE_COOKIE, `${state}.${verifier}.${next}`, STATE_TTL_SECONDS)]);
 }
 
-// Always returns to the configured playground page, never to an address the request names.
+// Returns to the account's page on this origin, or to the configured playground page, as the start chose; never to an
+// address the request names. A sign-in started before the account's page returns to the playground.
 export async function finishLogin(request, env, { fetcher = fetch, now = Date.now(), accounts }) {
-    const back = (result, cookies = []) => redirect(`${env.PLAYGROUND_URL}#login=${result}`, [clearCookie(STATE_COOKIE), ...cookies]);
+    const [expected, verifier, next] = readCookie(request, STATE_COOKIE)?.split('.') ?? [];
+    const target = next === 'account' ? `${new URL(request.url).origin}/login` : env.PLAYGROUND_URL;
+    const back = (result, cookies = []) => redirect(`${target}#login=${result}`, [clearCookie(STATE_COOKIE), ...cookies]);
     const params = new URL(request.url).searchParams;
     if (params.get('error')) return back('cancelled');
     const state = params.get('state');
-    const [expected, verifier] = readCookie(request, STATE_COOKIE)?.split('.') ?? [];
     if (!state || state !== expected || !verifier) return back('failed');
     try {
         const token = await json(await post(fetcher, TOKEN_URL, {

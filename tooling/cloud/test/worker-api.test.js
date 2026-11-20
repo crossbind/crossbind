@@ -24,9 +24,10 @@ const env = {
 const files = { 'native.h': 'int answer();', 'native.cpp': 'int answer() { return 42; }' };
 const compiled = { ok: true, js: 'var Module;', wasm: 'AGFzbQ==', log: '', ms: 900 };
 
+// standing: what the account's row says beyond a live account named octocat that never signed out everywhere.
 function setup({
     reserve = { ok: true, remaining: 4 }, compilerStatus = 200, compilerResult = compiled, turnstile = { success: true, action: 'compile', hostname: 'crossbind.dev' }, blockedUsers = [],
-    overLimit = false,
+    overLimit = false, standing = {},
 } = {}) {
     const calls = {
         reserve: [], refund: [], compile: [], siteverify: [], limited: [],
@@ -37,7 +38,11 @@ function setup({
             api: { limit: async ({ key }) => { calls.limited.push(key); return { success: !overLimit }; } },
             login: { limit: async () => ({ success: true }) },
         },
-        accounts: { standing: async (id) => ({ exists: true, blocked: blockedUsers.includes(id) }) },
+        accounts: {
+            standing: async (id) => ({
+                exists: true, blocked: blockedUsers.includes(id), login: 'octocat', signedOutAt: null, ...standing,
+            }),
+        },
         quota: {
             reserve: async (args) => { calls.reserve.push(args); return reserve; },
             refund: async (args) => { calls.refund.push(args); },
@@ -257,6 +262,48 @@ test('describes the session: who is signed in, what is left today and how to sig
     });
     assert.deepEqual((await (await ask(`${SESSION_COOKIE}=${session}`)).json()).user, { name: 'octocat' });
     assert.equal((await (await handleRequest(new Request(`${API}/session`), { ...env, GITHUB_CLIENT_SECRET: '' }, deps)).json()).canSignIn, false);
+});
+
+test('signs a cookie in only while its account is there, not blocked, and not signed out everywhere since the cookie was made', async () => {
+    const madeAt = Date.parse('2026-11-20T10:00:00Z');
+    const cookie = `${SESSION_COOKIE}=${await signSession({ id: '583231', name: 'octocat' }, env.SESSION_SECRET, madeAt)}`;
+    const rows = {
+        live: {},
+        'signed out before it': { signedOutAt: '2026-11-20T09:59:59.999Z' },
+        'signed out as it was made': { signedOutAt: '2026-11-20T10:00:00.000Z' },
+        'signed out after it': { signedOutAt: '2026-11-20T10:00:00.001Z' },
+        deleted: { exists: false, login: '' },
+        blocked: { blocked: true },
+    };
+
+    const answers = {};
+    for (const [name, standing] of Object.entries(rows)) {
+        const { deps, calls } = setup({ standing });
+        deps.now = () => madeAt + 60_000;
+        const deleted = [];
+        deps.accounts.deleteAccount = async (id) => { deleted.push(id); };
+        const session = await (await handleRequest(new Request(`${API}/session`, { headers: { origin: PAGE, cookie } }), env, deps)).json();
+        const compile = await handleRequest(compileRequest({ cookie, body: { files } }), env, deps);
+        const remove = await handleRequest(new Request(`${API}/delete-account`, { method: 'POST', headers: { origin: PAGE, cookie } }), env, deps);
+        answers[name] = {
+            user: session.user?.name ?? null, compile: compile.status, error: (await compile.json()).error ?? null, compiled: calls.compile.length, remove: remove.status, deleted,
+        };
+    }
+
+    const refused = (compile, error) => ({
+        user: null, compile, error, compiled: 0, remove: 401, deleted: [],
+    });
+    const taken = {
+        user: 'octocat', compile: 200, error: null, compiled: 1, remove: 204, deleted: ['583231'],
+    };
+    assert.deepEqual(answers, {
+        live: taken,
+        'signed out before it': taken,
+        'signed out as it was made': refused(401, 'This account was signed out everywhere; sign in again.'),
+        'signed out after it': refused(401, 'This account was signed out everywhere; sign in again.'),
+        deleted: refused(401, 'This account was deleted; sign in again to make a new one.'),
+        blocked: refused(403, 'This account or network may not compile here.'),
+    });
 });
 
 test('deletes the signed-in account from the playground page only, and signs it out', async () => {
