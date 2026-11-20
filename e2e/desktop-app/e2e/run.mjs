@@ -115,23 +115,45 @@ public static class Power {
 '@
 [Power]::Sleep((Get-Process -Id APP_PID).MainWindowHandle)
 `;
-// Prints which window is in front, with ACTION Report, and with Bring brings the app's window there when another is, as
-// its user's click would.
+// Brings the app's window to the front, with ACTION Click, as its user would, and prints which window was in front:
+// while another is, Escape closes what a user's Escape closes, as the Start menu that the windows-11-arm runners open at
+// sign-in; then each window over the app's middle minimized, as the console of a prompt; then a click on a part of the
+// app's window that no other window covers, which Windows answers by bringing the window to the front, as no call of a
+// process in the back can.
 const FOREGROUND_SCRIPT = `
 $ErrorActionPreference = 'Stop'
 Add-Type -TypeDefinition @'
 using System;
 using System.Text;
+using System.Threading;
 using System.Runtime.InteropServices;
 public static class Foreground {
     [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr window, StringBuilder text, int length);
-    [DllImport("user32.dll")] static extern bool AttachThreadInput(uint from, uint to, bool attach);
-    [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
-    [DllImport("user32.dll")] static extern bool BringWindowToTop(IntPtr window);
-    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr window);
-    [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr window, int command);
+    [DllImport("user32.dll")] static extern bool GetClientRect(IntPtr window, out Rect rect);
+    [DllImport("user32.dll")] static extern bool ClientToScreen(IntPtr window, ref Point point);
+    [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(Point point);
+    [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr window, uint flags);
+    [DllImport("user32.dll")] static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")] static extern void mouse_event(uint flags, int x, int y, uint data, UIntPtr extra);
+    [DllImport("user32.dll")] static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
+    [DllImport("user32.dll")] static extern bool ShowWindowAsync(IntPtr window, int command);
+    public struct Rect { public int Left, Top, Right, Bottom; }
+    public struct Point { public int X, Y; }
+    const uint ROOT = 2;
+    const uint LEFT_DOWN = 0x0002;
+    const uint LEFT_UP = 0x0004;
+    const byte ESCAPE = 0x1B;
+    const uint KEY_UP = 0x0002;
+    const int ESCAPES = 2;
+    const int MINIMIZE = 6;
+    const int MINIMIZES = 3;
+    const int WAIT_MS = 2000;
+    const int POLL_MS = 100;
+    // Where the run may click, as fractions of the app's page: its middle, then its edges, which the Start menu leaves.
+    static readonly double[] ACROSS = { 0.5, 0.04, 0.96, 0.5, 0.5 };
+    static readonly double[] DOWN = { 0.5, 0.5, 0.5, 0.04, 0.96 };
     static string Describe(IntPtr window) {
         uint process;
         GetWindowThreadProcessId(window, out process);
@@ -139,25 +161,49 @@ public static class Foreground {
         GetWindowText(window, text, text.Capacity);
         return string.Format("the window of process {0}, '{1}'", process, text);
     }
-    public static string Report(IntPtr app) {
-        IntPtr front = GetForegroundWindow();
-        if (front == app) return "the app's window is in front";
-        return (front == IntPtr.Zero ? "no window" : Describe(front)) + " is in front";
+    static Point Spot(IntPtr app, Rect client, int index) {
+        Point spot = new Point { X = (int)(client.Right * ACROSS[index]), Y = (int)(client.Bottom * DOWN[index]) };
+        ClientToScreen(app, ref spot);
+        return spot;
     }
-    public static string Bring(IntPtr app) {
+    static IntPtr Over(Point spot) {
+        return GetAncestor(WindowFromPoint(spot), ROOT);
+    }
+    static void AwaitFront(IntPtr app) {
+        for (int waited = 0; GetForegroundWindow() != app && waited < WAIT_MS; waited += POLL_MS) Thread.Sleep(POLL_MS);
+    }
+    public static string Click(IntPtr app) {
         IntPtr front = GetForegroundWindow();
-        if (front == app) return "the app's window was in front";
-        string was = front == IntPtr.Zero ? "no window" : Describe(front);
-        uint process;
-        uint thread = GetWindowThreadProcessId(front, out process);
-        uint own = GetCurrentThreadId();
-        // Windows lets a process take the front from the one that has it once their input is joined.
-        AttachThreadInput(own, thread, true);
-        ShowWindow(app, 5);
-        BringWindowToTop(app);
-        SetForegroundWindow(app);
-        AttachThreadInput(own, thread, false);
-        return string.Format("{0} was in front; the app's window {1}", was, GetForegroundWindow() == app ? "came to the front" : "could not be brought to the front");
+        string was = front == app ? "the app's window" : front == IntPtr.Zero ? "no window" : Describe(front);
+        int escapes = 0;
+        for (; GetForegroundWindow() != app && escapes < ESCAPES; escapes += 1) {
+            keybd_event(ESCAPE, 0, 0, UIntPtr.Zero);
+            keybd_event(ESCAPE, 0, KEY_UP, UIntPtr.Zero);
+            Thread.Sleep(WAIT_MS / 4);
+        }
+        Rect client;
+        if (!GetClientRect(app, out client)) throw new Exception("where the app's window is cannot be read");
+        string minimized = "";
+        for (int tries = 0; tries < MINIMIZES; tries += 1) {
+            IntPtr over = Over(Spot(app, client, 0));
+            if (over == app || over == IntPtr.Zero) break;
+            minimized += Describe(over) + ", ";
+            ShowWindowAsync(over, MINIMIZE);
+            Thread.Sleep(WAIT_MS / 4);
+        }
+        string done = string.Format("{0} Escape and minimized {1}", escapes, minimized.Length > 0 ? minimized.TrimEnd(' ', ',') : "nothing");
+        IntPtr under = IntPtr.Zero;
+        for (int i = 0; i < ACROSS.Length; i += 1) {
+            Point spot = Spot(app, client, i);
+            under = Over(spot);
+            if (under != app) continue;
+            SetCursorPos(spot.X, spot.Y);
+            mouse_event(LEFT_DOWN, 0, 0, 0, UIntPtr.Zero);
+            mouse_event(LEFT_UP, 0, 0, 0, UIntPtr.Zero);
+            AwaitFront(app);
+            return string.Format("{0} was in front; after {1}, the app's window {2} at a click at {3},{4}", was, done, GetForegroundWindow() == app ? "came to the front" : "did not come to the front", spot.X, spot.Y);
+        }
+        return string.Format("{0} was in front; after {1}, {2} covers the app's window, which the run did not click", was, done, under == IntPtr.Zero ? "no window" : Describe(under));
     }
 }
 '@
@@ -880,16 +926,17 @@ async function fillScreen() {
     }
     await readClipboard();
     try {
-        // The run's own times beside the page's FULL SCREEN lines, which a failed run shows.
-        console.log(`crossbind e2e: full screen clicked at ${new Date().toISOString()}; ${foreground('Report')}`);
+        // WebView2 grants full screen only to a page whose window has the focus, which DevTools' click does not give: the
+        // run clicks the window first. The run's own times go beside the page's FULL SCREEN lines, which a failed run shows.
+        console.log(`crossbind e2e: full screen clicked at ${new Date().toISOString()}; ${foreground('Click')}`);
         const entered = await clickedFull();
         if (entered !== 'full') {
-            // What the page's focus is without DevTools', and which window is in front, which comes there if it was
-            // another; then the click once more, whose answer the run shows either way.
+            // What the page's focus is without DevTools', and the window clicked once more; then the page's click once
+            // more, whose answer the run shows either way.
             const at = new Date().toISOString();
             const isFocused = await devTools([{ method: 'Runtime.evaluate', params: { expression: 'document.hasFocus()', returnByValue: true } }], { isFocusEmulated: false })
                 .then(({ result }) => result.value, (error) => `unknown: ${error.message}`);
-            const front = foreground('Bring');
+            const front = foreground('Click');
             const again = await clickedFull();
             const told = `${entered}, answered at ${at}; the page's own focus ${isFocused}; ${front}; asked again: ${again}`;
             if (again !== 'full') throw new Error(told);
