@@ -2,7 +2,7 @@ import { nameOf, userKey } from './accounts.js';
 import { appleAuthorizeUrl, appleIdentity, isAppleConfigured } from './apple.js';
 import { log } from './http.js';
 import {
-    signSession, sessionCookie, clearCookie, noticeCookie, pendingCookie, readCookie, randomToken, toBase64Url, SESSION_COOKIE, SESSION_TTL_MS,
+    signSession, sessionCookie, clearCookie, noticeCookie, pendingCookie, readCookie, readSignedIn, randomToken, toBase64Url, SESSION_COOKIE, SESSION_TTL_MS,
 } from './session.js';
 import { numberOr } from './settings.js';
 
@@ -90,16 +90,32 @@ export const signInProviders = (env) => Object.keys(PROVIDERS).filter((provider)
 
 const callbackUrl = (request, provider) => `${new URL(request.url).origin}/playground/callback/${provider}`;
 
-// The state cookie holds `<state>.<secret>.<next>.<provider>`: the secret is GitHub's PKCE verifier or the source of
-// Apple's nonce, and `next` where a sign-in returns, `account`, the account's page, or `playground`. A cookie of a
-// sign-in started before Apple, with three parts or two, is GitHub's.
-export async function startLogin(request, env, { provider = 'github', next = 'playground' } = {}) {
+// The state cookie holds `<state>.<secret>.<next>.<provider>.<purpose>`: the secret is GitHub's PKCE verifier or the
+// source of Apple's nonce, `next` where a sign-in returns, `account`, the account's page, or `playground`, and the
+// purpose `signin`, or `link:<account id>` for a link the account's page started. No script holds any of it. A cookie
+// of a sign-in started before Apple, with three parts or two, is GitHub's and signs in.
+export async function startLogin(request, env, { provider = 'github', next = 'playground', purpose = 'signin' } = {}) {
     const { configured, unset, authorizeUrl } = PROVIDERS[provider];
     if (!configured(env)) return Response.json({ error: unset }, { status: 503 });
     const state = randomToken();
     const secret = randomToken();
     const location = await authorizeUrl(env, callbackUrl(request, provider), state, secret);
-    return redirect(location, [sessionCookie(STATE_COOKIE, `${state}.${secret}.${next}.${provider}`, STATE_TTL_SECONDS)]);
+    return redirect(location, [sessionCookie(STATE_COOKIE, `${state}.${secret}.${next}.${provider}.${purpose}`, STATE_TTL_SECONDS)]);
+}
+
+// A link lands only on the account its start named, and only while this browser's cookie still signs it in: a plain
+// sign-in links nothing.
+async function linkBack(request, env, {
+    accounts, now, provider, accountId, found, done,
+}) {
+    const page = `${new URL(request.url).origin}/login`;
+    const said = (outcome, more = {}) => done(page, [noticeCookie({ said: `link-${outcome}`, provider, ...more })]);
+    const { user } = await readSignedIn(request, env.SESSION_SECRET, accounts, now);
+    if (!user || user.id !== accountId) return said('failed');
+    if (found.failure) return said(found.failure);
+    const { outcome, name, freeFrom } = await accounts.link(user.id, found.identity);
+    if (outcome === 'linked') log({ event: 'identity-linked', who: userKey(user.id), provider });
+    return said(outcome, { name, day: freeFrom });
 }
 
 // Signed in, the browser goes where the start chose: the account's page on this origin, or the configured playground
@@ -109,7 +125,7 @@ export async function startLogin(request, env, { provider = 'github', next = 'pl
 export async function finishLogin(request, env, {
     provider = 'github', fetcher = fetch, now = Date.now(), accounts,
 }) {
-    const [expected, secret, next, started = 'github'] = readCookie(request, STATE_COOKIE)?.split('.') ?? [];
+    const [expected, secret, next, started = 'github', purpose = 'signin'] = readCookie(request, STATE_COOKIE)?.split('.') ?? [];
     const { origin } = new URL(request.url);
     const page = next === 'account' ? `${origin}/login` : `${origin}/login?next=playground`;
     const done = (location, cookies = []) => redirect(location, [clearCookie(STATE_COOKIE), ...cookies]);
@@ -119,9 +135,15 @@ export async function finishLogin(request, env, {
     const state = params.get('state');
     if (!state || state !== expected || !secret || started !== provider) return back('failed');
     try {
-        const { identity, failure } = await PROVIDERS[provider].identity(env, {
+        const found = await PROVIDERS[provider].identity(env, {
             code: params.get('code') ?? '', secret, redirectUri: callbackUrl(request, provider), fetcher, now,
         });
+        if (purpose.startsWith('link:')) {
+            return await linkBack(request, env, {
+                accounts, now, provider, accountId: purpose.slice('link:'.length), found, done,
+            });
+        }
+        const { identity, failure } = found;
         if (failure) return back(failure);
         const { user, freeFrom, unknown } = await accounts.signIn(identity, { create: false });
         if (unknown) return done(page, [await pendingCookie(identity, next === 'account' ? 'account' : 'playground', env.SESSION_SECRET, now)]);

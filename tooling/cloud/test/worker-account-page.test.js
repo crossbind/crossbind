@@ -24,7 +24,7 @@ const env = {
 // Made-up GitHub accounts: ids of ten digits, and names with an underscore, which no GitHub login has.
 const dev = { provider: 'github', subject: '8000000001', login: 'made_up_dev' };
 const two = { provider: 'github', subject: '8000000002', login: 'made_up_two' };
-const POLICY = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; form-action 'self' https://crossbind.dev; frame-ancestors 'none'; base-uri 'none'";
+const POLICY = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; form-action 'self' https://github.com https://appleid.apple.com https://crossbind.dev; frame-ancestors 'none'; base-uri 'none'";
 
 function setup({ environment = env } = {}) {
     let now = NOW;
@@ -128,7 +128,15 @@ test('takes a form from the account\'s own page alone: crossbind.dev, another si
     const token = await accounts.issueToken(user.id);
     const cookie = await cookieOf(user, NOW);
     const forms = {
-        '/account/logout': {}, '/account/tokens/revoke': { ref: refOf(token) }, '/account/logout-everywhere': {}, '/account/delete': { confirm: 'yes' }, '/account/new': {},
+        '/account/logout': {},
+        '/account/tokens/revoke': { ref: refOf(token) },
+        '/account/logout-everywhere': {},
+        '/account/delete': { confirm: 'yes' },
+        '/account/new': {},
+        '/account/link/github': {},
+        '/account/link/apple': {},
+        '/account/link-pending': {},
+        '/account/unlink': { provider: 'github' },
     };
 
     const answers = [];
@@ -142,7 +150,7 @@ test('takes a form from the account\'s own page alone: crossbind.dev, another si
         }
     }
 
-    assert.equal(answers.length, 25);
+    assert.equal(answers.length, 45);
     assert.deepEqual(answers.filter((answer) => answer.status !== 403 || answer.cookie !== null || answer.error !== 'This is accepted from the account\'s page only.'), []);
     assert.deepEqual(await accounts.standing(user.id), {
         exists: true, blocked: false, login: 'made_up_dev', name: 'made_up_dev', signedOutAt: null,
@@ -280,7 +288,7 @@ test('answers 404 to any other path or method under /account/, a preflight inclu
         await send('GET', '/account/delete'),
         await send('OPTIONS', '/account/delete', { origin: SITE }),
         await send('GET', '/account/login/gitlab'),
-        await send('POST', '/account/unlink', { origin: API }),
+        await send('POST', '/account/link/gitlab', { origin: API }),
         await send('POST', '/login', { origin: API }),
     ];
 
