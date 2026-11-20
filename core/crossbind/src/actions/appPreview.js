@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import upath from 'upath';
@@ -15,8 +16,12 @@ import { identityLine, previewBlockers } from '../utils/previewBlockers.js';
 import { previewModuleSource } from '../utils/previewModule.js';
 import { PREVIEW_PROTOCOL, newPreviewKey } from '../utils/previewSession.js';
 import {
-    defaultRouteAddress, previewHost, previewPort, urlHost,
+    defaultRouteAddress, listedAddress, previewHost, previewPort, urlHost,
 } from '../utils/previewAddress.js';
+import { cloudUrl } from '../utils/cloudAccount.js';
+import loadSystemConfig from '../utils/systemConfig.js';
+import { halfBlocks, qrMatrix } from '../utils/qrMatrix.js';
+import { listSession, previewAccount } from './cloudCommands.js';
 
 const { version: CROSSBIND_VERSION } = JSON.parse(fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
 const UPDATES = {
@@ -25,6 +30,22 @@ const UPDATES = {
 // What tells a bundler plugin it builds an app, which a preview's web build leaves out.
 const APP_BUILD_ENV = ['CROSSBIND_APP_BUILD', 'CROSSBIND_APP_PLATFORM', 'CROSSBIND_APP_DEVICE'];
 const APP_HEADER = /#\s*include\s*[<"]crossbind\/app\.h[>"]/;
+// What a QR code or a link opens a session with: crossbind.dev's page, which hands it to the crossbind app. It names
+// the session alone; the device reads the rest, the key among it, from its own account's list.
+const OPEN_PAGE = 'https://crossbind.dev/open/';
+const SESSION_ID_BYTES = 16;
+const PROJECT_ID_BYTES = 16;
+// Black on bright white, so that a terminal's dark theme does not turn the code over.
+const BLACK_ON_WHITE = ['\x1b[30;107m', '\x1b[0m'];
+
+// The project's id on the account's list, the same at each run and for no other project, from its name and its root's
+// real path, with nothing written to disk.
+export const projectIdOf = (name, root) => crypto.createHash('sha256').update(`crossbind-project.${name}.${fs.realpathSync(root)}`).digest()
+    .subarray(0, PROJECT_ID_BYTES).toString('base64url');
+
+// A session's QR code as the terminal shows it, in its own colours under NO_COLOR.
+export const qrLines = (link, env = process.env) => halfBlocks(qrMatrix(link).modules)
+    .map((line) => (env.NO_COLOR ? line : `${BLACK_ON_WHITE[0]}${line}${BLACK_ON_WHITE[1]}`));
 
 // The web build's targets of its dev server, as the bundler plugins pick them: the debug build links, the release
 // target's bridges bind.
@@ -85,8 +106,8 @@ async function buildNative({ params, release, debug }, files) {
     await buildWasm(debug, { force: force || Boolean(sourceBuilt) || Boolean(bridgeBuilt) });
 }
 
-// crossbind app preview: what it checks before it prints anything, in order, then the project's Vite in preview mode,
-// whose exit code it gives back.
+// crossbind app preview: what it checks before it prints anything, in order, the account it opens on, then the
+// project's Vite in preview mode, whose exit code it gives back, with its session on the account's list meanwhile.
 export default async function appPreview({
     host, port, args, viteName, viteVersion, runVite,
 }) {
@@ -98,24 +119,55 @@ export default async function appPreview({
     const targets = webTargets();
     const blockers = previewBlockers(state.config, targets.debug);
     if (blockers.length > 0) throw new Error(blockers.join('\n'));
+    const cloud = cloudUrl(loadSystemConfig());
+    const account = await previewAccount({ url: cloud });
     const where = previewHost(host, host === undefined || ['0.0.0.0', '::'].includes(host) ? await defaultRouteAddress() : null);
     const chosenPort = await previewPort(where.listen, port);
     const files = nativeFiles();
     if (files.length > 0) await buildNative(targets, files);
 
     const key = newPreviewKey();
+    const id = crypto.randomBytes(SESSION_ID_BYTES).toString('base64url');
     const { name } = state.config.general;
     const update = UPDATES[packageManagerOf(state.config.paths.project, process.env.npm_config_user_agent)];
     const address = `${urlHost(where.address)}:${chosenPort}`;
+    const listed = await listSession({
+        url: cloud,
+        token: account.token,
+        id,
+        session: {
+            source: 'dev',
+            project: { id: projectIdOf(name, state.config.paths.project), name },
+            addresses: [listedAddress(where.address, chosenPort)],
+            protocol: PREVIEW_PROTOCOL,
+            key,
+        },
+    });
+    const link = `${OPEN_PAGE}?s=${id}`;
     const identity = identityLine(state.config);
     console.log(`crossbind app preview: ${name}, protocol ${PREVIEW_PROTOCOL}, Vite ${viteVersion}`);
+    console.log(`  signed in to crossbind cloud as ${account.name}`);
     console.log(`  on ${address}${where.interface ? ` (${where.interface})` : ''}${where.listen === where.address ? '' : `, listening on ${where.listen}`}`);
     console.log(`  open: http://${address}/#k=${key}`);
+    console.log(`  scan this with a phone's camera, or open ${link}`);
+    qrLines(link).forEach((line) => console.log(`  ${line}`));
+    console.log(`  Projects lists it in the crossbind app on every device signed in as ${account.name}`);
     if (identity) console.log(`  ${identity}`);
 
-    const session = { protocol: PREVIEW_PROTOCOL, project: { name }, crossbind: CROSSBIND_VERSION, update };
+    const session = {
+        protocol: PREVIEW_PROTOCOL, project: { name }, crossbind: CROSSBIND_VERSION, update, account: { id: account.id, name: account.name }, session: id,
+    };
     const preview = JSON.stringify({
         key, address: where.address, listen: where.listen, port: chosenPort, session, update,
     });
-    return runVite(args, { ...process.env, CROSSBIND_APP_PREVIEW: preview });
+    // A Ctrl-C ends Vite, then the preview once its session is off the list: crossbind's own end at a SIGINT
+    // (utils/logger.js) is set aside until Vite has ended, and a second Ctrl-C meanwhile ends it at once.
+    const onInterrupt = process.listeners('SIGINT');
+    onInterrupt.forEach((listener) => process.off('SIGINT', listener));
+    try {
+        return await runVite(args, { ...process.env, CROSSBIND_APP_PREVIEW: preview });
+    } finally {
+        onInterrupt.forEach((listener) => process.on('SIGINT', listener));
+        await listed.stop();
+    }
 }

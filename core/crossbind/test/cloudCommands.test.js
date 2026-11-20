@@ -1,9 +1,9 @@
-import { describe, test, expect, beforeEach, afterEach } from 'vitest';
+import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-    deleteAccount, login, logout, fetchUsage, usageLines,
+    deleteAccount, listSession, login, logout, fetchUsage, previewAccount, usageLines, RENEW_MS,
 } from '../src/actions/cloudCommands.js';
 import { DEFAULT_CLOUD_URL, cloudUrl, cloudCredentials } from '../src/utils/cloudAccount.js';
 
@@ -304,5 +304,99 @@ describe('crossbind usage', () => {
             'Playground: 20 of 20 compiles left today.',
         ]);
         expect(usageLines({ ...fresh, builds: { ...fresh.builds, opensOn: '2026-13-20' } })[1]).toBe('Cloud builds in 2026-11: 0s of 0s used, 0s left.');
+    });
+});
+
+describe("crossbind app preview's account and session", () => {
+    const ACCOUNT = { id: '1099511627777', name: 'made-up-dev' };
+    const ID = 'IRVUB8Fpwuh0lT_7NkiJ8Q';
+    const ROUTE = `${URL_}/v1/sessions/${ID}`;
+    const SESSION = {
+        source: 'dev', project: { id: 'mWW-UyZhfd1-czxo9qk5Aw', name: 'made-up-app' }, addresses: ['192.168.1.6:5173'], protocol: 1, key: 'GheN2aAnJDjAj-qTuiyNWPEy-yOsSHLE15uyL80No6o',
+    };
+    const NOT_SIGNED_IN = 'crossbind: crossbind app preview opens on your devices through your crossbind account: run crossbind login first.';
+    const sent = (calls) => calls.map(({ method, url, body }) => [method, url, body]);
+    const listing = (fetcher, warn = () => {}) => listSession({
+        url: URL_, token: TOKEN, id: ID, session: SESSION, fetcher, warn,
+    });
+
+    beforeEach(() => vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] }));
+    afterEach(() => vi.useRealTimers());
+
+    test('reads the account this machine signs in to, and asks for crossbind login where it signs in to none, or its sign-in no longer holds', async () => {
+        await expect(previewAccount({ url: URL_, file, fetcher: server([]).fetcher })).rejects.toThrow(NOT_SIGNED_IN);
+        save({ [URL_]: { token: TOKEN, login: 'made-up-dev' } });
+        const signedIn = server([[200, ACCOUNT]]);
+
+        expect(await previewAccount({ url: URL_, file, fetcher: signedIn.fetcher })).toEqual({ ...ACCOUNT, token: TOKEN });
+        expect(signedIn.calls).toEqual([{
+            url: `${URL_}/v1/account`, method: 'GET', headers: { authorization: `Bearer ${TOKEN}` }, body: undefined,
+        }]);
+        await expect(previewAccount({ url: URL_, file, fetcher: server([[401, { error: 'Sign in with crossbind login.' }]]).fetcher })).rejects.toThrow(NOT_SIGNED_IN);
+        await expect(previewAccount({ url: URL_, file, fetcher: server([[403, { error: 'This account may not use crossbind cloud.' }]]).fetcher }))
+            .rejects.toThrow('crossbind: This account may not use crossbind cloud.');
+        await expect(previewAccount({ url: URL_, file, fetcher: server([[200, { id: 1099511627777, name: 'made-up-dev' }]]).fetcher }))
+            .rejects.toThrow('crossbind: crossbind cloud sent no account.');
+    });
+
+    test('lists the session at once, renews it with the same body every five minutes while the preview runs, and takes it off as it stops', async () => {
+        const cloud = server([[200, { id: ID }], [200, { id: ID }], [200, { id: ID }], [204]]);
+        const listed = await listing(cloud.fetcher);
+        const registered = cloud.calls.length;
+        await vi.advanceTimersByTimeAsync(RENEW_MS - 1);
+        const early = cloud.calls.length;
+        await vi.advanceTimersByTimeAsync(1 + RENEW_MS);
+        await listed.stop();
+        await vi.advanceTimersByTimeAsync(2 * RENEW_MS);
+
+        expect([registered, early, RENEW_MS]).toEqual([1, 1, 5 * 60 * 1000]);
+        expect(sent(cloud.calls)).toEqual([['PUT', ROUTE, SESSION], ['PUT', ROUTE, SESSION], ['PUT', ROUTE, SESSION], ['DELETE', ROUTE, undefined]]);
+        expect(cloud.calls.map(({ headers }) => headers.authorization)).toEqual(Array(4).fill(`Bearer ${TOKEN}`));
+    });
+
+    test("stops a preview whose session the cloud refuses, with the cloud's words, and renews nothing", async () => {
+        const cloud = server([[429, { error: 'This account has 10 previews running, as many as it may: stop one first.' }]]);
+
+        await expect(listing(cloud.fetcher)).rejects.toThrow('crossbind: This account has 10 previews running, as many as it may: stop one first.');
+        await vi.advanceTimersByTimeAsync(2 * RENEW_MS);
+        expect(cloud.calls).toHaveLength(1);
+    });
+
+    test('says when a renewal or the removal fails, and stops nothing: the next renewal goes on, and a session already gone is no failure', async () => {
+        const warnings = [];
+        const cloud = server([[200, { id: ID }], [503, { error: 'crossbind cloud is busy.' }], [200, { id: ID }], [500, { error: 'Something failed.' }]]);
+        const listed = await listing(cloud.fetcher, (line) => warnings.push(line));
+        await vi.advanceTimersByTimeAsync(2 * RENEW_MS);
+        await listed.stop();
+        const gone = server([[200, { id: ID }], [404, { error: 'No session of this account has this id.' }]]);
+        const goneListed = await listing(gone.fetcher, (line) => warnings.push(line));
+        await goneListed.stop();
+
+        expect(sent(cloud.calls).map(([method]) => method)).toEqual(['PUT', 'PUT', 'PUT', 'DELETE']);
+        expect(warnings).toEqual([
+            "crossbind: crossbind cloud did not renew this preview on your account's list (crossbind cloud is busy.); it tries again in five minutes.",
+            "crossbind: crossbind cloud did not take this preview off your account's list (Something failed.); it leaves the list within ten minutes.",
+        ]);
+    });
+
+    test('takes the session off only once a renewal on its way has ended, so that the renewal cannot list it again', async () => {
+        const calls = [];
+        let release;
+        const held = new Promise((resolve) => { release = resolve; });
+        const fetcher = async (url, init) => {
+            calls.push(init.method);
+            if (calls.length === 2) await held;
+            return new Response(init.method === 'DELETE' ? null : JSON.stringify({ id: ID }), { status: init.method === 'DELETE' ? 204 : 200 });
+        };
+        const listed = await listing(fetcher);
+        await vi.advanceTimersByTimeAsync(RENEW_MS);
+        const stopping = listed.stop();
+        await Promise.resolve();
+        const whileRenewing = [...calls];
+        release();
+        await stopping;
+
+        expect(whileRenewing).toEqual(['PUT', 'PUT']);
+        expect(calls).toEqual(['PUT', 'PUT', 'DELETE']);
     });
 });

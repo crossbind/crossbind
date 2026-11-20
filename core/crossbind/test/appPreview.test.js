@@ -1,12 +1,19 @@
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import http from 'node:http';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import upath from 'upath';
-import { appHeaderBlocker, projectPageApi, viteProblem } from '../src/actions/appPreview.js';
+import {
+    appHeaderBlocker, projectIdOf, projectPageApi, qrLines, viteProblem,
+} from '../src/actions/appPreview.js';
+import { halfBlocks, qrMatrix } from '../src/utils/qrMatrix.js';
 
 const CLI = fileURLToPath(new URL('../src/cli.js', import.meta.url));
+const TOKEN = `cbt_${'a'.repeat(43)}`;
+const ACCOUNT = { id: '1099511627777', name: 'made-up-dev' };
+const NOT_SIGNED_IN = 'crossbind: crossbind app preview opens on your devices through your crossbind account: run crossbind login first.';
 
 let dir;
 beforeEach(() => {
@@ -25,6 +32,48 @@ function projectWith(config, viteVersion = '8.3.8') {
     fs.writeFileSync(upath.join(vite, 'bin', 'vite.js'), "console.log(`VITE ${process.argv.slice(2).join(' ')} ${process.env.CROSSBIND_APP_PREVIEW}`);\n");
 }
 const preview = (...args) => spawnSync(process.execPath, [CLI, 'app', 'preview', ...args], { cwd: dir, encoding: 'utf8', env: { ...process.env, HOME: dir, USERPROFILE: dir } });
+
+// crossbind cloud as a preview asks it, on this machine: the account TOKEN signs in to, and the session's registration,
+// which `refuse` answers with its [status, body], and its removal; each call recorded.
+function standInCloud({ refuse } = {}) {
+    const calls = [];
+    const server = http.createServer((request, response) => {
+        let text = '';
+        request.on('data', (chunk) => { text += chunk; });
+        request.on('end', () => {
+            calls.push({
+                call: `${request.method} ${request.url}`, authorization: request.headers.authorization, body: text ? JSON.parse(text) : undefined,
+            });
+            const answer = (status, body) => response.writeHead(status, { 'content-type': 'application/json' }).end(body === undefined ? undefined : JSON.stringify(body));
+            const isSession = request.url.startsWith('/v1/sessions/');
+            if (request.url === '/v1/account') answer(...(request.headers.authorization === `Bearer ${TOKEN}` ? [200, ACCOUNT] : [401, { error: 'Sign in with crossbind login.' }]));
+            else if (isSession && request.method === 'PUT') answer(...(refuse ?? [200, { id: request.url.slice('/v1/sessions/'.length), expiresAt: '2026-11-21T10:10:00.000Z' }]));
+            else if (isSession && request.method === 'DELETE') answer(204);
+            else answer(404, { error: 'Not found.' });
+        });
+    });
+    return new Promise((resolve) => {
+        server.listen(0, '127.0.0.1', () => resolve({ calls, url: `http://127.0.0.1:${server.address().port}`, close: () => server.close() }));
+    });
+}
+
+// This machine signed in to the stand-in with crossbind login, as its credentials file keeps it.
+function signIn(cloud, token = TOKEN) {
+    const file = upath.join(dir, '.crossbind', 'credentials.json');
+    fs.mkdirSync(upath.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify({ [cloud.url]: { token, login: ACCOUNT.name } }));
+}
+
+// crossbind app preview pointed at the stand-in, which answers while it runs, the QR code in its colours.
+const previewWith = (cloud, ...args) => new Promise((resolve) => {
+    const child = spawn(process.execPath, [CLI, 'app', 'preview', ...args], {
+        cwd: dir, env: { ...process.env, HOME: dir, USERPROFILE: dir, CROSSBIND_CLOUD_URL: cloud.url, NO_COLOR: '' },
+    });
+    const said = { stdout: '', stderr: '' };
+    child.stdout.on('data', (chunk) => { said.stdout += chunk; });
+    child.stderr.on('data', (chunk) => { said.stderr += chunk; });
+    child.on('close', (status) => resolve({ status, ...said }));
+});
 
 describe('crossbind app preview', () => {
     test("is no command crossbind app's help lists", () => {
@@ -71,18 +120,114 @@ describe('crossbind app preview', () => {
         expect(stdout).not.toContain('VITE');
     });
 
-    test("names what is the crossbind app's in a preview, and goes on to Vite with the key, the address and the session", () => {
+    test("lists its session on the account's list, names what is the crossbind app's in a preview, goes on to Vite with the key, the address and the session, and takes the session off as Vite ends", async () => {
         projectWith("export default { app: { urlSchemes: ['acme'] } };\n");
-        const { status, stdout } = preview('--mode', 'staging');
-        expect(status).toBe(0);
-        expect(stdout).toContain('crossbind app preview: demo, protocol 1, Vite 8.3.8');
-        expect(stdout).toContain("in a preview these are the crossbind app's: app.urlSchemes (links of acme open nothing of this project)");
-        const key = stdout.match(/open: http:\/\/\S+:(\d+)\/#k=([A-Za-z0-9_-]{43})\n/);
-        expect(key).not.toBeNull();
-        const handed = JSON.parse(stdout.match(/^VITE --mode staging (.*)$/m)[1]);
-        expect(handed).toMatchObject({ key: key[2], port: Number(key[1]), session: { protocol: 1, project: { name: 'demo' } } });
-        // crossbind prints the key once, in the line's fragment; the rest is the stand-in's.
-        expect(stdout.slice(0, stdout.indexOf('VITE --mode')).split(key[2])).toHaveLength(2);
+        const cloud = await standInCloud();
+        signIn(cloud);
+        try {
+            const { status, stdout } = await previewWith(cloud, '--mode', 'staging');
+            expect(status).toBe(0);
+            expect(stdout).toContain('crossbind app preview: demo, protocol 1, Vite 8.3.8\n  signed in to crossbind cloud as made-up-dev\n');
+            expect(stdout).toContain("in a preview these are the crossbind app's: app.urlSchemes (links of acme open nothing of this project)");
+            const [, address, port, key] = stdout.match(/open: http:\/\/(\S+):(\d+)\/#k=([A-Za-z0-9_-]{43})\n/);
+            const [, link, id] = stdout.match(/ {2}scan this with a phone's camera, or open (https:\/\/crossbind\.dev\/open\/\?s=([A-Za-z0-9_-]{22}))\n/);
+            expect(stdout).toContain(`${qrLines(link, {}).map((line) => `  ${line}`).join('\n')}\n  Projects lists it in the crossbind app on every device signed in as made-up-dev\n`);
+            const handed = JSON.parse(stdout.match(/^VITE --mode staging (.*)$/m)[1]);
+            expect(handed).toMatchObject({
+                key, port: Number(port), session: { protocol: 1, project: { name: 'demo' }, account: ACCOUNT, session: id },
+            });
+            expect(cloud.calls.map(({ call }) => call)).toEqual(['GET /v1/account', `PUT /v1/sessions/${id}`, `DELETE /v1/sessions/${id}`]);
+            expect(cloud.calls.map(({ authorization }) => authorization)).toEqual(Array(3).fill(`Bearer ${TOKEN}`));
+            expect(cloud.calls[1].body).toEqual({
+                source: 'dev', project: { id: projectIdOf('demo', dir), name: 'demo' }, addresses: [`${address}:${port}`], protocol: 1, key,
+            });
+            // crossbind prints the key once, in the line's fragment; the rest is the stand-in's.
+            expect(stdout.slice(0, stdout.indexOf('VITE --mode')).split(key)).toHaveLength(2);
+        } finally {
+            cloud.close();
+        }
+    });
+
+    test.skipIf(process.platform === 'win32')('takes its session off the list as a Ctrl-C ends Vite, before crossbind ends', async () => {
+        projectWith('export default {};\n');
+        // A Vite that runs until a signal ends it.
+        fs.writeFileSync(upath.join(dir, 'node_modules', 'vite', 'bin', 'vite.js'), "console.log('VITE running');\nsetInterval(() => {}, 1000);\n");
+        const cloud = await standInCloud();
+        signIn(cloud);
+        try {
+            const child = spawn(process.execPath, [CLI, 'app', 'preview'], {
+                cwd: dir, env: { ...process.env, HOME: dir, USERPROFILE: dir, CROSSBIND_CLOUD_URL: cloud.url },
+            });
+            const ended = new Promise((resolve) => { child.on('close', resolve); });
+            await new Promise((resolve) => { child.stdout.on('data', (chunk) => { if (String(chunk).includes('VITE running')) resolve(); }); });
+            child.kill('SIGINT');
+            expect(await ended).toBe(130);
+            expect(cloud.calls.map(({ call }) => call.split(' ')[0])).toEqual(['GET', 'PUT', 'DELETE']);
+        } finally {
+            cloud.close();
+        }
+    });
+
+    test('stops before Vite, asking for crossbind login, where this machine is not signed in, or its sign-in no longer holds', async () => {
+        projectWith('export default {};\n');
+        const cloud = await standInCloud();
+        try {
+            const unsigned = await previewWith(cloud);
+            signIn(cloud, `cbt_${'b'.repeat(43)}`);
+            const lapsed = await previewWith(cloud);
+            for (const { status, stdout, stderr } of [unsigned, lapsed]) {
+                expect(status).toBe(1);
+                expect(stderr).toContain(NOT_SIGNED_IN);
+                expect(stdout).not.toContain('VITE');
+            }
+            // The machine not signed in asked nothing.
+            expect(cloud.calls.map(({ call }) => call)).toEqual(['GET /v1/account']);
+        } finally {
+            cloud.close();
+        }
+    });
+
+    test("stops before Vite with crossbind cloud's words where it refuses the session, and prints no address", async () => {
+        projectWith('export default {};\n');
+        const cloud = await standInCloud({ refuse: [429, { error: 'This account has 10 previews running, as many as it may: stop one first.' }] });
+        signIn(cloud);
+        try {
+            const { status, stdout, stderr } = await previewWith(cloud);
+            expect(status).toBe(1);
+            expect(stderr).toContain('crossbind: This account has 10 previews running, as many as it may: stop one first.');
+            expect(stdout).not.toContain('VITE');
+            expect(stdout).not.toContain('open:');
+        } finally {
+            cloud.close();
+        }
+    });
+});
+
+describe("a preview's session on the account's list", () => {
+    test('names a project alike at each run, from its name and its root, and another root or name otherwise, in 16 bytes', () => {
+        const other = upath.join(dir, 'other');
+        fs.mkdirSync(other);
+        expect(projectIdOf('demo', dir)).toMatch(/^[A-Za-z0-9_-]{22}$/);
+        expect(projectIdOf('demo', dir)).toBe(projectIdOf('demo', dir));
+        expect(new Set([projectIdOf('demo', dir), projectIdOf('demo', other), projectIdOf('demo-2', dir)]).size).toBe(3);
+    });
+
+    test.skipIf(process.platform === 'win32')("names a project by its root's real path, whatever link leads to it", () => {
+        const link = upath.join(os.tmpdir(), `crossbind-preview-link-${process.pid}`);
+        fs.symlinkSync(dir, link);
+        try {
+            expect(projectIdOf('demo', link)).toBe(projectIdOf('demo', dir));
+        } finally {
+            fs.rmSync(link);
+        }
+    });
+
+    test("draws a session's QR code black on bright white, and in the terminal's own colours under NO_COLOR", () => {
+        const link = 'https://crossbind.dev/open/?s=IRVUB8Fpwuh0lT_7NkiJ8Q';
+        const plain = halfBlocks(qrMatrix(link).modules);
+        expect(qrLines(link, { NO_COLOR: '1' })).toEqual(plain);
+        expect(qrLines(link, {})).toEqual(plain.map((line) => `\x1b[30;107m${line}\x1b[0m`));
+        expect(qrLines(link, { NO_COLOR: '' })).toEqual(qrLines(link, {}));
     });
 });
 

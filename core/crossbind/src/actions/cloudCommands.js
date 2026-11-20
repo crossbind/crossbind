@@ -3,7 +3,8 @@ import {
     CREDENTIALS_FILE, cloudCredentials, readCredentials, writeCredentials,
 } from '../utils/cloudAccount.js';
 
-// `crossbind login`, `logout` and `usage`, against tooling/cloud/worker/account-api.js.
+// `crossbind login`, `logout` and `usage`, and crossbind app preview's account and session, against
+// tooling/cloud/worker/account-api.js.
 
 const TOKEN_PATTERN = /^cbt_[A-Za-z0-9_-]{43}$/;
 const MAX_NAME_LENGTH = 64;
@@ -17,13 +18,20 @@ const NUMBER_QUESTION = 'crossbind: once you approve, the page shows a number: t
 const NUMBER = /^\s*([1-9]\d)\s*$/;
 const DAY = /^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 const MONTH_NAMES = Object.freeze(['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']);
+const NOT_SIGNED_IN = 'crossbind: crossbind app preview opens on your devices through your crossbind account: run crossbind login first.';
+// The cloud lists a dev session ten minutes after its last renewal (tooling/cloud/worker/project-sessions.js).
+export const RENEW_MS = 5 * 60 * 1000;
+// A renewal or the removal waits this long for the cloud, so that a preview never stops on it.
+const SESSION_CALL_MS = 10 * 1000;
 
 const wait = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 // What the cloud sends ends up on the terminal: no escape sequences.
 const printable = (value) => String(value ?? '').replace(/\p{Cc}/gu, '');
 const paceOf = (seconds, fallback) => Math.max(MIN_INTERVAL_SECONDS, Number.isFinite(seconds) ? seconds : fallback);
 
-async function call(fetcher, url, route, { method = 'GET', token, body } = {}) {
+async function call(fetcher, url, route, {
+    method = 'GET', token, body, signal,
+} = {}) {
     let response;
     try {
         // A redirect would carry the token to an address nobody configured.
@@ -32,6 +40,7 @@ async function call(fetcher, url, route, { method = 'GET', token, body } = {}) {
             headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...(body ? { 'content-type': 'application/json' } : {}) },
             body: body && JSON.stringify(body),
             redirect: 'error',
+            signal,
         });
     } catch (error) {
         throw new Error(`crossbind: crossbind cloud at ${url} is unreachable (${error.cause?.code ?? error.message}).`, { cause: error });
@@ -142,6 +151,55 @@ export async function fetchUsage({ url, file = CREDENTIALS_FILE, fetcher = fetch
     if (answer.status === 401) throw new Error('crossbind: this sign-in is no longer valid; run crossbind login.');
     if (!answer.ok) throw refused(answer);
     return answer.body;
+}
+
+// The account crossbind app preview opens on, as this machine is signed in to it: { id, name, token }.
+export async function previewAccount({ url, file = CREDENTIALS_FILE, fetcher = fetch }) {
+    const entry = cloudCredentials(url, file);
+    if (!entry) throw new Error(NOT_SIGNED_IN);
+    const answer = await call(fetcher, url, '/v1/account', { token: entry.token });
+    if (answer.status === 401) throw new Error(NOT_SIGNED_IN);
+    if (!answer.ok) throw refused(answer);
+    const { id, name } = answer.body;
+    if (typeof id !== 'string' || !/^\d{1,16}$/.test(id)) throw new Error('crossbind: crossbind cloud sent no account.');
+    return { id, name: printable(name).slice(0, MAX_NAME_LENGTH), token: entry.token };
+}
+
+const reasonOf = (error) => error.message.replace(/^crossbind: /, '');
+
+// crossbind app preview's session on its account's list (tooling/cloud/worker/project-sessions.js): registered at once,
+// which a refusal stops, then renewed every RENEW_MS, and removed by stop(). A renewal or the removal that fails says
+// so and stops nothing: the cloud lists the session again at the next renewal, and drops it ten minutes after the last.
+export async function listSession({
+    url, token, id, session, fetcher = fetch, warn = console.warn,
+}) {
+    const route = `/v1/sessions/${id}`;
+    const registered = await call(fetcher, url, route, { method: 'PUT', token, body: session });
+    if (!registered.ok) throw refused(registered);
+    let renewal = Promise.resolve();
+    const renew = async () => {
+        try {
+            const answer = await call(fetcher, url, route, {
+                method: 'PUT', token, body: session, signal: AbortSignal.timeout(SESSION_CALL_MS),
+            });
+            if (!answer.ok) throw refused(answer);
+        } catch (error) {
+            warn(`crossbind: crossbind cloud did not renew this preview on your account's list (${reasonOf(error)}); it tries again in five minutes.`);
+        }
+    };
+    const timer = setInterval(() => { renewal = renew(); }, RENEW_MS);
+    return {
+        async stop() {
+            clearInterval(timer);
+            await renewal;
+            try {
+                const answer = await call(fetcher, url, route, { method: 'DELETE', token, signal: AbortSignal.timeout(SESSION_CALL_MS) });
+                if (!answer.ok && answer.status !== 404) throw refused(answer);
+            } catch (error) {
+                warn(`crossbind: crossbind cloud did not take this preview off your account's list (${reasonOf(error)}); it leaves the list within ten minutes.`);
+            }
+        },
+    };
 }
 
 function formatSeconds(seconds) {

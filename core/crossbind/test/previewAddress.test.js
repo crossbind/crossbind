@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import net from 'node:net';
 import {
-    PREVIEW_PORT, isLocalSource, previewHost, previewPort, urlHost,
+    PREVIEW_PORT, isLocalSource, listedAddress, previewHost, previewPort, urlHost,
 } from '../src/utils/previewAddress.js';
 
 const entry = (address) => [{ address, family: net.isIPv6(address) ? 'IPv6' : 'IPv4', internal: false }];
@@ -49,6 +49,13 @@ describe('the address a device reaches the dev server at', () => {
     test('writes an IPv6 address in brackets, as a URL holds it', () => {
         expect(urlHost('fd00::6')).toBe('[fd00::6]');
         expect(urlHost('192.168.1.6')).toBe('192.168.1.6');
+    });
+
+    test("lists the address with its port in the one form crossbind cloud takes, as a URL writes it", () => {
+        expect(listedAddress('192.168.1.6', 5173)).toBe('192.168.1.6:5173');
+        expect(listedAddress('MyMac.local', 5173)).toBe('mymac.local:5173');
+        expect(listedAddress('FD00:0:0:0::6', 5174)).toBe('[fd00::6]:5174');
+        expect(listedAddress('10.0.0.2', 80)).toBe('10.0.0.2:80');
     });
 });
 
