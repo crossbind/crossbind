@@ -130,9 +130,41 @@ test('holds one linked identity of each provider to an account, and one snapshot
     assert.deepEqual(await rows(db, 'SELECT count(*) AS identities, (SELECT count(*) FROM sessions) AS sessions FROM identities'), [{ identities: 3, sessions: 4 }]);
 });
 
+test('takes a deleted account\'s identities with its row, or with the prune of its last seconds, and never a live or blocked account\'s', async () => {
+    let now = NOW;
+    const db = sqliteD1();
+    const accounts = createAccounts(db, () => now);
+    const holders = async () => (await rows(db, 'SELECT user_id FROM identities ORDER BY user_id')).map((row) => row.user_id);
+    const [idle, spent, live, blocked, late] = ['8000000001', '8000000002', '8000000003', '8000000004', '8000000005'];
+    for (const id of [idle, spent, live, blocked, late]) await accounts.signIn({ id, login: `made_up_${id.at(-1)}` });
+    await accounts.addBuildSeconds(spent, NOW, 'web', 600);
+    await accounts.addBuildSeconds(live, Date.parse('2026-07-10T10:00:00Z'), 'web', 10);
+    await db.prepare('UPDATE users SET blocked = 1 WHERE id = ?').bind(blocked).run();
+
+    for (const id of [idle, spent, blocked]) await accounts.deleteAccount(id);
+    const afterDeletion = await holders();
+    const back = await accounts.signIn({ id: spent, login: 'made_up_2' });
+    const monthSpent = (await accounts.buildBudget(spent, now)).mine;
+    await accounts.deleteAccount(spent);
+    // An account deleted as the month ends, whose runner is metered once more, into the next month.
+    now = Date.parse('2026-11-30T23:59:00Z');
+    await accounts.addBuildSeconds(late, now, 'web', 60);
+    await accounts.deleteAccount(late);
+    await accounts.addBuildSeconds(late, Date.parse('2026-12-01T00:00:30Z'), 'web', 30);
+    now = Date.parse('2026-12-02T03:17:00Z');
+    await accounts.prune();
+
+    assert.deepEqual(afterDeletion, [8000000002, 8000000003, 8000000004, 8000000005]);
+    assert.deepEqual(back, { id: spent, login: 'made_up_2', blocked: false });
+    assert.equal(monthSpent, 600);
+    assert.deepEqual(await holders(), [8000000003, 8000000004, 8000000005]);
+});
+
 // What a later migration would run to take 0002 back.
 const UNDO = [
     'DROP TRIGGER users_github_identity',
+    'DROP TRIGGER users_deleted_identities',
+    'DROP TRIGGER build_usage_gone_identities',
     'DROP TABLE sessions',
     'DROP TABLE device_codes',
     'DROP TABLE identities',
