@@ -5,6 +5,7 @@
     "type": "module",
     "scripts": {
         "test": "node --import ./test/support/register.mjs --test test/*.test.js",
+        "check:local": "node test/local/run.mjs",
         "build:image": "node scripts/build-image.mjs",
         "attack": "node scripts/attack.mjs",
         "local": "node scripts/local.mjs",
