@@ -96,7 +96,10 @@ export function checkSite(dist = DIST, { pageAnchors = new Map() } = {}) {
         const sources = new Set(rules.map(([from]) => from));
         for (const [from, to, status] of rules) {
             if (!from?.startsWith('/') || !to) failures.push(`_redirects: malformed rule "${from} ${to}"`);
-            if (status && status !== '301') failures.push(`_redirects: ${from} uses status ${status}; only 301 is expected`);
+            // A page of this site moves for good; a path handed to another origin may move again.
+            const statuses = to?.startsWith('/') ? ['301'] : ['301', '302'];
+            if (status && !statuses.includes(status))
+                failures.push(`_redirects: ${from} uses status ${status}; only ${statuses.join(' or ')} is expected`);
             if (from === to) failures.push(`_redirects: ${from} redirects to itself`);
             if (routeToFile(from) && !from.includes('*')) failures.push(`_redirects: ${from} shadows a real page`);
             if (to.startsWith('/')) {

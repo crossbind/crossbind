@@ -116,8 +116,8 @@ test('/login and /login/ lead to the account\'s page on crossbind cloud', () => 
     const rules = source('../public/_redirects').split('\n').map((line) => line.trim().split(/\s+/));
 
     assert.deepEqual(rules.filter(([from]) => from === '/login' || from === '/login/'), [
-        ['/login', 'https://api.crossbind.dev/login', '301'],
-        ['/login/', 'https://api.crossbind.dev/login', '301'],
+        ['/login', 'https://api.crossbind.dev/login', '302'],
+        ['/login/', 'https://api.crossbind.dev/login', '302'],
     ]);
 });
 
