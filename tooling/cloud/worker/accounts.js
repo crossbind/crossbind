@@ -184,9 +184,14 @@ export function createAccounts(db, now = () => Date.now(), drawId = randomAccoun
                 const held = row.unlinked_at === null ? await hasSecondsThisMonth(row.user_id) : isThisMonth(row.unlinked_at);
                 if (held) return { outcome: 'held', freeFrom: firstOfNextMonth(now()) };
             }
+            // The delete takes the row only as the read found it free: this account's own, one whose account is gone with
+            // no build seconds this month, or one unlinked in an earlier month. A row another request changed meanwhile
+            // stays, and the insert then fails on it.
             try {
                 await db.batch([
-                    db.prepare('DELETE FROM identities WHERE provider = ? AND subject = ?').bind(provider, subject),
+                    db.prepare(`DELETE FROM identities WHERE provider = ?1 AND subject = ?2 AND (user_id = ?3
+                        OR (user_id NOT IN (SELECT id FROM users) AND NOT EXISTS (SELECT 1 FROM build_usage WHERE build_usage.user_id = identities.user_id AND month = ?4))
+                        OR unlinked_at < ?4)`).bind(provider, subject, userId, periodsOf(now()).month),
                     db.prepare('INSERT INTO identities (provider, subject, user_id, created_at) VALUES (?, ?, ?, ?)').bind(provider, subject, userId, timestamp()),
                     ...(provider === 'github' ? [db.prepare('UPDATE users SET login = ? WHERE id = ?').bind(login, userId)] : []),
                 ]);

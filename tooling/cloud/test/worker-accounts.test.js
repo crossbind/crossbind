@@ -286,6 +286,51 @@ test('moves to the account that links it an identity left free, links an account
     assert.deepEqual(await rows(db, 'SELECT login FROM users'), [{ login: 'octocat' }]);
 });
 
+test('moves an identity the link read as free, and none that changed before it wrote: then the link fails, and the identity stays where it went', async () => {
+    // The rows as link() reads them, the identity free to move, and what another request does before link() writes.
+    const leftByADeletedAccount = async (db) => {
+        await db.prepare("INSERT INTO identities (provider, subject, user_id, created_at) VALUES ('github', '8000000002', ?1, ?2)").bind(OWN[1], AT).run();
+        await db.prepare("INSERT INTO build_usage (user_id, month, image, seconds) VALUES (?, '2026-09', 'web', 60)").bind(OWN[1]).run();
+    };
+    const cases = {
+        'made its own account meanwhile': [async () => {}, (accounts) => accounts.signIn(madeUp)],
+        'brought its deleted account back meanwhile': [leftByADeletedAccount, (accounts) => accounts.signIn(madeUp)],
+        'its deleted account metered this month meanwhile': [leftByADeletedAccount, (accounts) => accounts.addBuildSeconds(String(OWN[1]), NOW, 'web', 60)],
+        'linked back meanwhile where it was unlinked last month': [async (db) => {
+            await rowAlone(db, { id: OWN[1], login: '' }).run();
+            await db.prepare(`INSERT INTO identities (provider, subject, user_id, created_at, unlinked_at)
+                VALUES ('apple', ?1, ?2, ?3, NULL), ('github', '8000000002', ?2, ?3, '2026-09-30T23:59:59.999Z')`).bind(APPLE[1], OWN[1], AT).run();
+        }, (accounts) => accounts.link(String(OWN[1]), madeUp)],
+    };
+
+    const outcomes = {};
+    for (const [name, [before, meanwhile]] of Object.entries(cases)) {
+        for (const racing of [false, true]) {
+            const { db, accounts } = setup({ draws: [OWN[2]] });
+            await rowAlone(db, { id: OWN[0], login: '' }).run();
+            await db.prepare("INSERT INTO identities (provider, subject, user_id, created_at) VALUES ('apple', ?1, ?2, ?3)").bind(APPLE[0], OWN[0], AT).run();
+            await before(db);
+            const linking = racing
+                ? createAccounts({ prepare: db.prepare, batch: async (statements) => { await meanwhile(accounts); return db.batch(statements); } }, () => NOW)
+                : accounts;
+            const { outcome } = await linking.link(String(OWN[0]), madeUp);
+            outcomes[`${name}${racing ? '' : ': nothing meanwhile'}`] = [outcome, ...(await rows(db, "SELECT user_id, unlinked_at FROM identities WHERE subject = '8000000002'"))];
+        }
+    }
+
+    const mine = ['linked', { user_id: OWN[0], unlinked_at: null }];
+    assert.deepEqual(outcomes, {
+        'made its own account meanwhile: nothing meanwhile': mine,
+        'made its own account meanwhile': ['failed', { user_id: OWN[2], unlinked_at: null }],
+        'brought its deleted account back meanwhile: nothing meanwhile': mine,
+        'brought its deleted account back meanwhile': ['failed', { user_id: OWN[1], unlinked_at: null }],
+        'its deleted account metered this month meanwhile: nothing meanwhile': mine,
+        'its deleted account metered this month meanwhile': ['failed', { user_id: OWN[1], unlinked_at: null }],
+        'linked back meanwhile where it was unlinked last month: nothing meanwhile': mine,
+        'linked back meanwhile where it was unlinked last month': ['failed', { user_id: OWN[1], unlinked_at: null }],
+    });
+});
+
 test('prunes an identity unlinked in an earlier month, and keeps one unlinked this month and every linked one', async () => {
     const { db, accounts } = setup();
     await db.prepare("INSERT INTO users (id, login, created_at, last_login_at) VALUES (?1, '', ?2, ?2)").bind(OWN[0], AT).run();
