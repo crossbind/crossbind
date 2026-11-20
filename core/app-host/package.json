@@ -5,6 +5,7 @@
     "homepage": "https://github.com/crossbind/crossbind/tree/main/core/app-host#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
     "license": "MIT",
+    "type": "module",
     "files": [
         "android",
         "android-verification-metadata.xml",
