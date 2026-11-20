@@ -144,6 +144,15 @@ describe('crossbind login', () => {
         expect(waits).toEqual([5000, 10000, 10000, 15000]);
     });
 
+    test('sends the number once: a cloud that asks for it again gets no second number and no second question', async () => {
+        const { fetcher, calls } = server([[200, DEVICE], refusal('matching_required'), refusal('matching_required', 'Asked again.')]);
+        const person = typing('47', '48');
+
+        await expect(login(at(fetcher, person))).rejects.toThrow('crossbind: Asked again.');
+        expect(person.questions).toEqual([QUESTION]);
+        expect(calls.filter((call) => call.body?.match !== undefined)).toHaveLength(1);
+    });
+
     test('stops before it asks the cloud for anything when no terminal is there to type the number', async () => {
         const { fetcher, calls } = server([]);
 
