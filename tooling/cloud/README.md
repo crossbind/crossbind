@@ -29,7 +29,7 @@ On Cloudflare every container is its own Firecracker microVM, started without in
 `worker/` is the API on `api.crossbind.dev`. The playground page talks to it under `/playground`:
 
 - `GET /session`: who is signed in, the day's limit and what is left of it, whether GitHub sign-in is set up, and the Turnstile site key.
-- `POST /compile`: from the playground page's origin only. An anonymous visitor passes Turnstile first. A compile seen before comes from the cache without counting (a week for a module, ten minutes for a compile error); otherwise it counts against the visitor's network (an IPv6 /64 is one network) or their account, and against the day's total for everyone.
+- `POST /compile`: from the playground page's origin only, or with a token of the crossbind app (`Authorization: Bearer`), whose extension sends it by the host's own fetch: that compile is held to the token, not to the `Origin`, and counted for its account with no browser check. An anonymous visitor passes Turnstile first. A compile seen before comes from the cache without counting (a week for a module, ten minutes for a compile error); otherwise it counts against the visitor's network (an IPv6 /64 is one network) or their account, and against the day's total for everyone.
 - `GET /login/github` and `/callback/github`: GitHub sign-in that asks for no scope; GitHub accounts younger than 30 days are turned away. PKCE (S256) binds GitHub's code to the browser that asked for it: the verifier waits in an HttpOnly cookie beside the state, so a code caught on its way is worth nothing elsewhere. The GitHub account signs in to its crossbind account (below), and the session is an HMAC-signed, host-only cookie holding the account's id and name.
 - `POST /logout`, and `POST /delete-account`, which deletes the signed-in account as `crossbind account delete` does. The site's playground now signs in through the account's start below and deletes on the account's page; `GET /login/github` and `POST /delete-account` stay for the site of the day before, until a later release removes them.
 
@@ -53,7 +53,7 @@ The CLI and the crossbind app talk to it under `/v1` (`worker/account-api.js`), 
 - `DELETE /v1/token` and `DELETE /v1/tokens`: `crossbind logout`, for the token sent, or `--all`, which signs the account out everywhere as its page does.
 - `DELETE /v1/account`: `crossbind account delete`, open to a blocked account too.
 
-Every token has a kind (`tokens.kind`), the client its device sign-in asked as, and a label, what asked. The CLI's, `cli`, takes every route, the runners' included; the old routes issue it too. The crossbind app's, `app`, takes `GET /v1/account` and the three deletions alone. A route refuses any other kind with 403.
+Every token has a kind (`tokens.kind`), the client its device sign-in asked as, and a label, what asked. The CLI's, `cli`, takes every route of `/v1` that takes a token, and the runners', and compiles nothing in the playground; the old routes issue it too. The crossbind app's, `app`, takes `GET /v1/account`, the three deletions and the playground's compile alone. A route refuses any other kind with 403.
 
 Builds under `RUNNER=REMOTE` talk to it under `/runner/<image>/v1/*`, the runner protocol of `docs/api/remote-runner.md`, with the same token (`worker/runner-api.js`, below).
 
