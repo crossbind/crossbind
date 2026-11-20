@@ -1,0 +1,32 @@
+// The Worker of test/local/run.mjs under `wrangler dev`: no container, a local D1 the run makes and the migrations of
+// this package, and a stand-in for GitHub (worker.js). Made-up values alone; never deployed.
+{
+    "name": "crossbind-cloud-local",
+    "main": "worker.js",
+    "compatibility_date": "2026-09-01",
+    "d1_databases": [
+        {
+            "binding": "DB",
+            "database_name": "crossbind-accounts-local",
+            "database_id": "00000000-0000-0000-0000-000000000000",
+            "migrations_dir": "../../migrations"
+        }
+    ],
+    "ratelimits": [
+        { "name": "API_LIMITER", "namespace_id": "1901", "simple": { "limit": 120, "period": 60 } },
+        { "name": "LOGIN_LIMITER", "namespace_id": "1902", "simple": { "limit": 10, "period": 60 } },
+        { "name": "RUNNER_LIMITER", "namespace_id": "1903", "simple": { "limit": 1200, "period": 60 } }
+    ],
+    "vars": {
+        "PLAYGROUND_ENABLED": "true",
+        "CLOUD_BUILDS_ENABLED": "false",
+        "ALLOWED_ORIGINS": "http://localhost:5173",
+        "PLAYGROUND_URL": "http://localhost:5173/playground/",
+        "SESSION_SECRET": "a-made-up-secret-for-the-local-run-alone",
+        "GITHUB_CLIENT_ID": "made-up-client-id",
+        "GITHUB_CLIENT_SECRET": "made-up-client-secret",
+        "MIN_GITHUB_ACCOUNT_DAYS": "30",
+        "STANDIN_GITHUB_ID": "8000000101",
+        "STANDIN_GITHUB_LOGIN": "made_up_local"
+    }
+}
