@@ -3,6 +3,7 @@
 // outside. Two paths of its own, for the run alone: what Apple's stand-in saw, and build seconds for an account.
 import { createAccounts } from '../../worker/accounts.js';
 import { handleRequest } from '../../worker/api.js';
+import { createDeviceCodes } from '../../worker/devices.js';
 import { createQuota } from '../../worker/quota.js';
 import { memoryStorage } from '../../scripts/memory-storage.mjs';
 
@@ -81,8 +82,11 @@ export default {
         if (url.pathname === '/__standin/apple') return Response.json(appleSeen);
         if (url.pathname === '/__standin/seconds' && request.method === 'POST') return addSeconds(env, url.searchParams.get('provider'));
         return handleRequest(request, env, {
-            limits: { api: env.API_LIMITER, login: env.LOGIN_LIMITER, runner: env.RUNNER_LIMITER },
+            limits: {
+                api: env.API_LIMITER, login: env.LOGIN_LIMITER, runner: env.RUNNER_LIMITER, starts: env.STARTS_LIMITER, poll: env.POLL_LIMITER, code: env.CODE_LIMITER,
+            },
             accounts: createAccounts(env.DB),
+            devices: createDeviceCodes(env.DB),
             quota,
             compiler: { fetch: async () => Response.json({ error: 'This run has no compiler.' }, { status: 503 }) },
             fetcher: (url, init) => (url.startsWith('https://appleid.apple.com/') ? apple(url, init, env) : github(url, init, env)),

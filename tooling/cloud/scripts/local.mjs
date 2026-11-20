@@ -1,8 +1,9 @@
 // The crossbind cloud API on this machine, for the landing's dev server and `crossbind login`: the Worker's own
 // request handling (worker/api.js) in front of the compiler image in Docker, with the quota, the cache and the
 // accounts in memory. Turnstile's server-side check is answered here; the page still runs the real widget, on
-// Cloudflare's always-passing test key. With a GitHub OAuth app's client id (its device flow enabled), `crossbind login`
-// signs in for real: CROSSBIND_CLOUD_URL=http://localhost:8686 crossbind login.
+// Cloudflare's always-passing test key. With a GitHub OAuth app's client id (its device flow enabled), the CLI's route
+// of before signs in for real, a crossbind of the releases before the device page: CROSSBIND_CLOUD_URL=http://localhost:8686
+// crossbind login. Today's crossbind login approves its code on the device page, whose sign-in this API does not set up.
 // `wrangler dev` cannot run the compiler: bubblewrap needs Docker's seccomp filter and /proc masking lifted.
 // usage: node scripts/local.mjs [--port 8686] [--tag <image>] [--anonymous-daily <n>] [--github-client-id <id>]
 import { execFileSync } from 'node:child_process';
