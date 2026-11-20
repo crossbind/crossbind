@@ -228,6 +228,19 @@ test('tells a token the account it signs in to', async () => {
     assert.deepEqual([anonymous.status, blocked.status], [401, 403]);
 });
 
+test('names an account with no GitHub account linked by the last four digits of its id, to its token and in its usage', async () => {
+    const { call, db, accounts } = setup();
+    await db.batch([
+        db.prepare("INSERT INTO users (id, login, created_at, last_login_at) VALUES (?1, '', ?2, ?2)").bind(OWN_ID, new Date(NOW).toISOString()),
+        db.prepare("INSERT INTO identities (provider, subject, user_id, created_at) VALUES ('apple', '000123.made0up0apple0id.0001', ?1, ?2)").bind(OWN_ID, new Date(NOW).toISOString()),
+    ]);
+    const token = await accounts.issueToken(String(OWN_ID));
+    const name = `Apple account …${String(OWN_ID).slice(-4)}`;
+
+    assert.deepEqual(await (await call('GET', '/account', { token })).json(), { id: String(OWN_ID), name });
+    assert.equal((await (await call('GET', '/usage', { token })).json()).login, name);
+});
+
 test('takes the CLI\'s tokens on every route, the crossbind app\'s on the account\'s own alone, and no other kind', async () => {
     const routes = [['GET', '/usage'], ['GET', '/account'], ['DELETE', '/token'], ['DELETE', '/tokens'], ['DELETE', '/account']];
     const statuses = {};

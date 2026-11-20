@@ -41,10 +41,14 @@ export const dayWords = (day) => {
     return `${date} ${MONTH_NAMES[month - 1]} ${year}`;
 };
 
-export const ACCOUNT_BLOCKED = 'This GitHub account may not use crossbind cloud.';
+export const ACCOUNT_BLOCKED = 'This account may not use crossbind cloud.';
 
 // The key a signed-in user's daily playground compiles count under (worker/quota.js).
 export const userKey = (id) => `user:${id}`;
+
+// The name an account goes by: its GitHub name while a GitHub account is linked, else "Apple account …1643", the last
+// four digits of its id.
+export const nameOf = ({ id, login }) => login || `Apple account …${String(id).slice(-4)}`;
 
 export const isTokenShaped = (token) => typeof token === 'string' && TOKEN_PATTERN.test(token);
 
@@ -99,10 +103,12 @@ export function createAccounts(db, now = () => Date.now(), drawId = randomAccoun
             for (let attempt = 0; attempt < MAX_SIGN_IN_ATTEMPTS; attempt += 1) {
                 const identity = await db.prepare('SELECT user_id, unlinked_at FROM identities WHERE provider = ? AND subject = ?').bind(provider, subject).first();
                 if (identity?.unlinked_at === null) {
-                    // A blocked account's row stays as it is: the sign-in it refuses writes nothing to it.
+                    // A blocked account's row stays as it is: the sign-in it refuses writes nothing to it. The GitHub name
+                    // comes from a GitHub sign-in alone: Apple's brings none.
                     const row = await db.prepare(`INSERT INTO users (id, login, created_at, last_login_at) VALUES (?1, ?2, ?3, ?3)
-                        ON CONFLICT (id) DO UPDATE SET login = excluded.login, last_login_at = excluded.last_login_at WHERE users.blocked = 0
-                        RETURNING id, login, blocked`).bind(identity.user_id, login, timestamp()).first()
+                        ON CONFLICT (id) DO UPDATE SET login = CASE WHEN ?4 = 'github' THEN excluded.login ELSE users.login END,
+                        last_login_at = excluded.last_login_at WHERE users.blocked = 0
+                        RETURNING id, login, blocked`).bind(identity.user_id, login, timestamp(), provider).first()
                         ?? await db.prepare('SELECT id, login, blocked FROM users WHERE id = ?').bind(identity.user_id).first();
                     return { user: userOf(row) };
                 }
@@ -117,11 +123,15 @@ export function createAccounts(db, now = () => Date.now(), drawId = randomAccoun
         },
 
         // Whether an account still exists, as a session of another browser may outlive it, whether it is blocked, its
-        // name, and when it last signed out everywhere: no cookie made before then counts.
+        // GitHub name and the name it goes by, and when it last signed out everywhere: no cookie made before then counts.
         async standing(id) {
             const row = await db.prepare('SELECT login, blocked, signed_out_at FROM users WHERE id = ?').bind(id).first();
             return {
-                exists: row !== null, blocked: row?.blocked === 1, login: row?.login ?? '', signedOutAt: row?.signed_out_at ?? null,
+                exists: row !== null,
+                blocked: row?.blocked === 1,
+                login: row?.login ?? '',
+                name: row ? nameOf({ id, login: row.login }) : '',
+                signedOutAt: row?.signed_out_at ?? null,
             };
         },
 

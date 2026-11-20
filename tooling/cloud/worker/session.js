@@ -28,6 +28,21 @@ export function readCookie(request, name) {
 export const sessionCookie = (name, value, maxAgeSeconds) => `${name}=${value}; Max-Age=${maxAgeSeconds}; Path=/; Secure; HttpOnly; SameSite=Lax`;
 export const clearCookie = (name) => sessionCookie(name, '', 0);
 
+export const NOTICE_COOKIE = '__Host-pg_notice';
+const NOTICE_SECONDS = 60;
+
+// What a sign-in or a form came back with that the account's page shows once, when its words hold a date or another
+// account's name: a link could make those up if the address carried them, as it carries a `#login=` result.
+export const noticeCookie = (notice) => sessionCookie(NOTICE_COOKIE, toBase64Url(utf8.encode(JSON.stringify(notice))), NOTICE_SECONDS);
+
+export function readNotice(request) {
+    try {
+        return JSON.parse(new TextDecoder().decode(fromBase64Url(readCookie(request, NOTICE_COOKIE) ?? '')));
+    } catch {
+        return null;
+    }
+}
+
 // Only the GitHub account id and name: no email, no GitHub token.
 export async function signSession({ id, name }, secret, now = Date.now()) {
     const payload = toBase64Url(utf8.encode(JSON.stringify({ id, n: name, exp: now + SESSION_TTL_MS })));
@@ -59,5 +74,5 @@ export async function readSignedIn(request, secret, accounts, now = Date.now()) 
     const standing = await accounts.standing(session.id);
     const signedOut = standing.signedOutAt !== null && session.madeAt <= Date.parse(standing.signedOutAt);
     const signsIn = standing.exists && !standing.blocked && !signedOut;
-    return { session, standing, user: signsIn ? { id: session.id, name: standing.login } : null };
+    return { session, standing, user: signsIn ? { id: session.id, name: standing.name } : null };
 }

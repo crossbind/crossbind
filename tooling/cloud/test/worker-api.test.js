@@ -40,7 +40,7 @@ function setup({
         },
         accounts: {
             standing: async (id) => ({
-                exists: true, blocked: blockedUsers.includes(id), login: 'octocat', signedOutAt: null, ...standing,
+                exists: true, blocked: blockedUsers.includes(id), login: 'octocat', name: 'octocat', signedOutAt: null, ...standing,
             }),
         },
         quota: {
@@ -262,6 +262,10 @@ test('describes the session: who is signed in, what is left today and how to sig
     });
     assert.deepEqual((await (await ask(`${SESSION_COOKIE}=${session}`)).json()).user, { name: 'octocat' });
     assert.equal((await (await handleRequest(new Request(`${API}/session`), { ...env, GITHUB_CLIENT_SECRET: '' }, deps)).json()).canSignIn, false);
+    const appleAlone = {
+        ...env, GITHUB_CLIENT_SECRET: '', APPLE_SERVICES_ID: 'dev.made-up.signin', APPLE_TEAM_ID: 'MADEUPTEAM', APPLE_KEY_ID: 'MADEUPKEY1', APPLE_PRIVATE_KEY: 'made-up',
+    };
+    assert.equal((await (await handleRequest(new Request(`${API}/session`), appleAlone, deps)).json()).canSignIn, true);
 });
 
 test('signs a cookie in only while its account is there, not blocked, and not signed out everywhere since the cookie was made', async () => {

@@ -1,4 +1,6 @@
-import { ACCOUNT_BLOCKED, dayWords, userKey } from './accounts.js';
+import {
+    ACCOUNT_BLOCKED, dayWords, nameOf, userKey,
+} from './accounts.js';
 import {
     BodyTooLarge, SECURITY_HEADERS, bearerToken, jsonResponse, log, readLimited,
 } from './http.js';
@@ -87,7 +89,7 @@ async function usageRoute({ deps, settings }, user) {
     const month = new Date(now(deps)).toISOString().slice(0, 7);
     const byImage = await deps.accounts.buildSeconds(user.id, month);
     return jsonResponse(200, {
-        login: user.login,
+        login: nameOf(user),
         builds: {
             month, limitSeconds: settings.buildSecondsMonthly, usedSeconds: Object.values(byImage).reduce((sum, seconds) => sum + seconds, 0), byImage,
         },
@@ -115,7 +117,7 @@ const ROUTES = Object.freeze({
     'POST /v1/login/device': deviceRoute,
     'POST /v1/login/token': tokenRoute,
     'GET /v1/usage': authenticated(usageRoute),
-    'GET /v1/account': authenticated((context, user) => jsonResponse(200, { id: user.id, name: user.login }), { kinds: EVERY_KIND }),
+    'GET /v1/account': authenticated((context, user) => jsonResponse(200, { id: user.id, name: nameOf(user) }), { kinds: EVERY_KIND }),
     'DELETE /v1/token': authenticated(async ({ deps }, user, token) => {
         await deps.accounts.revokeToken(token);
         log({ event: 'token-revoked', who: userKey(user.id), all: false });

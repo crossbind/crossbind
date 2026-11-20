@@ -5,7 +5,7 @@ import { userKey } from './accounts.js';
 import {
     BodyTooLarge, SECURITY_HEADERS, jsonResponse, log, networkOf, readLimited,
 } from './http.js';
-import { startLogin, finishLogin, isLoginConfigured } from './oauth.js';
+import { startLogin, finishLogin, signInProviders } from './oauth.js';
 import { handleRunnerRequest } from './runner-api.js';
 import { readSignedIn, clearCookie, SESSION_COOKIE } from './session.js';
 import { settingsOf } from './settings.js';
@@ -154,7 +154,7 @@ async function sessionRoute(context) {
         user: caller.user ? { name: caller.user.name } : null,
         limit: caller.limit,
         remaining: await deps.quota.remaining({ key: caller.key, limit: caller.limit }),
-        canSignIn: isLoginConfigured(env),
+        canSignIn: signInProviders(env).length > 0,
         turnstileSiteKey: env.TURNSTILE_SITE_KEY ?? null,
     });
 }
@@ -179,6 +179,11 @@ async function deleteAccountRoute({
     return signedOut(corsOrigin);
 }
 
+// A provider sends the browser back here, to the callback it lists for this origin.
+const callback = (provider) => ({ request, env, deps }) => finishLogin(request, env, {
+    provider, fetcher: deps.fetcher, accounts: deps.accounts, now: (deps.now ?? Date.now)(),
+});
+
 function preflight({ corsOrigin }) {
     if (!corsOrigin) return new Response(null, { status: 403, headers: SECURITY_HEADERS });
     return withCors(new Response(null, {
@@ -193,7 +198,8 @@ const PLAYGROUND_ROUTES = Object.freeze({
     'POST /logout': logoutRoute,
     'POST /delete-account': deleteAccountRoute,
     'GET /login/github': ({ request, env }) => startLogin(request, env),
-    'GET /callback/github': ({ request, env, deps }) => finishLogin(request, env, { fetcher: deps.fetcher, accounts: deps.accounts }),
+    'GET /callback/github': callback('github'),
+    'GET /callback/apple': callback('apple'),
 });
 
 // deps: the rate limiters, the accounts, the quota and compiler Durable Object stubs, the cache, fetch and

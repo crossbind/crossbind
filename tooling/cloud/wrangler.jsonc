@@ -3,7 +3,8 @@
 // `pnpm run deploy` (or `deploy:staging`) assembles the image contexts first and migrates the accounts database (D1)
 // after. Secrets, set with `wrangler secret put [--env staging]`: SESSION_SECRET and RUNNER_SECRET (32+ random
 // characters each), TURNSTILE_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET (a GitHub OAuth app with the device flow
-// enabled).
+// enabled), and for Sign in with Apple, off until all four are set: APPLE_SERVICES_ID, APPLE_TEAM_ID, APPLE_KEY_ID and
+// APPLE_PRIVATE_KEY (the key's .p8 whole).
 {
     "name": "crossbind-cloud",
     "main": "worker/index.js",
