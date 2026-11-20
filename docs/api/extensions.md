@@ -575,8 +575,10 @@ registry.function("acme.open", [](crossbind::Call call) {
   path from the origin's `/`, on the thread the webview asks on, which it must not hold up. Unlike a route's, its
   `path()` holds the colons, backslashes and empty parts a dev server's URLs have, as Vite's `/@id/__x00__virtual:…` or
   `/@fs/C:/…`, never a part `..`, so a handler that joins it to a folder checks it itself. The host answers another
-  method with 405, what `handler` throws with 500, and the paths under `/__crossbind/b/` itself: the bytes its pages'
-  calls send and take, with their token.
+  method with 405, what `handler` throws with 500, and two kinds of path itself: those under `/__crossbind/b/`, the
+  bytes its pages' calls send and take, with their token, and `/__crossbind/app.js`, `crossbind/app` for its pages,
+  below. A request's `page()` is the page its window shows as the request arrives, which a frame, a worker or a page on
+  its way out asks for as well, so a handler decides nothing by it.
 - `Origin`: Any thread may hold a copy. `url()`, its URL with the path `/`, as `crossbind://acme-notes/`. `end()`, from
   any thread, once: its pages' calls fail from then on, saying it ended, and those that wait for their answers are
   cancelled; each window that shows one of its pages shows the app's first page again; and its requests get 404
@@ -589,7 +591,14 @@ What its pages reach:
   `Call::page()` of that `role()`, its bytes go to its own origin's `/__crossbind/b/`, and the host refuses its token
   anywhere else, as it refuses the app's own at a served origin.
 - The app's module, `events.held()` and the functions of the role `app`, which `function(name, fn)` adds and
-  `crossbind/app`'s own functions are, refuse it. Of the events, it hears the ones `emit(name, value, page)` sends it.
+  `crossbind/app`'s own functions are, refuse it, naming the function and both roles: "crossbind: a page of the role
+  project does not reach app.paths, which pages of the role app call". Of the events, it hears the ones
+  `emit(name, value, page)` sends it.
+- `crossbind/app`, which it imports from `/__crossbind/app.js`: the host answers that path for every served origin from
+  a file the app's build puts beside the host's own, in a built app and during development alike, so the page gets the
+  names the app's own page imports, of the app's own version, whatever the origin's source holds. Its calls take the
+  token and the base the host gives the top frame, with no `initNative()`, and leave `globalThis.Crossbind` to the
+  page's own `crossbind.js`, as a web build's.
 - Its dialogs, file inputs, downloads, drops and the devices it asks for reach their holders with its page, whose
   `role()` they read. The host's own `page-permissions` allows the devices of `app.permissions` to pages of the role
   `app` alone.

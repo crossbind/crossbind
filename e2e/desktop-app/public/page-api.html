@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>page api</title>
+</head>
+<body>
+<script>
+// A page of the project's origin, which src/served-origins.js opens there, with no crossbind.js of the app's: it imports
+// crossbind/app from /__crossbind/app.js, which the host answers from the app's own files, and tells the app's page what
+// it got. An app's function is refused naming the page's role, also once globalThis.Crossbind is what a web build's
+// crossbind.js makes it.
+(async () => {
+    const name = location.hostname.split('.')[0];
+    const failure = (error) => `${error?.name ?? 'Error'}: ${error?.message ?? error}`;
+    const answered = (promise) => promise.then((value) => `answered ${JSON.stringify(value)}`, failure);
+    let api;
+    try {
+        api = await import('/__crossbind/app.js');
+    } catch (error) {
+        const asked = await fetch('/__crossbind/app.js').then(async (response) => `${response.status} ${(await response.text()).slice(0, 200)}`, failure);
+        console.error(`CONFORMANCE ERR: ${location.origin}: /__crossbind/app.js did not import, ${failure(error)}; it answered ${asked}`);
+        return;
+    }
+    const got = { names: Object.keys(api).sort() };
+    try {
+        got.role = await api.invoke('probe.role');
+        got.paths = await answered(api.app.paths());
+        globalThis.Crossbind = { initNative: () => Promise.resolve({}) };
+        got.pathsAfter = await answered(api.app.paths());
+    } catch (error) {
+        got.failure = failure(error);
+    }
+    try {
+        await api.invoke('probe.report', { key: 'pageApi', value: got });
+        await api.invoke('probe.setStage', { stage: 'page-api-done' });
+        await api.invoke('probe.endOrigin', { name });
+    } catch (error) {
+        console.error(`CONFORMANCE ERR: ${location.origin}: /__crossbind/app.js could not tell the app's page what it got, ${failure(error)}: ${JSON.stringify(got)}`);
+    }
+})();
+</script>
+</body>
+</html>

@@ -3,10 +3,12 @@
 // browser it rejects, or events.on throws. A page imports these from crossbind/app, which an app's bundler plugin takes
 // from the app host, with what crossbind's own extensions give the page, as crossbind/app/core alone holds these.
 
-// The app's crossbind.js, which initNative() loads, hands the calls to the host. A browser has crossbind's glue as well,
-// but no token of a host, and none of its functions.
+// The app's crossbind.js, which initNative() loads, hands the calls to the host, and so does the page API the host
+// answers a served origin's page at /__crossbind/app.js, under a name of its own, as that page's own crossbind.js, a web
+// build's, takes globalThis.Crossbind. A browser has crossbind's glue as well, but no token of a host, and none of its
+// functions.
 function hostOf(member, name) {
-    const host = globalThis.Crossbind?.[member];
+    const host = globalThis.__crossbind_page_api?.[member] ?? globalThis.Crossbind?.[member];
     if (host) return host;
     if (!globalThis.__crossbind_token && !globalThis.Crossbind?.app) throw new Error(`crossbind: ${name} works in an app alone, which crossbind app builds`);
     if (globalThis.Crossbind) throw new Error(`crossbind: this app's host is older than crossbind/app; update @crossbind/core-app-host to call ${name}`);

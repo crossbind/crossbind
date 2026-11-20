@@ -35,6 +35,8 @@ constexpr unsigned PATTERN = 251;
 std::mutex originsMutex;
 std::map<std::string, crossbind::Origin> origins;
 std::map<std::string, int> handled;
+// The requests of each origin's handler by their paths.
+std::map<std::pair<std::string, std::string>, int> handledPaths;
 // The stage of the round trip, which outlives each page, and what the pages report for the conformance page.
 std::string stage = "start";
 Value::Object reports;
@@ -65,6 +67,7 @@ void proxy(const std::string &name, const std::string &source, crossbind::Reques
     {
         std::lock_guard<std::mutex> lock(originsMutex);
         handled[name] += 1;
+        handledPaths[{name, request.path()}] += 1;
     }
     const bool isDown = request.path().rfind("/down/", 0) == 0;
     const std::string url = (isDown ? DOWN_SOURCE : source) + escaped(request.path()) + (request.query().empty() ? "" : "?" + request.query());
@@ -126,10 +129,12 @@ void addOriginFunctions(crossbind::Registry &registry) {
         }
         call.resolve();
     });
-    // How many requests of the origin of this name its handler got.
+    // How many requests of the origin of this name its handler got, or of this path alone.
     registry.function("probe.handled", [](Call call) {
+        const std::string name = call.options()["name"].asString();
+        const std::string path = call.options()["path"].asString("");
         std::lock_guard<std::mutex> lock(originsMutex);
-        call.resolve(handled[call.options()["name"].asString()]);
+        call.resolve(path.empty() ? handled[name] : handledPaths[{name, path}]);
     });
     // What serveOrigin() refuses: the name app, a name served now, a name of other letters, one of 64, and the role app.
     registry.function("probe.refusedOrigins", [](Call call) {

@@ -96,8 +96,8 @@ struct PageOrigin {
 PageOrigin pageOriginOf(const std::string &url);
 // Whether the app's extensions have all started, which serveOrigin() and invoke() wait for.
 bool hasStarted();
-// Answers a request of a served origin's with its handler, as a route answers its own: respond() may be called from any
-// thread.
+// Answers a request of a served origin's with its handler, as a route answers its own, but /__crossbind/app.js, which the
+// host answers from the app's own files: respond() may be called from any thread.
 void answerOriginRequest(const std::string &name, std::function<void(Request)> handler, SchemeRequest request, SchemeRespond respond);
 // The running module cancels each call that waits for its answer of a page of an origin that ended; from any thread.
 void endCallsOf(const std::string &name);

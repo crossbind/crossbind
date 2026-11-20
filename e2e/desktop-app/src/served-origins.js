@@ -2,6 +2,7 @@
 // the one of the role project in its window, which runs what follows there and comes back, and checks what the pages
 // left with the probe, whose stage outlives each page. A project's page that fails says so as the suite would.
 import { app as host, device, events, invoke } from 'crossbind/app';
+import * as ownApi from 'crossbind/app';
 import { initNative } from '@crossbind/conformance/native/confconstants.h';
 import { REACH_PORT } from '../e2e/launch.mjs';
 import { reportWebFeatures } from './web-features.js';
@@ -12,6 +13,9 @@ const ENDED = 'e2e-ended';
 const POSTED = 'e2e-posted';
 const FRAME_PAGE = 'frame-probe.html';
 const NO_ROLE_PAGE = 'no-role.html';
+const PAGE_API_PAGE = 'page-api.html';
+// crossbind/app as a served origin's page imports it, which the host answers from the app's own files.
+const PAGE_API = '/__crossbind/app.js';
 // The run's endpoint, on the device's own loopback, or where a build for a phone names it, as http://<the Mac's
 // address>:47831, which e2e/endpoint.mjs serves when run alone.
 const ENDPOINT = import.meta.env.VITE_E2E_ENDPOINT || `http://127.0.0.1:${REACH_PORT}`;
@@ -262,6 +266,16 @@ async function afterTheEnd(isAndroid, reports) {
     throw new Error(`the window did not open ${project} again`);
 }
 
+// The project's page that imports crossbind/app from PAGE_API, public/page-api.html, from source: the run's endpoint, or
+// a development session's dev server. It reports what it got, and ends the origin, which brings the app's page back.
+async function openPageApi(source) {
+    const page = under(await invoke('probe.serveOrigin', { name: PROJECT, source }), PAGE_API_PAGE);
+    await invoke('probe.setStage', { stage: 'page-api' });
+    location.href = page;
+    await sleep(ANSWER_MS);
+    throw new Error(`the window did not open ${page}`);
+}
+
 // The app's page at the stage the round trip reached: false once it sent the window elsewhere, else what the project's
 // pages reported, at its end.
 export async function runServedRoundTrip(isAndroid) {
@@ -274,8 +288,33 @@ export async function runServedRoundTrip(isAndroid) {
     if (stage === 'start') return start(isAndroid).then(() => false);
     if (stage === 'no-role') return afterNoRole(reports).then(() => false);
     if (stage === 'ended') return afterTheEnd(isAndroid, reports).then(() => false);
-    if (stage === 'done') return reports;
+    if (stage === 'done') return openPageApi(SOURCE).then(() => false);
+    if (stage === 'page-api-done') return reports;
     throw new Error(`the app's page opened at ${location.href} at the stage ${stage}${stage === 'refused' ? ", which the project's page navigated to" : ''}`);
+}
+
+// A development session's app page, which has no endpoint: the page that imports crossbind/app alone, from the dev
+// server, the app's page's own source.
+export async function runPageApiTrip() {
+    const stage = await invoke('probe.stage');
+    if (stage === 'start') return openPageApi(location.origin).then(() => false);
+    if (stage === 'page-api-done') return invoke('probe.reports');
+    throw new Error(`the app's page opened at ${location.href} at the stage ${stage}`);
+}
+
+// What public/page-api.html got from PAGE_API, which the host answers, so the origin's handler never got it: the names of
+// the app's own page's crossbind/app, and an app's function refused naming the role, also once a web build's
+// crossbind.js took globalThis.Crossbind.
+export async function checkPageApi({ pageApi: got }) {
+    if (!got || got.failure) throw new Error(`${PAGE_API_PAGE} of ${PROJECT} failed: ${got?.failure ?? 'it told nothing'}`);
+    const names = Object.keys(ownApi).sort();
+    if (got.names.join() !== names.join()) throw new Error(`${PAGE_API} gave ${got.names.join(', ')}, not the app's crossbind/app's ${names.join(', ')}`);
+    const refusal = 'a page of the role project does not reach app.paths, which pages of the role app call';
+    if (got.role !== 'project' || !got.paths?.includes(refusal)) throw new Error(`app.paths of ${PAGE_API} in a page of the role ${got.role} got ${got.paths}`);
+    if (!got.pathsAfter?.includes(refusal)) throw new Error(`app.paths of ${PAGE_API}, once a web build's crossbind.js took globalThis.Crossbind, got ${got.pathsAfter}`);
+    const handled = await invoke('probe.handled', { name: PROJECT, path: PAGE_API });
+    if (handled !== 0) throw new Error(`the handler of ${PROJECT} got ${PAGE_API} ${handled} times`);
+    show('page-api', { ...got, names: got.names.length, handled });
 }
 
 // 1, 6 and the loop, once the round trip is done and the app's page has timed its own.

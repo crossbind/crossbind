@@ -41,9 +41,11 @@ defaults and current limits (macOS, Linux, Windows, iOS and Android for now).
   activity calls for its native code, the manifest, and Gradle 9.8.1's wrapper (Apache-2.0), as `gradle wrapper`
   writes it; `gradle-wrapper.jar` matches the sha256 Gradle publishes for the release.
 - `js/host.js` — what runs in Hermes: the embind runtime and the side of the protocol that answers the page.
-- `js/page.js` — what the page loads as `crossbind.js`: `initNative()` over the webview's messages, or on Android its
-  message port, the calls of `crossbind/app`, and a request left waiting for what the host pushes: the events of the
-  app's C++ and the calls of the functions the page passed.
+- `js/page.js` — what the page loads as `crossbind.js`: `initNative()` over the page's channel, `js/channel.js`: the
+  webview's messages, or on Android its message port, the calls of `crossbind/app`, and a request left waiting for what
+  the host pushes: the events of the app's C++ and the calls of the functions the page passed.
+- `js/served-page.js` — `crossbind/app` for the page of an origin an extension serves, over the same channel, which an
+  app's build puts beside the host's bytecode and the host answers at `/__crossbind/app.js`.
 - `js/app.js`, `app.d.ts` — `crossbind/app` as a page imports it and its types: `crossbind/app/core`'s functions, with what
   each of crossbind's own extensions gives the page in its `page.js`. Beside `package.json`'s dependencies, they alone name
   those extensions; an app's bundler plugin routes `crossbind/app` here.
