@@ -2,6 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { createAccounts } from './accounts.js';
 import { handleRequest } from './api.js';
 import { createDeviceCodes } from './devices.js';
+import { createProjectSessions } from './project-sessions.js';
 import { createQuota } from './quota.js';
 
 // The runners' outbound traffic goes through ContainerProxy, which holds it to their allowed hosts.
@@ -117,6 +118,7 @@ export default {
             },
             accounts: createAccounts(env.DB),
             devices: createDeviceCodes(env.DB),
+            sessions: createProjectSessions(env.DB),
             runner: (image, userId) => env[`RUNNER_${image.toUpperCase()}`].getByName(userId),
             recentTokens,
             quota: env.QUOTA.getByName('quota'),
@@ -127,9 +129,10 @@ export default {
         });
     },
 
-    // Daily (`triggers` in wrangler.jsonc): what accounts keep only for a while goes (worker/accounts.js), and the devices'
-    // sign-in codes past their ten minutes (worker/devices.js).
+    // Daily (`triggers` in wrangler.jsonc): what accounts keep only for a while goes (worker/accounts.js), the devices'
+    // sign-in codes past their ten minutes (worker/devices.js), and the sessions past their life
+    // (worker/project-sessions.js).
     scheduled(controller, env, ctx) {
-        ctx.waitUntil(Promise.all([createAccounts(env.DB).prune(), createDeviceCodes(env.DB).prune()]));
+        ctx.waitUntil(Promise.all([createAccounts(env.DB).prune(), createDeviceCodes(env.DB).prune(), createProjectSessions(env.DB).prune()]));
     },
 };

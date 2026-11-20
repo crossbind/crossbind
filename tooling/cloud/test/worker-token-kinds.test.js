@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { createAccounts } from '../worker/accounts.js';
 import { handleRequest } from '../worker/api.js';
 import { createDeviceCodes } from '../worker/devices.js';
+import { createProjectSessions } from '../worker/project-sessions.js';
 import { createQuota } from '../worker/quota.js';
 import { signSession, SESSION_COOKIE } from '../worker/session.js';
 import { memoryStorage } from '../scripts/memory-storage.mjs';
@@ -53,6 +54,7 @@ function setup() {
         },
         accounts,
         devices: createDeviceCodes(db, () => NOW),
+        sessions: createProjectSessions(db, () => NOW),
         quota: createQuota(memoryStorage(), () => NOW),
         compiler: { fetch: async () => { calls.compile += 1; return Response.json(compiled); } },
         cache: { match: async () => undefined, put: async () => {} },
@@ -90,9 +92,19 @@ async function deviceToken({ accounts, send }, kind) {
     return (await (await send('POST', '/v1/device/token', { body: { device_code: started.device_code, match } })).json()).access_token;
 }
 
+// A session no route has registered: a kind that may read or remove it gets 404.
+const SESSION = '/v1/sessions/IRVUB8Fpwuh0lT_7NkiJ8Q';
+const DEV_SESSION = {
+    source: 'dev', project: { id: 'mWW-UyZhfd1-czxo9qk5Aw', name: 'made-up-app' }, addresses: ['192.168.1.6:5173'], protocol: 1, key: 'GheN2aAnJDjAj-qTuiyNWPEy-yOsSHLE15uyL80No6o',
+};
+
 const ROUTES = Object.freeze([
     ['GET', '/v1/usage'],
     ['GET', '/v1/account'],
+    ['PUT', SESSION, DEV_SESSION],
+    ['GET', '/v1/sessions'],
+    ['GET', SESSION],
+    ['DELETE', SESSION],
     ['POST', '/playground/compile', { files }],
     ['POST', '/runner/web/v1/missing', { hashes: [] }],
     ['DELETE', '/v1/token'],
@@ -113,10 +125,12 @@ test('takes each kind of token on the routes the design gives it alone, the runn
         }
     }
 
+    const sessions = { cli: ['200', '403', '403', '404'], app: ['403', '200', '404', '403'], partner: ['403', '403', '403', '403'] };
+    const sessionRoutes = (kind) => [`PUT ${SESSION}`, 'GET /v1/sessions', `GET ${SESSION}`, `DELETE ${SESSION}`].map((route, at) => `${route} ${sessions[kind][at]}`);
     assert.deepEqual(statuses, {
-        cli: ['GET /v1/usage 200', 'GET /v1/account 200', 'POST /playground/compile 403', 'POST /runner/web/v1/missing 200', 'DELETE /v1/token 204', 'DELETE /v1/tokens 204', 'DELETE /v1/account 204'],
-        app: ['GET /v1/usage 403', 'GET /v1/account 200', 'POST /playground/compile 200', 'POST /runner/web/v1/missing 403', 'DELETE /v1/token 204', 'DELETE /v1/tokens 204', 'DELETE /v1/account 204'],
-        partner: ['GET /v1/usage 403', 'GET /v1/account 403', 'POST /playground/compile 403', 'POST /runner/web/v1/missing 403', 'DELETE /v1/token 403', 'DELETE /v1/tokens 403', 'DELETE /v1/account 403'],
+        cli: ['GET /v1/usage 200', 'GET /v1/account 200', ...sessionRoutes('cli'), 'POST /playground/compile 403', 'POST /runner/web/v1/missing 200', 'DELETE /v1/token 204', 'DELETE /v1/tokens 204', 'DELETE /v1/account 204'],
+        app: ['GET /v1/usage 403', 'GET /v1/account 200', ...sessionRoutes('app'), 'POST /playground/compile 200', 'POST /runner/web/v1/missing 403', 'DELETE /v1/token 204', 'DELETE /v1/tokens 204', 'DELETE /v1/account 204'],
+        partner: ['GET /v1/usage 403', 'GET /v1/account 403', ...sessionRoutes('partner'), 'POST /playground/compile 403', 'POST /runner/web/v1/missing 403', 'DELETE /v1/token 403', 'DELETE /v1/tokens 403', 'DELETE /v1/account 403'],
     });
 });
 
