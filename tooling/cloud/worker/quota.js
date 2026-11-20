@@ -1,5 +1,8 @@
 // Durable Object storage deletes at most this many keys per call.
 const DELETE_BATCH = 128;
+// The minute's count of sign-ins started by everyone, one key that each new minute starts over; no day's key, so the
+// daily prune leaves it.
+const STARTS_KEY = 'starts';
 
 // Daily compile counts per caller and for everyone, kept by one Durable Object: it handles one call at a time
 // and its storage reads hold other calls back, so a check and its increment cannot interleave.
@@ -32,6 +35,17 @@ export function createQuota(storage, now = () => Date.now()) {
         async remaining({ key, limit }) {
             const { used } = await counts(key);
             return Math.max(0, limit - used);
+        },
+
+        // Whether one more device sign-in may start this minute, for everyone together: counted here exactly, as a rate
+        // limit counted at each Cloudflare location cannot.
+        async startSignIn({ limit }) {
+            const minute = new Date(now()).toISOString().slice(0, 16);
+            const last = await storage.get(STARTS_KEY);
+            const count = last?.minute === minute ? last.count : 0;
+            if (count >= limit) return false;
+            await storage.put({ [STARTS_KEY]: { minute, count: count + 1 } });
+            return true;
         },
 
         async prune() {

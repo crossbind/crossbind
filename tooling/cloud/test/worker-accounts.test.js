@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import {
-    buildsOpenOn, createAccounts, dayWords, randomAccountId, DEVICE_REF_LENGTH, MAX_TOKENS_PER_USER, OWN_IDS_BELOW, OWN_IDS_FROM, TOKEN_IDLE_DAYS,
+    buildsOpenOn, createAccounts, dayWords, randomAccountId, DEVICE_REF_LENGTH, MAX_APP_TOKENS_PER_USER, MAX_TOKENS_PER_USER, OWN_IDS_BELOW, OWN_IDS_FROM, TOKEN_IDLE_DAYS,
 } from '../worker/accounts.js';
 import { sqliteD1 } from '../scripts/sqlite-d1.mjs';
 
@@ -467,6 +467,24 @@ test(`keeps the ${MAX_TOKENS_PER_USER} most recently used tokens of an account`,
     assert.equal((await rows(db, 'SELECT hash FROM tokens')).length, MAX_TOKENS_PER_USER);
     assert.equal(await accounts.userOfToken(tokens[0]), null);
     assert.notEqual(await accounts.userOfToken(tokens[1]), null);
+});
+
+test(`keeps the ${MAX_APP_TOKENS_PER_USER} most recently used tokens of the crossbind app, each with its label, apart from the CLI's`, async () => {
+    const { db, accounts, advance } = setup();
+    await accountOfToday(db, octocat);
+    const cli = await accounts.issueToken(octocat.id);
+    const apps = [];
+    for (let count = 0; count <= MAX_APP_TOKENS_PER_USER; count += 1) {
+        advance(MINUTE);
+        apps.push(await accounts.issueToken(octocat.id, { kind: 'app', label: `crossbind app 1.0.${count} on iOS 27.1` }));
+    }
+
+    assert.deepEqual(await rows(db, 'SELECT kind, count(1) AS kept FROM tokens GROUP BY kind ORDER BY kind'), [{ kind: 'app', kept: MAX_APP_TOKENS_PER_USER }, { kind: 'cli', kept: 1 }]);
+    assert.equal(await accounts.userOfToken(apps[0]), null);
+    assert.deepEqual([(await accounts.userOfToken(apps[1])).kind, (await accounts.userOfToken(cli)).kind], ['app', 'cli']);
+    assert.deepEqual((await accounts.devices(octocat.id))[0], {
+        ref: createHash('sha256').update(apps.at(-1)).digest('hex').slice(0, DEVICE_REF_LENGTH), kind: 'app', label: `crossbind app 1.0.${MAX_APP_TOKENS_PER_USER} on iOS 27.1`, createdAt: '2026-10-08T12:11:00.000Z', lastUsedAt: '2026-10-08T12:11:00.000Z',
+    });
 });
 
 test('notes when a token was last used, at most once an hour', async () => {

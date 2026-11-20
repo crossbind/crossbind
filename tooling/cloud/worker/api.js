@@ -207,8 +207,8 @@ const PLAYGROUND_ROUTES = Object.freeze({
     'GET /callback/apple': callback('apple'),
 });
 
-// deps: the rate limiters, the accounts, the quota and compiler Durable Object stubs, the cache, fetch and
-// waitUntil, so tests can stand in for them.
+// deps: the rate limiters, the accounts, the devices' sign-in codes, the quota and compiler Durable Object stubs, the
+// cache, fetch and waitUntil, so tests can stand in for them.
 export async function handleRequest(request, env, deps) {
     const settings = settingsOf(env);
     const { pathname } = new URL(request.url);

@@ -194,7 +194,8 @@ test('only adds: dropping what it added leaves the schema before it, with its ac
     await accounts.issueToken(dev.id);
 
     for (const statement of UNDO) await db.prepare(statement).run();
-    await accounts.issueToken(dev.id);
+    // A token as the code before identities issued one, with no kind and no label.
+    await db.prepare('INSERT INTO tokens (hash, user_id, created_at, last_used_at) VALUES (?1, ?2, ?3, ?3)').bind('0'.repeat(64), dev.id, AT).run();
 
     assert.deepEqual(await rows(db, SCHEMA), rowsOf(databaseBefore(), SCHEMA));
     // A token made before the undo and one made after it, read as the code before identities read them.

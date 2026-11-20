@@ -10,6 +10,7 @@ import crypto from 'node:crypto';
 import http from 'node:http';
 import { createAccounts } from '../worker/accounts.js';
 import { handleRequest } from '../worker/api.js';
+import { createDeviceCodes } from '../worker/devices.js';
 import { createQuota } from '../worker/quota.js';
 import { memoryStorage } from './memory-storage.mjs';
 import { sqliteD1 } from './sqlite-d1.mjs';
@@ -43,9 +44,13 @@ const env = {
 
 const cache = new Map();
 const unlimited = { limit: async () => ({ success: true }) };
+const db = sqliteD1();
 const deps = {
-    limits: { api: unlimited, login: unlimited },
-    accounts: createAccounts(sqliteD1()),
+    limits: {
+        api: unlimited, login: unlimited, starts: unlimited, poll: unlimited, code: unlimited,
+    },
+    accounts: createAccounts(db),
+    devices: createDeviceCodes(db),
     quota: createQuota(memoryStorage()),
     compiler: {
         fetch: async (request) => fetch(`${COMPILER_URL}/compile`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: await request.text() }),

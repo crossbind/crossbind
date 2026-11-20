@@ -90,10 +90,16 @@ export const signInProviders = (env) => Object.keys(PROVIDERS).filter((provider)
 
 const callbackUrl = (request, provider) => `${new URL(request.url).origin}/playground/callback/${provider}`;
 
+// Where a sign-in returns, by the name its start keeps (`account`, `device` or `playground`): signed in, to the account's
+// page or the device page on this origin, or to the configured playground page; with anything else, to the account's
+// page, which says what happened and keeps the name for the sign-ins it offers.
+export const signedInPage = (origin, next, env) => (next === 'playground' ? env.PLAYGROUND_URL : `${origin}${next === 'device' ? '/device' : '/login'}`);
+export const returnPage = (origin, next) => (next === 'account' ? `${origin}/login` : `${origin}/login?next=${next}`);
+
 // The state cookie holds `<state>.<secret>.<next>.<provider>.<purpose>`: the secret is GitHub's PKCE verifier or the
-// source of Apple's nonce, `next` where a sign-in returns, `account`, the account's page, or `playground`, and the
-// purpose `signin`, or `link:<account id>` for a link the account's page started. No script holds any of it. A cookie
-// of a sign-in started before Apple, with three parts or two, is GitHub's and signs in.
+// source of Apple's nonce, `next` where a sign-in returns, `account`, the account's page, `device`, the device page, or
+// `playground`, and the purpose `signin`, or `link:<account id>` for a link the account's page started. No script holds
+// any of it. A cookie of a sign-in started before Apple, with three parts or two, is GitHub's and signs in.
 export async function startLogin(request, env, { provider = 'github', next = 'playground', purpose = 'signin' } = {}) {
     const { configured, unset, authorizeUrl } = PROVIDERS[provider];
     if (!configured(env)) return Response.json({ error: unset }, { status: 503 });
@@ -118,16 +124,17 @@ async function linkBack(request, env, {
     return said(outcome, { name, day: freeFrom });
 }
 
-// Signed in, the browser goes where the start chose: the account's page on this origin, or the configured playground
-// page, never an address the request names; a sign-in started before the account's page goes to the playground.
-// Anything else comes back to the account's page, which says what happened and offers to sign in again. A first
-// sign-in with an identity crossbind does not know makes no account: the page asks its person first.
+// Signed in, the browser goes where the start chose: the account's page or the device page on this origin, or the
+// configured playground page, never an address the request names; a sign-in started before the account's page goes to
+// the playground. Anything else comes back to the account's page, which says what happened and offers to sign in again.
+// A first sign-in with an identity crossbind does not know makes no account: the page asks its person first.
 export async function finishLogin(request, env, {
     provider = 'github', fetcher = fetch, now = Date.now(), accounts,
 }) {
-    const [expected, secret, next, started = 'github', purpose = 'signin'] = readCookie(request, STATE_COOKIE)?.split('.') ?? [];
+    const [expected, secret, kept, started = 'github', purpose = 'signin'] = readCookie(request, STATE_COOKIE)?.split('.') ?? [];
     const { origin } = new URL(request.url);
-    const page = next === 'account' ? `${origin}/login` : `${origin}/login?next=playground`;
+    const next = kept === 'account' || kept === 'device' ? kept : 'playground';
+    const page = returnPage(origin, next);
     const done = (location, cookies = []) => redirect(location, [clearCookie(STATE_COOKIE), ...cookies]);
     const back = (result) => done(`${page}#login=${result}`);
     const params = new URL(request.url).searchParams;
@@ -146,15 +153,14 @@ export async function finishLogin(request, env, {
         const { identity, failure } = found;
         if (failure) return back(failure);
         const { user, freeFrom, unknown } = await accounts.signIn(identity, { create: false });
-        if (unknown) return done(page, [await pendingCookie(identity, next === 'account' ? 'account' : 'playground', env.SESSION_SECRET, now)]);
+        if (unknown) return done(page, [await pendingCookie(identity, next, env.SESSION_SECRET, now)]);
         if (freeFrom) return done(page, [noticeCookie({ said: 'held', provider, day: freeFrom })]);
         if (user.blocked) {
             log({ event: 'blocked-sign-in', who: userKey(user.id) });
             return back('blocked');
         }
         const session = await signSession({ id: user.id, name: nameOf(user) }, env.SESSION_SECRET, now);
-        const target = next === 'account' ? page : env.PLAYGROUND_URL;
-        return done(`${target}#login=ok`, [sessionCookie(SESSION_COOKIE, session, SESSION_TTL_MS / 1000)]);
+        return done(`${signedInPage(origin, next, env)}#login=ok`, [sessionCookie(SESSION_COOKIE, session, SESSION_TTL_MS / 1000)]);
     } catch (error) {
         log({ event: 'login-failed', provider, message: error.message });
         return back('failed');
