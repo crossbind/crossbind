@@ -205,7 +205,6 @@ export default function TutorialPage({ tokens, page }) {
                     onRun={run}
                     onStop={runner.stop}
                     onSignOut={runner.leave}
-                    onDeleteAccount={runner.removeAccount}
                     style={{ marginBottom: 12 }}
                 />
                 <div ref={runner.check} />

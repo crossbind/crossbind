@@ -1,7 +1,7 @@
 import { primaryButtonStyle, secondaryButtonStyle } from '../components/ui.jsx';
 import { PLAYGROUND_URL } from '../data.js';
 import { inline } from '../guide/inline.jsx';
-import { LOGIN_URL } from './client.js';
+import { ACCOUNT_URL, LOGIN_URL } from './client.js';
 import { PAUSED } from './runReason.js';
 
 // The run controls and the console's lines the playground and the tutorial share; useRunner.js holds their state.
@@ -42,7 +42,7 @@ function SignInLink({ tokens, away }) {
 }
 
 export function Account({
-    tokens, session, away, onSignOut, onDeleteAccount,
+    tokens, session, away, onSignOut,
 }) {
     if (!session || session.error) return null;
     const style = { display: 'inline-flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', fontSize: 13, color: tokens.textDim };
@@ -51,7 +51,7 @@ export function Account({
             <span style={style}>
                 {`Signed in as ${session.user.name}`}
                 <button type="button" onClick={onSignOut} className="tap-target" style={linkButtonStyle(tokens)}>Sign out</button>
-                <button type="button" onClick={onDeleteAccount} className="tap-target" style={linkButtonStyle(tokens, tokens.textDim)}>Delete account</button>
+                <a href={ACCOUNT_URL} className="tap-target" style={{ ...linkButtonStyle(tokens, tokens.textDim), textDecoration: 'none' }}>Delete account</a>
             </span>
         );
     }
@@ -67,7 +67,7 @@ export function Account({
 // Run closes the row, after what it says; `runFirst` leads with it and lets the text take the rest of the row, for a
 // toolbar under a text rather than over a window.
 export function Toolbar({
-    tokens, phase, session, ready, runOff, prebuilt, away, runFirst = false, onRun, onStop, onSignOut, onDeleteAccount, children, style,
+    tokens, phase, session, ready, runOff, prebuilt, away, runFirst = false, onRun, onStop, onSignOut, children, style,
 }) {
     const button = { padding: '10px 20px', fontSize: 14, cursor: 'pointer' };
     const busy = { loading: 'Loading…', compiling: 'Compiling…' }[phase];
@@ -99,7 +99,7 @@ export function Toolbar({
             {children}
             {!runFirst && <span style={{ flex: 1 }} />}
             <span aria-live="polite" style={{ fontSize: 13, color: tokens.textDim, ...(runFirst ? { flex: 1, minWidth: 180 } : {}) }}>{statusText(phase, session, prebuilt)}</span>
-            <Account tokens={tokens} session={session} away={away} onSignOut={onSignOut} onDeleteAccount={onDeleteAccount} />
+            <Account tokens={tokens} session={session} away={away} onSignOut={onSignOut} />
             {!runFirst && run}
         </div>
     );

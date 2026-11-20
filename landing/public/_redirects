@@ -110,3 +110,7 @@
 /tutorial/packages /tutorial/library/ 301
 /tutorial/packages/* /tutorial/library/ 301
 /tutorial/packages.md /tutorial/library.md 301
+
+# The account's page is crossbind cloud's own, on the origin of the routes it calls.
+/login https://api.crossbind.dev/login 301
+/login/ https://api.crossbind.dev/login 301
