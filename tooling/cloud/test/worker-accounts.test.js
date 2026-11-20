@@ -82,10 +82,10 @@ test('reports a blocked account at sign-in and when asked', async () => {
 
     assert.deepEqual(await accounts.signIn(github), signedInAs(octocat.id, 'octocat', true));
     assert.deepEqual(await accounts.standing('583231'), {
-        exists: true, blocked: true, login: 'octocat', signedOutAt: null,
+        exists: true, blocked: true, login: 'octocat', name: 'octocat', signedOutAt: null,
     });
     assert.deepEqual(await accounts.standing('1'), {
-        exists: false, blocked: false, login: '', signedOutAt: null,
+        exists: false, blocked: false, login: '', name: '', signedOutAt: null,
     });
 });
 

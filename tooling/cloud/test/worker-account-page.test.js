@@ -80,7 +80,7 @@ test('serves the account\'s page with its policy, and to a browser signed out a 
     assert.ok(!html.includes('<script>') && !html.includes('<style') && !html.includes('style='), 'nothing inline, which the policy would block');
     assert.deepEqual([style.status, style.headers.get('content-type'), script.status, script.headers.get('content-type')], [200, 'text/css; charset=utf-8', 200, 'text/javascript; charset=utf-8']);
     const unsetHtml = await (await unset.send('GET', '/login')).text();
-    assert.ok(unsetHtml.includes('Signing in with GitHub is not set up.') && !unsetHtml.includes('/account/login/github'));
+    assert.ok(unsetHtml.includes('Signing in is not set up.') && !unsetHtml.includes('/account/login/github'));
 });
 
 test('shows a signed-in account its name and devices, each with a form that signs it out, every value escaped', async () => {
@@ -113,9 +113,9 @@ test('renders a notice for each result a sign-in or a form sends the page back w
     assert.deepEqual([...html.matchAll(/<p class="notice" data-notice="([^"]+)" hidden>([^<]+)<\/p>/g)].map(([, key, words]) => [key, words]), [
         ['login=ok', 'Signed in.'],
         ['login=failed', 'Signing in did not work; try again.'],
-        ['login=cancelled', 'Signing in was cancelled on GitHub.'],
+        ['login=cancelled', 'Signing in was cancelled.'],
         ['login=too-new', 'This GitHub account is too new; accounts can sign in 30 days after they were created.'],
-        ['login=blocked', 'This GitHub account may not use crossbind cloud.'],
+        ['login=blocked', 'This account may not use crossbind cloud.'],
         ['signed-out-everywhere', 'Every device and every browser is signed out of the account, this one included.'],
         ['deleted', 'Your crossbind account is deleted, and every device is signed out of it.'],
     ]);
@@ -144,7 +144,7 @@ test('takes a form from the account\'s own page alone: crossbind.dev, another si
     assert.equal(answers.length, 20);
     assert.deepEqual(answers.filter((answer) => answer.status !== 403 || answer.cookie !== null || answer.error !== 'This is accepted from the account\'s page only.'), []);
     assert.deepEqual(await accounts.standing(user.id), {
-        exists: true, blocked: false, login: 'made_up_dev', signedOutAt: null,
+        exists: true, blocked: false, login: 'made_up_dev', name: 'made_up_dev', signedOutAt: null,
     });
     assert.equal((await accounts.userOfToken(token)).login, 'made_up_dev');
     assert.equal(await signsIn(send, cookie), true);
@@ -219,7 +219,7 @@ test('sends a form posted without a cookie that counts back to the page, and cha
     assert.deepEqual(answers, Array(6).fill([303, `${API}/login`]));
     assert.equal((await accounts.userOfToken(token)).login, 'made_up_dev');
     assert.deepEqual(await accounts.standing(user.id), {
-        exists: true, blocked: false, login: 'made_up_dev', signedOutAt: null,
+        exists: true, blocked: false, login: 'made_up_dev', name: 'made_up_dev', signedOutAt: null,
     });
 });
 
@@ -278,7 +278,7 @@ test('answers 404 to any other path or method under /account/, a preflight inclu
     const answers = [
         await send('GET', '/account/delete'),
         await send('OPTIONS', '/account/delete', { origin: SITE }),
-        await send('GET', '/account/login/apple'),
+        await send('GET', '/account/login/gitlab'),
         await send('POST', '/account/unlink', { origin: API }),
         await send('POST', '/login', { origin: API }),
     ];

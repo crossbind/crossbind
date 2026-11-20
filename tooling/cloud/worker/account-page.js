@@ -1,9 +1,13 @@
-import { ACCOUNT_BLOCKED, DEVICE_REF_LENGTH, userKey } from './accounts.js';
+import {
+    ACCOUNT_BLOCKED, DEVICE_REF_LENGTH, dayWords, userKey,
+} from './accounts.js';
 import {
     BodyTooLarge, SECURITY_HEADERS, jsonResponse, log, readLimited,
 } from './http.js';
-import { isLoginConfigured, minAccountDays, startLogin } from './oauth.js';
-import { clearCookie, readSignedIn, SESSION_COOKIE } from './session.js';
+import { minAccountDays, signInProviders, startLogin } from './oauth.js';
+import {
+    clearCookie, readNotice, readSignedIn, NOTICE_COOKIE, SESSION_COOKIE,
+} from './session.js';
 
 // The account's own page, /login on this API's origin, and the routes under /account/ that its forms post to. Those
 // take a request from this origin alone, so no other site, crossbind.dev included, can change an account through them.
@@ -24,12 +28,28 @@ const PAGE_HEADERS = Object.freeze({
 const notices = (env) => ({
     'login=ok': 'Signed in.',
     'login=failed': 'Signing in did not work; try again.',
-    'login=cancelled': 'Signing in was cancelled on GitHub.',
+    'login=cancelled': 'Signing in was cancelled.',
     'login=too-new': `This GitHub account is too new; accounts can sign in ${minAccountDays(env)} days after they were created.`,
     'login=blocked': ACCOUNT_BLOCKED,
     'signed-out-everywhere': 'Every device and every browser is signed out of the account, this one included.',
     deleted: 'Your crossbind account is deleted, and every device is signed out of it.',
 });
+
+const PROVIDER_NAMES = Object.freeze({ github: 'GitHub', apple: 'Apple' });
+const IDENTITY_WORDS = Object.freeze({ github: 'GitHub account', apple: 'Apple ID' });
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+// The words of a notice that came in its cookie (session.js), which any browser can make up for itself: each is checked
+// before it is worded, and a notice that does not check out shows nothing.
+const SAID = Object.freeze({
+    held: ({ provider, day }) => `This ${IDENTITY_WORDS[provider]} was unlinked from a crossbind account this month: it signs in again from ${dayWords(day)}, and can be linked back to that account now.`,
+});
+
+function wordsOf(notice) {
+    const word = Object.hasOwn(SAID, notice?.said ?? '') ? SAID[notice.said] : null;
+    if (!word || !Object.hasOwn(IDENTITY_WORDS, notice.provider ?? '') || (notice.day !== undefined && !DAY.test(notice.day))) return null;
+    return word(notice);
+}
 
 const SCRIPT = `const shown = [...document.querySelectorAll('[data-notice]')].find((notice) => '#' + notice.dataset.notice === location.hash);
 if (shown) {
@@ -78,15 +98,21 @@ ${list}
 <button type="submit">Delete account</button></form>`;
 }
 
-function signedOutPart(env) {
-    const signIn = isLoginConfigured(env)
-        ? '<p><a class="button" href="/account/login/github">Sign in with GitHub</a></p>'
-        : '<p>Signing in with GitHub is not set up.</p>';
+// `next`: where a sign-in started here returns, the playground when this page was opened from it.
+function signedOutPart(env, next) {
+    const query = next === 'playground' ? '?next=playground' : '';
+    const providers = signInProviders(env);
+    const signIn = providers.length === 0
+        ? '<p>Signing in is not set up.</p>'
+        : `<p class="sign-in">${providers.map((provider) => `<a class="button" href="/account/login/${provider}${query}">Sign in with ${PROVIDER_NAMES[provider]}</a>`).join(' ')}</p>`;
     return `<p>Sign in to see the devices signed in to your crossbind account, sign them out, or delete the account.</p>\n${signIn}`;
 }
 
-function page(env, user, devices) {
+function page(env, {
+    user, devices, said, next,
+}) {
     const shown = Object.entries(notices(env)).map(([key, words]) => `<p class="notice" data-notice="${key}" hidden>${escape(words)}</p>`);
+    if (said) shown.unshift(`<p class="notice" role="status">${escape(said)}</p>`);
     return `<!doctype html>
 <html lang="en">
 <head>
@@ -100,7 +126,7 @@ function page(env, user, devices) {
 <main>
 <h1>crossbind account</h1>
 ${shown.join('\n')}
-${user ? signedInPart(user, devices) : signedOutPart(env)}
+${user ? signedInPart(user, devices) : signedOutPart(env, next)}
 </main>
 </body>
 </html>
@@ -126,17 +152,22 @@ async function readForm(request) {
 
 const signedInUser = async ({ request, env, deps }) => (await readSignedIn(request, env.SESSION_SECRET, deps.accounts, (deps.now ?? Date.now)())).user;
 
+const nextOf = (request) => (new URL(request.url).searchParams.get('next') === 'playground' ? 'playground' : 'account');
+
+// A notice that came in its cookie is shown once: the page that shows it clears it.
 async function loginPage({ request, env, deps }) {
     const user = await signedInUser({ request, env, deps });
     const devices = user ? await deps.accounts.devices(user.id) : [];
-    return new Response(page(env, user, devices), { headers: PAGE_HEADERS });
+    const notice = readNotice(request);
+    const headers = new Headers(PAGE_HEADERS);
+    if (notice) headers.append('set-cookie', clearCookie(NOTICE_COOKIE));
+    return new Response(page(env, {
+        user, devices, said: wordsOf(notice), next: nextOf(request),
+    }), { headers });
 }
 
 // A navigation, which carries no Origin: it changes nothing but this browser's state cookie.
-function signInRoute({ request, env }) {
-    const next = new URL(request.url).searchParams.get('next') === 'playground' ? 'playground' : 'account';
-    return startLogin(request, env, next);
-}
+const signInRoute = (provider) => ({ request, env }) => startLogin(request, env, { provider, next: nextOf(request) });
 
 // Another site's request, crossbind.dev's included, and one with no Origin or `Origin: null`, gets 403.
 const fromThePage = (route) => (context) => {
@@ -179,7 +210,8 @@ const ROUTES = Object.freeze({
     'GET /login': loginPage,
     'GET /account.css': () => asset(STYLE, 'text/css; charset=utf-8'),
     'GET /account.js': () => asset(SCRIPT, 'text/javascript; charset=utf-8'),
-    'GET /account/login/github': signInRoute,
+    'GET /account/login/github': signInRoute('github'),
+    'GET /account/login/apple': signInRoute('apple'),
     'POST /account/logout': fromThePage(({ request }) => seeOther(request, '/login', [clearCookie(SESSION_COOKIE)])),
     'POST /account/tokens/revoke': fromThePage(signedIn(revokeRoute)),
     'POST /account/logout-everywhere': fromThePage(signedIn(everywhereRoute)),

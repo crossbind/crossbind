@@ -1,7 +1,8 @@
-import { userKey } from './accounts.js';
+import { nameOf, userKey } from './accounts.js';
+import { appleAuthorizeUrl, appleIdentity, isAppleConfigured } from './apple.js';
 import { log } from './http.js';
 import {
-    signSession, sessionCookie, clearCookie, readCookie, randomToken, toBase64Url, SESSION_COOKIE, SESSION_TTL_MS,
+    signSession, sessionCookie, clearCookie, noticeCookie, readCookie, randomToken, toBase64Url, SESSION_COOKIE, SESSION_TTL_MS,
 } from './session.js';
 import { numberOr } from './settings.js';
 
@@ -48,60 +49,90 @@ async function githubIdentity(accessToken, env, fetcher, now) {
     return { identity: { provider: 'github', subject: String(user.id), login: user.login.slice(0, MAX_NAME_LENGTH) } };
 }
 
-const callbackUrl = (request) => `${new URL(request.url).origin}/playground/callback/github`;
-
 function redirect(location, cookies) {
     const headers = new Headers({ location, 'cache-control': 'no-store' });
     cookies.forEach((cookie) => headers.append('set-cookie', cookie));
     return new Response(null, { status: 302, headers });
 }
 
-// PKCE (S256) binds GitHub's code to this browser: the verifier waits in its HttpOnly cookie beside the state, so a code
-// caught on its way is worth nothing in another browser. The cookie also keeps where the sign-in returns: `account`, the
-// account's page, or `playground`.
-export async function startLogin(request, env, next = 'playground') {
-    if (!isLoginConfigured(env)) return Response.json({ error: 'Signing in with GitHub is not set up.' }, { status: 503 });
-    const state = randomToken();
-    const verifier = randomToken();
+// PKCE (S256) binds GitHub's code to this browser, as the nonce binds Apple's: the verifier waits in its HttpOnly state
+// cookie, so a code caught on its way is worth nothing in another browser.
+async function githubAuthorizeUrl(env, redirectUri, state, verifier) {
     const challenge = toBase64Url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
     const url = new URL(AUTHORIZE_URL);
     Object.entries({
-        client_id: env.GITHUB_CLIENT_ID, redirect_uri: callbackUrl(request), state, code_challenge: challenge, code_challenge_method: 'S256',
+        client_id: env.GITHUB_CLIENT_ID, redirect_uri: redirectUri, state, code_challenge: challenge, code_challenge_method: 'S256',
     }).forEach(([key, value]) => url.searchParams.set(key, value));
-    return redirect(url.href, [sessionCookie(STATE_COOKIE, `${state}.${verifier}.${next}`, STATE_TTL_SECONDS)]);
+    return url.href;
 }
 
-// Returns to the account's page on this origin, or to the configured playground page, as the start chose; never to an
-// address the request names. A sign-in started before the account's page returns to the playground.
-export async function finishLogin(request, env, { fetcher = fetch, now = Date.now(), accounts }) {
-    const [expected, verifier, next] = readCookie(request, STATE_COOKIE)?.split('.') ?? [];
-    const target = next === 'account' ? `${new URL(request.url).origin}/login` : env.PLAYGROUND_URL;
-    const back = (result, cookies = []) => redirect(`${target}#login=${result}`, [clearCookie(STATE_COOKIE), ...cookies]);
+async function githubWebIdentity(env, {
+    code, secret, redirectUri, fetcher, now,
+}) {
+    const token = await json(await post(fetcher, TOKEN_URL, {
+        client_id: env.GITHUB_CLIENT_ID, client_secret: env.GITHUB_CLIENT_SECRET, code, redirect_uri: redirectUri, code_verifier: secret,
+    }));
+    if (typeof token.access_token !== 'string') throw new LoginFailed('GitHub sent no access token');
+    return githubIdentity(token.access_token, env, fetcher, now);
+}
+
+// The ways a browser signs in, each through its own callback, the address its provider lists for this origin.
+const PROVIDERS = Object.freeze({
+    github: {
+        configured: isLoginConfigured, unset: 'Signing in with GitHub is not set up.', authorizeUrl: githubAuthorizeUrl, identity: githubWebIdentity,
+    },
+    apple: {
+        configured: isAppleConfigured, unset: 'Signing in with Apple is not set up.', authorizeUrl: appleAuthorizeUrl, identity: appleIdentity,
+    },
+});
+
+export const signInProviders = (env) => Object.keys(PROVIDERS).filter((provider) => PROVIDERS[provider].configured(env));
+
+const callbackUrl = (request, provider) => `${new URL(request.url).origin}/playground/callback/${provider}`;
+
+// The state cookie holds `<state>.<secret>.<next>.<provider>`: the secret is GitHub's PKCE verifier or the source of
+// Apple's nonce, and `next` where a sign-in returns, `account`, the account's page, or `playground`. A cookie of a
+// sign-in started before Apple, with three parts or two, is GitHub's.
+export async function startLogin(request, env, { provider = 'github', next = 'playground' } = {}) {
+    const { configured, unset, authorizeUrl } = PROVIDERS[provider];
+    if (!configured(env)) return Response.json({ error: unset }, { status: 503 });
+    const state = randomToken();
+    const secret = randomToken();
+    const location = await authorizeUrl(env, callbackUrl(request, provider), state, secret);
+    return redirect(location, [sessionCookie(STATE_COOKIE, `${state}.${secret}.${next}.${provider}`, STATE_TTL_SECONDS)]);
+}
+
+// Signed in, the browser goes where the start chose: the account's page on this origin, or the configured playground
+// page, never an address the request names; a sign-in started before the account's page goes to the playground.
+// Anything else comes back to the account's page, which says what happened and offers to sign in again.
+export async function finishLogin(request, env, {
+    provider = 'github', fetcher = fetch, now = Date.now(), accounts,
+}) {
+    const [expected, secret, next, started = 'github'] = readCookie(request, STATE_COOKIE)?.split('.') ?? [];
+    const { origin } = new URL(request.url);
+    const page = next === 'account' ? `${origin}/login` : `${origin}/login?next=playground`;
+    const done = (location, cookies = []) => redirect(location, [clearCookie(STATE_COOKIE), ...cookies]);
+    const back = (result) => done(`${page}#login=${result}`);
     const params = new URL(request.url).searchParams;
     if (params.get('error')) return back('cancelled');
     const state = params.get('state');
-    if (!state || state !== expected || !verifier) return back('failed');
+    if (!state || state !== expected || !secret || started !== provider) return back('failed');
     try {
-        const token = await json(await post(fetcher, TOKEN_URL, {
-            client_id: env.GITHUB_CLIENT_ID,
-            client_secret: env.GITHUB_CLIENT_SECRET,
-            code: params.get('code') ?? '',
-            redirect_uri: callbackUrl(request),
-            code_verifier: verifier,
-        }));
-        if (typeof token.access_token !== 'string') throw new LoginFailed('GitHub sent no access token');
-        const { identity, failure } = await githubIdentity(token.access_token, env, fetcher, now);
+        const { identity, failure } = await PROVIDERS[provider].identity(env, {
+            code: params.get('code') ?? '', secret, redirectUri: callbackUrl(request, provider), fetcher, now,
+        });
         if (failure) return back(failure);
         const { user, freeFrom } = await accounts.signIn(identity);
-        if (freeFrom) return back('held');
+        if (freeFrom) return done(page, [noticeCookie({ said: 'held', provider, day: freeFrom })]);
         if (user.blocked) {
             log({ event: 'blocked-sign-in', who: userKey(user.id) });
             return back('blocked');
         }
-        const session = await signSession({ id: user.id, name: user.login }, env.SESSION_SECRET, now);
-        return back('ok', [sessionCookie(SESSION_COOKIE, session, SESSION_TTL_MS / 1000)]);
+        const session = await signSession({ id: user.id, name: nameOf(user) }, env.SESSION_SECRET, now);
+        const target = next === 'account' ? page : env.PLAYGROUND_URL;
+        return done(`${target}#login=ok`, [sessionCookie(SESSION_COOKIE, session, SESSION_TTL_MS / 1000)]);
     } catch (error) {
-        log({ event: 'login-failed', message: error.message });
+        log({ event: 'login-failed', provider, message: error.message });
         return back('failed');
     }
 }

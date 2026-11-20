@@ -4,7 +4,9 @@ import { createHash } from 'node:crypto';
 import {
     startLogin, finishLogin, requestDeviceCode, pollDeviceCode, STATE_COOKIE,
 } from '../worker/oauth.js';
-import { readSession, SESSION_COOKIE } from '../worker/session.js';
+import {
+    readNotice, readSession, NOTICE_COOKIE, SESSION_COOKIE,
+} from '../worker/session.js';
 
 const NOW = Date.parse('2026-10-07T12:00:00Z');
 const DAY = 24 * 3600 * 1000;
@@ -100,7 +102,7 @@ test('signs the GitHub account in to its account, whose id the session holds, an
 
 test('returns to the account\'s page or the playground, as its start chose, and to the playground from a start of before', async () => {
     const kept = [];
-    for (const start of [() => startLogin(new Request(`${API}/account/login/github`), env, 'account'), () => startLogin(new Request(`${API}/playground/login/github`), env)]) {
+    for (const start of [() => startLogin(new Request(`${API}/account/login/github`), env, { next: 'account' }), () => startLogin(new Request(`${API}/playground/login/github`), env)]) {
         kept.push(stateFrom(await start()).split('.')[2]);
     }
     const back = async (options) => (await finish(callback({ state: 's1', ...options }))).headers.get('location');
@@ -109,6 +111,7 @@ test('returns to the account\'s page or the playground, as its start chose, and 
         await back({ next: 'account' }),
         await back({ next: 'account', query: { error: 'access_denied' } }),
         await back({ next: 'playground' }),
+        await back({ next: 'playground', query: { error: 'access_denied' } }),
         await back({}),
         await back({ next: 'elsewhere' }),
     ];
@@ -118,6 +121,7 @@ test('returns to the account\'s page or the playground, as its start chose, and 
         `${API}/login#login=ok`,
         `${API}/login#login=cancelled`,
         'https://crossbind.dev/playground/#login=ok',
+        `${API}/login?next=playground#login=cancelled`,
         'https://crossbind.dev/playground/#login=ok',
         'https://crossbind.dev/playground/#login=ok',
     ]);
@@ -141,7 +145,7 @@ test('binds GitHub\'s code to the browser that asked for it: with another verifi
         outcomes.push((await finish(callback({ state, verifier: each }), { fetcher: pkce, accounts })).headers.get('location'));
     }
 
-    assert.deepEqual(outcomes, ['ok', 'failed', 'failed'].map((result) => `https://crossbind.dev/playground/#login=${result}`));
+    assert.deepEqual(outcomes, ['https://crossbind.dev/playground/#login=ok', ...['failed', 'failed'].map((result) => `${API}/login?next=playground#login=${result}`)]);
     assert.deepEqual(sent, [verifier, 'another-browser-s-verifier']);
     assert.equal(accounts.signedIn.length, 1);
 });
@@ -151,7 +155,7 @@ test('turns away a GitHub account younger than the minimum age before recording 
 
     const response = await finish(callback({ state: 's1' }), { fetcher: github(3), accounts });
 
-    assert.equal(response.headers.get('location'), 'https://crossbind.dev/playground/#login=too-new');
+    assert.equal(response.headers.get('location'), `${API}/login?next=playground#login=too-new`);
     assert.ok(!setCookies(response).some((c) => c.startsWith(`${SESSION_COOKIE}=`)));
     assert.equal(accounts.signedIn.length, 0);
 });
@@ -161,15 +165,17 @@ test('turns away a blocked account without a session, and logs the account\'s id
 
     const response = await finish(callback({ state: 's1' }), { accounts: accountsWith({ blocked: true }) });
 
-    assert.equal(response.headers.get('location'), 'https://crossbind.dev/playground/#login=blocked');
+    assert.equal(response.headers.get('location'), `${API}/login?next=playground#login=blocked`);
     assert.ok(!setCookies(response).some((c) => c.startsWith(`${SESSION_COOKIE}=`)));
     assert.deepEqual(lines.mock.calls.map((each) => JSON.parse(each.arguments[0])), [{ event: 'blocked-sign-in', who: `user:${ACCOUNT_ID}` }]);
 });
 
 test('signs an identity that is held in to nothing', async () => {
     const response = await finish(callback({ state: 's1' }), { accounts: accountsWith({ freeFrom: '2026-11-01' }) });
+    const notice = setCookies(response).find((c) => c.startsWith(`${NOTICE_COOKIE}=`)).split(';')[0];
 
-    assert.equal(response.headers.get('location'), 'https://crossbind.dev/playground/#login=held');
+    assert.equal(response.headers.get('location'), `${API}/login?next=playground`);
+    assert.deepEqual(readNotice(new Request(API, { headers: { cookie: notice } })), { said: 'held', provider: 'github', day: '2026-11-01' });
     assert.ok(!setCookies(response).some((c) => c.startsWith(`${SESSION_COOKIE}=`)));
 });
 
@@ -177,14 +183,14 @@ test('refuses a callback whose state does not match the one it set', async () =>
     const forged = await finish(callback({ state: 'attacker', cookieState: 's1' }));
     const missing = await finish(new Request(`${API}/playground/callback/github?code=c&state=s1`));
 
-    assert.equal(forged.headers.get('location'), 'https://crossbind.dev/playground/#login=failed');
-    assert.equal(missing.headers.get('location'), 'https://crossbind.dev/playground/#login=failed');
+    assert.equal(forged.headers.get('location'), `${API}/login?next=playground#login=failed`);
+    assert.equal(missing.headers.get('location'), `${API}/login?next=playground#login=failed`);
 });
 
 test('reports a login the user cancelled at GitHub', async () => {
     const response = await finish(callback({ state: 's1', query: { error: 'access_denied' } }));
 
-    assert.equal(response.headers.get('location'), 'https://crossbind.dev/playground/#login=cancelled');
+    assert.equal(response.headers.get('location'), `${API}/login?next=playground#login=cancelled`);
 });
 
 test('answers 503 while GitHub sign-in is not set up', async () => {
@@ -237,7 +243,7 @@ test('turns an approved device code into the GitHub account\'s identity, after t
 test('keeps the default minimum account age when the setting is left blank', async () => {
     const response = await finish(callback({ state: 's1' }), { fetcher: github(3), environment: { ...env, MIN_GITHUB_ACCOUNT_DAYS: '' } });
 
-    assert.equal(response.headers.get('location'), 'https://crossbind.dev/playground/#login=too-new');
+    assert.equal(response.headers.get('location'), `${API}/login?next=playground#login=too-new`);
 });
 
 test('logs only device-flow failures that point at a setup problem, not codes anyone can make up', async (t) => {
