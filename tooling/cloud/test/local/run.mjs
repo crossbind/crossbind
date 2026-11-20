@@ -1,9 +1,11 @@
-// The account's page against a local Worker: `wrangler dev` of wrangler.jsonc beside this file, on a local D1 made for
+// The account's pages against a local Worker: `wrangler dev` of wrangler.jsonc beside this file, on a local D1 made for
 // the run, and Chromium signing in on /login through stand-ins for GitHub's page and Apple's, signing devices out,
 // signing out everywhere and deleting the account, while the site, an origin of the same site as the API's, is refused;
-// then a first sign-in's question, linking and unlinking both ways, and an identity held with the day workerd words.
-// Made-up accounts alone, and an Apple key made for the run; Chromium resolves no name but localhost, so nothing leaves
-// this machine, a redirect included. Chromium comes from the workspace's Playwright.
+// a device's sign-in on /device, by scripts/device-check.mjs playing the app and by crossbind login's own code, each
+// typing the number read off the page; then a first sign-in's question, linking and unlinking both ways, and an
+// identity held with the day workerd words. Made-up accounts alone, and an Apple key made for the run; Chromium
+// resolves no name but localhost, and wrangler is asked for no Cloudflare request details from outside, so nothing
+// leaves this machine, a redirect included. Chromium comes from the workspace's Playwright.
 // usage: node test/local/run.mjs
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash, webcrypto } from 'node:crypto';
@@ -14,6 +16,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
+import { login as cliLogin } from '../../../../core/crossbind/src/actions/cloudCommands.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PACKAGE_DIR = path.resolve(HERE, '../..');
@@ -23,8 +26,11 @@ const NAME = 'made_up_local';
 const SERVICES_ID = 'dev.made-up.local';
 const AUTHORIZE = Object.freeze({ github: 'https://github.com/login/oauth/authorize', apple: 'https://appleid.apple.com/auth/authorize' });
 // A sign-in's start, a link, or a link's, a form of the page.
-const SIGN_IN_STARTS = /^\/account\/(login|link)\/(github|apple)$|^\/playground\/login\/github$/;
+const SIGN_IN_STARTS = /^\/account\/(login|link)\/(github|apple)$/;
 const READY_MS = 60_000;
+const CROSSBIND_VERSION = JSON.parse(fs.readFileSync(path.resolve(PACKAGE_DIR, '../../core/crossbind/package.json'), 'utf8')).version;
+// The country wrangler dev gives every request when it asks Cloudflare for nothing: Miniflare's made-up one, US.
+const COUNTRY_NAME = 'United States';
 
 const results = [];
 function check(name, ok, detail) {
@@ -56,7 +62,9 @@ const [APPLE_PRIVATE_KEY, APPLE_PUBLIC_KEY] = [
     Buffer.from(await webcrypto.subtle.exportKey('spki', APPLE_KEYS.publicKey)).toString('base64'),
 ];
 const wranglerArgs = (args) => ['exec', 'wrangler', ...args, '--config', CONFIG, '--persist-to', state];
-const wranglerEnv = { ...process.env, WRANGLER_SEND_METRICS: 'false' };
+// Without CLOUDFLARE_CF_FETCH_ENABLED=false, wrangler dev asks Cloudflare for the request details it gives the Worker,
+// this machine's country among them; with it, Miniflare's made-up ones.
+const wranglerEnv = { ...process.env, WRANGLER_SEND_METRICS: 'false', CLOUDFLARE_CF_FETCH_ENABLED: 'false' };
 
 // /fetch.html: a JSON request, which the browser asks the Worker about first and it does not allow, then a plain one it
 // sends unasked; /form.html: a form.
@@ -70,6 +78,15 @@ fetch('${API}/account/logout-everywhere', { method: 'POST', credentials: 'includ
 </script>`,
     '/form.html': `<!doctype html><title>site</title><form id="f" method="post" action="${API}/account/delete"><input name="confirm" value="yes"></form>
 <script>document.getElementById('f').submit();</script>`,
+    // The approval of the code its address names: as JSON, which the browser asks the Worker about first, then as
+    // plain text, sent unasked.
+    '/approve.html': `<!doctype html><title>site</title><script>
+const body = JSON.stringify({ user_code: location.hash.slice(1), approve: true });
+fetch('${API}/account/device/approve', { method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body })
+    .then((answer) => 'read ' + answer.status, () => 'blocked')
+    .then((outcome) => fetch('${API}/account/device/approve', { method: 'POST', mode: 'no-cors', credentials: 'include', headers: { 'content-type': 'text/plain' }, body })
+        .then(() => { document.title = outcome + ', sent'; }));
+</script>`,
 };
 const site = http.createServer((req, res) => {
     const page = SITE_PAGES[req.url];
@@ -146,6 +163,94 @@ async function cliSignIn() {
 }
 const usage = async (token) => (await fetch(`${API}/v1/usage`, { headers: { authorization: `Bearer ${token}` } })).status;
 
+const post = async (route, body) => (await fetch(`${API}${route}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })).json();
+const APP = {
+    client: 'app', version: '1.0.0', platform: 'ios', os: '27.1',
+};
+
+async function until(read, ms = 30_000) {
+    const deadline = Date.now() + ms;
+    for (let value = read(); Date.now() < deadline; value = read()) {
+        if (value) return value;
+        await wait(100);
+    }
+    throw new Error(`waited ${ms / 1000} s in vain`);
+}
+
+// A code entered on the device page as its person types it, then approved or denied there: the words the page shows of
+// what asked, what it says after, and the number it shows once approved.
+async function decideOnPage(page, typed, approve = true) {
+    await page.goto(`${API}/device`);
+    await page.fill('#user-code', typed);
+    await page.click('button:has-text("Continue")');
+    await page.waitForSelector('#device-asked:not([hidden])');
+    const words = await page.textContent('#device-words');
+    await page.click(`#device-asked button:has-text("${approve ? 'Approve' : 'Deny'}")`);
+    const said = await (await page.waitForSelector('#device-said:not([hidden])')).textContent();
+    return { words, said, number: Number(/^Type (\d{2}) on your device\. It gets one try\.$/.exec(said)?.[1]) };
+}
+
+// A device's sign-in, approved on the device page by `page`, signed in to the stand-in's account: the app played by
+// scripts/device-check.mjs, which reads the number from its input, and the CLI by crossbind login's own code; a denial;
+// the site refused; and the device page's own sign-in. Answers the CLI's token.
+async function runDevice(browser, page) {
+    const checker = spawn(process.execPath, [path.join(PACKAGE_DIR, 'scripts/device-check.mjs'), '--url', API], { stdio: ['pipe', 'pipe', 'pipe'] });
+    let printed = '';
+    checker.stdout.on('data', (chunk) => { printed += chunk; });
+    checker.stderr.on('data', (chunk) => { printed += chunk; });
+    const exited = new Promise((resolve) => { checker.on('close', resolve); });
+    const shown = await until(() => /enter the code ([A-Z]{4}-[A-Z]{4})/.exec(printed)?.[1]);
+    const app = await decideOnPage(page, ` ${shown.toLowerCase().replace('-', ' ')} `);
+    await until(() => printed.includes('type it here'));
+    checker.stdin.end(`${app.number}\n`);
+    const status = await exited;
+    // An answer piped in is not echoed, so the check after the question shares its line.
+    const passes = printed.match(/(?:PASS|FAIL) [^\n]*/g) ?? [];
+    check('scripts/device-check.mjs, playing the app, signs in through the device page: its code typed in lower case with spaces, what asked named with its country, and the number read off the page typed into it',
+        status === 0 && app.words === `The crossbind app 0.0.0 on macOS 0.0 asked just now, from ${COUNTRY_NAME}, to sign in as ${NAME}.` && passes.length === 4 && passes.every((line) => line.startsWith('PASS')),
+        `${app.words} ${app.said} ${passes.join('; ')}`);
+
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-cloud-local-cli-'));
+    const credentials = path.join(home, 'credentials.json');
+    let cliPrinted = '';
+    let typeNumber;
+    const typed = new Promise((resolve) => { typeNumber = resolve; });
+    const signingIn = cliLogin({
+        url: API, version: CROSSBIND_VERSION, file: credentials, print: (line) => { cliPrinted += `${line}\n`; }, ask: async () => String(await typed), isTerminal: () => true,
+    });
+    const cliCode = await until(() => /enter the code ([A-Z]{4}-[A-Z]{4})/.exec(cliPrinted)?.[1]);
+    const cli = await decideOnPage(page, cliCode);
+    typeNumber(cli.number);
+    const { login } = await signingIn;
+    const cliToken = JSON.parse(fs.readFileSync(credentials, 'utf8'))[API].token;
+    fs.rmSync(home, { recursive: true, force: true });
+    check('crossbind login\'s own code signs in through the same page, which names the CLI', login === NAME && cli.words.startsWith(`The crossbind CLI ${CROSSBIND_VERSION} asked`) && await usage(cliToken) === 200,
+        `${cliPrinted.trim()} ${cli.words}`);
+
+    const denied = await post('/v1/device/authorize', APP);
+    const deny = await decideOnPage(page, denied.user_code, false);
+    const after = await post('/v1/device/token', { device_code: denied.device_code });
+    check('a code denied on the page ends for its device', deny.said === 'Denied. That code no longer works.' && after.error === 'access_denied', `${deny.said} ${after.error}`);
+
+    const waiting = await post('/v1/device/authorize', APP);
+    const site = await page.context().newPage();
+    await site.goto(`${SITE}/approve.html#${waiting.user_code}`);
+    await site.waitForFunction(() => document.title.endsWith(', sent'));
+    const fetched = await site.title();
+    await site.close();
+    const still = await decideOnPage(page, waiting.user_code);
+    check('the site, another origin of the same site, approves no code: its JSON request blocked and its plain request refused, the code still waiting for the page',
+        fetched === 'blocked, sent' && Number.isInteger(still.number), `${fetched}; ${still.said}`);
+
+    const fresh = await newBrowser(browser);
+    await fresh.goto(`${API}/device`);
+    await fresh.click('a:has-text("Sign in with GitHub")');
+    await fresh.waitForSelector('[data-notice="login=ok"]:not([hidden])');
+    check('signed out, the device page signs in and comes back to itself, signed in', fresh.url() === `${API}/device` && (await fresh.textContent('main')).includes(`Signed in as ${NAME}`), fresh.url());
+    await fresh.context().close();
+    return cliToken;
+}
+
 async function run(browser) {
     const page = await newBrowser(browser);
     const first = await page.goto(`${API}/login`);
@@ -179,10 +284,14 @@ async function run(browser) {
     await signIn(second);
     check('a second browser signed in to the same account', await signedIn(second));
 
+    const cliToken = await runDevice(browser, page);
+    await page.goto(`${API}/login`);
+
     await page.click('button:has-text("Sign out everywhere")');
     await page.waitForSelector('[data-notice="signed-out-everywhere"]:not([hidden])');
     await second.goto(`${API}/login`);
-    check('signed out everywhere: this browser, the other and the last device', !(await signedIn(page)) && !(await signedIn(second)) && await usage(kept) === 401);
+    check('signed out everywhere: this browser, the other, the last device and the one crossbind login signed in on the device page',
+        !(await signedIn(page)) && !(await signedIn(second)) && await usage(kept) === 401 && await usage(cliToken) === 401);
 
     await signIn(page);
     await page.click('button:has-text("Delete account")');
@@ -199,10 +308,9 @@ async function run(browser) {
     const question = await page.textContent('.question');
     await Promise.all([page.waitForURL((url) => url.href.startsWith(PLAYGROUND)), page.click('button:has-text("Make a new account")')]);
     const made = page.url();
-    await page.goto(`${API}/playground/login/github`);
-    await page.waitForURL((url) => url.href.startsWith(PLAYGROUND));
-    check('the playground\'s Sign in: its page asks a first sign-in, Make a new account goes on to the playground, a form\'s redirect the policy lets out, and the start of before comes back to it',
-        question.includes('No crossbind account signs in with this GitHub account yet.') && made === `${PLAYGROUND}#login=ok` && page.url() === `${PLAYGROUND}#login=ok`, `${made}, ${page.url()}`);
+    const before = await page.goto(`${API}/playground/login/github`);
+    check('the playground\'s Sign in: its page asks a first sign-in, Make a new account goes on to the playground, a form\'s redirect the policy lets out, and the start of before is gone',
+        question.includes('No crossbind account signs in with this GitHub account yet.') && made === `${PLAYGROUND}#login=ok` && before.status() === 404, `${made}, ${before.status()}`);
 
     await runApple(browser, page);
 
