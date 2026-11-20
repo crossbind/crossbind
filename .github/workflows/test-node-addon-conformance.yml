@@ -619,6 +619,13 @@ jobs:
                   $store.Close()
             - name: Leave a WebView2 profile where a release before kept it, under the executable's name in the roaming folder
               run: New-Item -ItemType File -Force -Path "$env:APPDATA\crossbind-e2e-desktop-app.exe\crossbind-profile" | Out-Null
+            - name: Close what keeps the front from the app on the windows-11-arm runners
+              # windows-11-arm runs Windows 11, where windows-latest runs Server: it signs in to a full screen privacy
+              # settings page, and Windows Firewall asks about the run's endpoint, which listens on every address. Either
+              # covers the app's window, and WebView2 refuses a page full screen while its window has no focus.
+              run: |
+                  Stop-Process -Name WWAHost -Force -ErrorAction SilentlyContinue
+                  Set-NetFirewallProfile -All -NotifyOnListen False
             - name: Run the conformance suite in the app
               run: node e2e/desktop-app/e2e/run.mjs
             - name: Restore e2e/app-page-requests
@@ -774,6 +781,13 @@ jobs:
                   if ($package.Status -ne 'Ok') { throw "the package is $($package.Status)" }
                   if ($package.Publisher -ne 'CN=crossbind e2e') { throw "the package names $($package.Publisher) as its publisher, not the build's key" }
                   if ($package.Architecture -ne '${{ matrix.arch }}') { throw "the package is for $($package.Architecture)" }
+            - name: Close what keeps the front from the app on the windows-11-arm runners
+              # windows-11-arm runs Windows 11, where windows-latest runs Server: it signs in to a full screen privacy
+              # settings page, and Windows Firewall asks about the run's endpoint, which listens on every address. Either
+              # covers the app's window, and WebView2 refuses a page full screen while its window has no focus.
+              run: |
+                  Stop-Process -Name WWAHost -Force -ErrorAction SilentlyContinue
+                  Set-NetFirewallProfile -All -NotifyOnListen False
             - name: Run the conformance suite in the app from its package
               run: node e2e/desktop-app/e2e/run.mjs --msix
             - name: Show what Windows logged about the package
