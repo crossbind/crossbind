@@ -33,6 +33,13 @@ const monthsBefore = (at, months) => {
     return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() - months, 1)).toISOString().slice(0, 7);
 };
 const firstOfNextMonth = (at) => `${monthsBefore(at, -1)}-01`;
+const MONTH_NAMES = Object.freeze(['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']);
+
+// 2026-12-01 as "1 December 2026", made without a locale's data, which workerd need not have as Node has it.
+export const dayWords = (day) => {
+    const [year, month, date] = day.split('-').map(Number);
+    return `${date} ${MONTH_NAMES[month - 1]} ${year}`;
+};
 
 export const ACCOUNT_BLOCKED = 'This GitHub account may not use crossbind cloud.';
 
@@ -58,6 +65,8 @@ export function createAccounts(db, now = () => Date.now(), drawId = randomAccoun
     const timestamp = () => new Date(now()).toISOString();
     const hasSecondsThisMonth = async (id) => (await db.prepare('SELECT EXISTS (SELECT 1 FROM build_usage WHERE user_id = ? AND month = ?) AS spent')
         .bind(id, periodsOf(now()).month).first('spent')) === 1;
+    // An identity unlinked from an account with build seconds is held through the month of its unlinking, and no longer.
+    const isThisMonth = (time) => time.slice(0, 7) === periodsOf(now()).month;
 
     // A plain INSERT, never an upsert, which on an id taken would sign the person in to someone else's account. An id
     // that a deleted account's identities or seconds still name is taken too. Null when the id drawn was taken, or
@@ -82,9 +91,10 @@ export function createAccounts(db, now = () => Date.now(), drawId = randomAccoun
 
     return {
         // The account an identity signs in to, made at once for an identity crossbind does not know: { user }, or
-        // { freeFrom } for one unlinked from an account with build seconds this month, which holds it until the 1st.
-        // An account deleted this month comes back under its id, its month spent: while its seconds stay, so do its
-        // identities (migrations/0002's triggers). Never looked up by a GitHub id.
+        // { freeFrom } for one unlinked this month from an account with build seconds then (unlink), which holds it
+        // until the 1st; one unlinked in an earlier month is free. An account deleted this month comes back under its
+        // id, its month spent: while its seconds stay, so do its identities (migrations/0002's triggers). Never looked
+        // up by a GitHub id.
         async signIn({ provider, subject, login }) {
             for (let attempt = 0; attempt < MAX_SIGN_IN_ATTEMPTS; attempt += 1) {
                 const identity = await db.prepare('SELECT user_id, unlinked_at FROM identities WHERE provider = ? AND subject = ?').bind(provider, subject).first();
@@ -97,7 +107,7 @@ export function createAccounts(db, now = () => Date.now(), drawId = randomAccoun
                     return { user: userOf(row) };
                 }
                 if (identity) {
-                    if (await hasSecondsThisMonth(identity.user_id)) return { freeFrom: firstOfNextMonth(now()) };
+                    if (isThisMonth(identity.unlinked_at)) return { freeFrom: firstOfNextMonth(now()) };
                     await db.prepare('DELETE FROM identities WHERE provider = ? AND subject = ? AND unlinked_at IS NOT NULL').bind(provider, subject).run();
                 }
                 const user = await createAccount({ provider, subject, login });
@@ -128,14 +138,33 @@ export function createAccounts(db, now = () => Date.now(), drawId = randomAccoun
             ]);
         },
 
-        // Run daily: tokens unused for TOKEN_IDLE_DAYS, build seconds older than USAGE_MONTHS_KEPT months, and those of
-        // deleted accounts once their month is over.
+        // A way into the account taken away, never the last one: { outcome } of 'unlinked', 'held' with { freeFrom },
+        // 'last' or 'none'. Without build seconds this month the identity is free at once; with them it is held under
+        // the account until the month ends (signIn), so that no other account starts a fresh month with it. Unlinking
+        // GitHub blanks the account's GitHub name.
+        async unlink(userId, provider) {
+            const { results } = await db.prepare('SELECT provider FROM identities WHERE user_id = ? AND unlinked_at IS NULL').bind(userId).all();
+            if (!results.some((row) => row.provider === provider)) return { outcome: 'none' };
+            if (results.length < 2) return { outcome: 'last' };
+            const held = await hasSecondsThisMonth(userId);
+            await db.batch([
+                held
+                    ? db.prepare('UPDATE identities SET unlinked_at = ? WHERE user_id = ? AND provider = ? AND unlinked_at IS NULL').bind(timestamp(), userId, provider)
+                    : db.prepare('DELETE FROM identities WHERE user_id = ? AND provider = ? AND unlinked_at IS NULL').bind(userId, provider),
+                ...(provider === 'github' ? [db.prepare("UPDATE users SET login = '' WHERE id = ?").bind(userId)] : []),
+            ]);
+            return held ? { outcome: 'held', freeFrom: firstOfNextMonth(now()) } : { outcome: 'unlinked' };
+        },
+
+        // Run daily: tokens unused for TOKEN_IDLE_DAYS, build seconds older than USAGE_MONTHS_KEPT months, those of
+        // deleted accounts once their month is over, and identities unlinked in an earlier month.
         async prune() {
             const at = now();
             await db.batch([
                 db.prepare('DELETE FROM tokens WHERE last_used_at < ?').bind(new Date(at - TOKEN_IDLE_DAYS * DAY_MS).toISOString()),
                 db.prepare('DELETE FROM build_usage WHERE month < ?').bind(monthsBefore(at, USAGE_MONTHS_KEPT)),
                 db.prepare('DELETE FROM build_usage WHERE month < ? AND user_id NOT IN (SELECT id FROM users)').bind(periodsOf(at).month),
+                db.prepare('DELETE FROM identities WHERE unlinked_at < ?').bind(periodsOf(at).month),
             ]);
         },
 

@@ -1,4 +1,4 @@
-import { ACCOUNT_BLOCKED, userKey } from './accounts.js';
+import { ACCOUNT_BLOCKED, dayWords, userKey } from './accounts.js';
 import {
     BodyTooLarge, SECURITY_HEADERS, bearerToken, jsonResponse, log, readLimited,
 } from './http.js';
@@ -17,10 +17,6 @@ const EVERY_KIND = Object.freeze(['cli', 'app']);
 
 const now = (deps) => (deps.now ?? Date.now)();
 const noContent = () => new Response(null, { status: 204, headers: SECURITY_HEADERS });
-// 2026-12-01 as "1 December 2026".
-const dayWords = (day) => new Date(`${day}T00:00:00Z`).toLocaleDateString('en-GB', {
-    day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
-});
 
 function githubUnreachable(error) {
     log({ event: 'github-unreachable', message: error.message });
