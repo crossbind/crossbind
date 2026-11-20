@@ -1,5 +1,5 @@
 import { validateRequest, InvalidRequest, MAX_BODY_BYTES } from '../compiler/validate.js';
-import { handleAccountRequest } from './account-api.js';
+import { authenticate, handleAccountRequest } from './account-api.js';
 import { handleAccountPage, isAccountPath } from './account-page.js';
 import { buildsOpenOn, userKey } from './accounts.js';
 import {
@@ -20,6 +20,8 @@ const CACHE_SECONDS = 7 * 24 * 3600;
 // A container that started badly fails compiles too, so a failure is kept only long enough to spare a visitor who
 // runs the same code again.
 const FAILURE_CACHE_SECONDS = 10 * 60;
+// The tokens that compile: the crossbind app's, whose extension sends its token by the host's own fetch, never a page.
+const COMPILING_KINDS = Object.freeze(['app']);
 // The compiler caps its outputs well below this (compiler/compile.js OUTPUT_LIMITS).
 const MAX_COMPILER_ANSWER_BYTES = 12 * 1024 * 1024;
 
@@ -67,6 +69,17 @@ async function callerOf({
         key: user ? userKey(user.id) : `ip:${network}`,
         limit: (user ? (isNew ? settings.newAccountDaily : settings.userDaily) : settings.anonymousDaily),
     };
+}
+
+// The crossbind app's compile: held to its token and not to the Origin, and counted for its account as the cookie's is,
+// without the browser check. Any other kind of token compiles nothing.
+async function tokenCallerOf({
+    request, env, deps, settings,
+}) {
+    const { user, answer } = await authenticate(request, deps.accounts, { kinds: COMPILING_KINDS });
+    if (answer) return { answer };
+    const isNew = buildsOpenOn(user, minAccountDays(env), (deps.now ?? Date.now)()) !== null;
+    return { caller: { user, key: userKey(user.id), limit: isNew ? settings.newAccountDaily : settings.userDaily } };
 }
 
 async function readCompileBody(request, respond) {
@@ -118,22 +131,9 @@ async function runCompile({ project, caller, cacheRequest, reservation }, { deps
     return respond(200, { ...result, remaining: reservation.remaining });
 }
 
-// Cheap checks first: nothing reaches the browser check, the quota or the compiler before the body is sound.
-async function compileRoute(context) {
-    const { request, env, deps, settings, corsOrigin, respond } = context;
-    if (!settings.enabled) return respond(503, { error: 'The playground is paused; the examples on this page still run.' });
-    if (!corsOrigin) return respond(403, { error: 'Compiles are accepted from the playground page only.' });
-    const { project, turnstile, error } = await readCompileBody(request, respond);
-    if (error) return error;
-    const caller = await callerOf(context);
-    // Accounts are blocked in D1; a blocked network still compiles for whoever signs in, who can be blocked in turn.
-    const standing = caller.session ? caller.standing : { exists: true, blocked: settings.blockedNetworks.has(context.network) };
-    if (!standing.exists) return respond(401, { error: 'This account was deleted; sign in again to make a new one.', login: true });
-    if (standing.blocked) return respond(403, { error: 'This account or network may not compile here.' });
-    if (caller.session && !caller.user) return respond(401, { error: 'This account was signed out everywhere; sign in again.', login: true });
-    if (!caller.user && !(await verifyTurnstile(turnstile, { secret: env.TURNSTILE_SECRET, ip: caller.ip, hostnames: settings.turnstileHostnames, fetcher: deps.fetcher }))) {
-        return respond(403, { error: 'The browser check did not pass; reload the page and try again.', turnstile: true });
-    }
+// A compile seen before comes from the cache without counting; any other is counted for its caller, then run.
+async function countAndCompile(project, caller, context) {
+    const { deps, settings, respond } = context;
     const cacheRequest = new Request(await cacheUrl(settings.compilerVersion, project));
     const cached = await deps.cache?.match(cacheRequest);
     if (cached) return respond(200, { ...(await cached.json()), cached: true, remaining: await deps.quota.remaining({ key: caller.key, limit: caller.limit }) });
@@ -147,6 +147,31 @@ async function compileRoute(context) {
         });
     }
     return runCompile({ project, caller, cacheRequest, reservation }, context);
+}
+
+// Cheap checks first: nothing reaches the browser check, the quota or the compiler before the body is sound. A page
+// compiles from the playground's origin alone, signed in by its cookie or as a visitor; the crossbind app by its token.
+async function compileRoute(context) {
+    const { request, env, deps, settings, corsOrigin, respond } = context;
+    if (!settings.enabled) return respond(503, { error: 'The playground is paused; the examples on this page still run.' });
+    const byToken = request.headers.has('authorization');
+    if (!byToken && !corsOrigin) return respond(403, { error: 'Compiles are accepted from the playground page only.' });
+    const { project, turnstile, error } = await readCompileBody(request, respond);
+    if (error) return error;
+    if (byToken) {
+        const { caller, answer } = await tokenCallerOf(context);
+        return answer ?? countAndCompile(project, caller, context);
+    }
+    const caller = await callerOf(context);
+    // Accounts are blocked in D1; a blocked network still compiles for whoever signs in, who can be blocked in turn.
+    const standing = caller.session ? caller.standing : { exists: true, blocked: settings.blockedNetworks.has(context.network) };
+    if (!standing.exists) return respond(401, { error: 'This account was deleted; sign in again to make a new one.', login: true });
+    if (standing.blocked) return respond(403, { error: 'This account or network may not compile here.' });
+    if (caller.session && !caller.user) return respond(401, { error: 'This account was signed out everywhere; sign in again.', login: true });
+    if (!caller.user && !(await verifyTurnstile(turnstile, { secret: env.TURNSTILE_SECRET, ip: caller.ip, hostnames: settings.turnstileHostnames, fetcher: deps.fetcher }))) {
+        return respond(403, { error: 'The browser check did not pass; reload the page and try again.', turnstile: true });
+    }
+    return countAndCompile(project, caller, context);
 }
 
 async function sessionRoute(context) {
