@@ -84,7 +84,7 @@ function Menu({
 
 export default function TurboBar({
     tokens, phase, session, ready, runOff, prebuilt, samples, sampleId, edited,
-    onRun, onStop, onSelectSample, onNewFile, onReset, onAddPackage, onSignOut, onDeleteAccount,
+    onRun, onStop, onSelectSample, onNewFile, onReset, onAddPackage, onSignOut,
 }) {
     const { mono } = tokens;
     const busy = phase !== 'idle';
@@ -140,7 +140,7 @@ export default function TurboBar({
             <span style={{ flex: 1 }} />
             <span aria-live="polite" style={{ padding: '0 8px' }}>{statusText(phase, session, prebuilt)}</span>
             <span style={{ padding: '0 8px' }}>
-                <Account tokens={bar} session={session} onSignOut={onSignOut} onDeleteAccount={onDeleteAccount} />
+                <Account tokens={bar} session={session} onSignOut={onSignOut} />
             </span>
         </div>
     );

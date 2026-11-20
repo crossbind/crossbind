@@ -226,7 +226,6 @@ export default function PlaygroundPage({ tokens, page }) {
                         onReset={resetSample}
                         onAddPackage={() => setAdding(true)}
                         onSignOut={runner.leave}
-                        onDeleteAccount={runner.removeAccount}
                     />
                 ) : (
                     <Toolbar
@@ -239,7 +238,6 @@ export default function PlaygroundPage({ tokens, page }) {
                         onRun={run}
                         onStop={runner.stop}
                         onSignOut={runner.leave}
-                        onDeleteAccount={runner.removeAccount}
                         // On the files pane's surface, so the toolbar reads as the editor's and not as a second navbar.
                         style={{ margin: 0, padding: '10px var(--playground-x)', background: tokens.panelAlt, borderBottom: `1px solid ${tokens.border}` }}
                     >

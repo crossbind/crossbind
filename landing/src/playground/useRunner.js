@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-    deleteAccount, fetchSession, requestCompile, signOut, turnstileToken,
+    fetchSession, requestCompile, signOut, turnstileToken,
 } from './client.js';
 import { hasPrebuilt, loadPrebuilt } from './prebuilt.js';
 import {
@@ -10,7 +10,6 @@ import { runInSandbox } from './sandbox.js';
 
 const MAX_LINES = 500;
 const UNREACHABLE = 'The playground service cannot be reached right now.';
-const DELETE_QUESTION = 'Delete your crossbind cloud account? This signs you out here and on every machine where crossbind login used it.';
 const FAILURE_NOTICES = Object.freeze({
     compile: 'The build failed; its log is in the console.',
     timeout: 'The compile ran out of time.',
@@ -103,14 +102,7 @@ export function useRunner({ lazy = false } = {}) {
         reloadSession();
     }
 
-    async function removeAccount() {
-        if (!window.confirm(DELETE_QUESTION)) return;
-        const response = await deleteAccount().catch(() => null);
-        setNotice({ text: response?.ok ? 'Your crossbind cloud account is deleted, and every machine is signed out of it.' : 'The account could not be deleted; try again.' });
-        reloadSession();
-    }
-
     return {
-        session, phase, notice, setNotice, lines, buildLog, lastRun, check, canCompile, connect, run, clear, stop: () => stopRun.current?.(), leave, removeAccount,
+        session, phase, notice, setNotice, lines, buildLog, lastRun, check, canCompile, connect, run, clear, stop: () => stopRun.current?.(), leave,
     };
 }

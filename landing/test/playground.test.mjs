@@ -111,3 +111,21 @@ test('on a phone the package dialog puts what a package is under its name, besid
     assert.match(phone, /\.turbo-package \.package-summary \{\s*grid-column: 2;\s*grid-row: 2;/);
     assert.match(phone, /\.turbo-package \.package-version \{\s*display: none;/);
 });
+
+test('/login and /login/ lead to the account\'s page on crossbind cloud', () => {
+    const rules = source('../public/_redirects').split('\n').map((line) => line.trim().split(/\s+/));
+
+    assert.deepEqual(rules.filter(([from]) => from === '/login' || from === '/login/'), [
+        ['/login', 'https://api.crossbind.dev/login', '301'],
+        ['/login/', 'https://api.crossbind.dev/login', '301'],
+    ]);
+});
+
+test('the playground signs in through crossbind cloud\'s start, which comes back to it, and deletes the account on the cloud\'s page', () => {
+    const client = source('../src/playground/client.js');
+
+    assert.ok(client.includes('export const LOGIN_URL = `${CLOUD_URL}/account/login/github?next=playground`;'));
+    assert.ok(client.includes('export const ACCOUNT_URL = `${CLOUD_URL}/login`;'));
+    assert.ok(!client.includes('delete-account'));
+    assert.match(source('../src/playground/parts.jsx'), /<a href=\{ACCOUNT_URL\}[^>]*>Delete account<\/a>/);
+});
