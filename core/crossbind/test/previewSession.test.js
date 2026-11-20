@@ -1,8 +1,10 @@
 import { describe, expect, test, vi } from 'vitest';
 import { webcrypto } from 'node:crypto';
+import http from 'node:http';
+import net from 'node:net';
 import {
-    GATE_HEADER, PREVIEW_PROTOCOL, answerSession, gateToken, isBase64url32, isSameSecret, newPreviewKey, previewGate, previewOf,
-    previewSocketGate, protocolsLine,
+    GATE_HEADER, PREVIEW_PROTOCOL, answerSession, gateToken, guardServer, isBase64url32, isSameSecret, newPreviewKey, previewGate,
+    previewOf, previewSocketGate, protocolsLine,
 } from '../src/utils/previewSession.js';
 
 const key = newPreviewKey();
@@ -116,6 +118,22 @@ describe('the gate', () => {
         }
     });
 
+    test('names each range of protocols an app asked for once, however often it asks', () => {
+        const logger = { warn: vi.fn() };
+        const gate = previewGate(preview, logger);
+        const res = () => ({ setHeader() {}, end() {} });
+        for (const protocols of ['2-3', '2-3', '0-0', '2-3', '0-0', '1-1']) {
+            gate({ url: `/__crossbind/session?challenge=${challenge}&protocols=${protocols}`, headers: {} }, res(), vi.fn());
+        }
+        expect(logger.warn.mock.calls.map(([line]) => line.match(/protocols (\S+) asked/)[1])).toEqual(['2–3', '0–0']);
+    });
+
+    test('answers 400 to a request whose target no URL reads, and passes nothing on', () => {
+        const { res, next } = asked('http://[/');
+        expect(res.statusCode).toBe(400);
+        expect(next).not.toHaveBeenCalled();
+    });
+
     test('passes a request with the token on to Vite, and names one for the page API the device answers itself', () => {
         const page = asked('/src/main.js', { [GATE_HEADER]: token });
         expect(page.next).toHaveBeenCalledOnce();
@@ -128,10 +146,12 @@ describe('the gate', () => {
 
 describe('the socket', () => {
     const viteToken = 'vite-token-1';
-    function upgraded(url, protocol = 'vite-hmr') {
+    // Vite's resolved config as the gate reads it: its token, its base and its socket's own options.
+    function upgraded(url, protocol = 'vite-hmr', { base = '/', ws = {} } = {}) {
         const socket = { destroy: vi.fn() };
         const logger = { warn: vi.fn() };
-        previewSocketGate(() => viteToken, logger)({ url, headers: { 'sec-websocket-protocol': protocol }, socket: { remoteAddress: '192.168.1.9' } }, socket);
+        const config = { webSocketToken: viteToken, base, server: { ws } };
+        previewSocketGate(() => config, logger)({ url, headers: { 'sec-websocket-protocol': protocol }, socket: { remoteAddress: '192.168.1.9' } }, socket);
         return { socket, logger };
     }
 
@@ -144,8 +164,58 @@ describe('the socket', () => {
         }
     });
 
-    test("lets Vite's ping through, which closes at once and carries nothing", () => {
+    test("lets Vite's ping through on Vite's own socket path alone, where it closes at once and carries nothing", () => {
         expect(upgraded('/', 'vite-ping').socket.destroy).not.toHaveBeenCalled();
+        expect(upgraded('/app/', 'vite-ping', { base: '/app/' }).socket.destroy).not.toHaveBeenCalled();
+        expect(upgraded('/hmr', 'vite-ping', { ws: { path: 'hmr' } }).socket.destroy).not.toHaveBeenCalled();
+        for (const [url, options] of [['/other', {}], ['/other?x=/', {}], ['/', { base: '/app/' }], ['/', { ws: { path: 'hmr' } }]]) {
+            expect(upgraded(url, 'vite-ping', options).socket.destroy, url).toHaveBeenCalledOnce();
+        }
+        expect(upgraded('/other', 'vite-hmr').socket.destroy).toHaveBeenCalledOnce();
+        expect(upgraded(`/other?token=${viteToken}`).socket.destroy).not.toHaveBeenCalled();
+    });
+
+    test('refuses a socket whose target no URL reads', () => {
+        expect(upgraded('http://[/', 'vite-ping').socket.destroy).toHaveBeenCalledOnce();
+    });
+});
+
+describe('the gate in front of the server', () => {
+    const token = gateToken(key);
+    // A request to the server, by a socket of its own, so that its target is sent as written: its status and body.
+    function raw(port, target, headers = {}) {
+        return new Promise((done) => {
+            const socket = net.connect(port, '127.0.0.1', () => {
+                const lines = Object.entries({ Host: `127.0.0.1:${port}`, Connection: 'close', ...headers }).map(([name, value]) => `${name}: ${value}`);
+                socket.write(`GET ${target} HTTP/1.1\r\n${lines.join('\r\n')}\r\n\r\n`);
+            });
+            let said = '';
+            socket.on('data', (chunk) => { said += chunk; });
+            socket.on('close', () => done({ status: Number(said.split(' ')[1]), body: said.split('\r\n\r\n')[1] }));
+        });
+    }
+
+    test("answers before the server's own handler and whatever middleware it holds, whenever it was added", async () => {
+        const reached = [];
+        // The handler stands for Vite's middlewares, those of a plugin before crossbind's among them.
+        const server = http.createServer((req, res) => {
+            reached.push(req.url);
+            res.end(req.url === '/__e2e/early' ? 'early' : 'vite');
+        });
+        guardServer(server, previewGate(preview, { warn() {} }));
+        await new Promise((done) => { server.listen(0, '127.0.0.1', done); });
+        const { port } = server.address();
+        try {
+            expect(await raw(port, '/__e2e/early')).toMatchObject({ status: 403, body: 'crossbind: this preview answers the device that opened it alone' });
+            expect(await raw(port, '/@vite/client', { [GATE_HEADER]: 'nope' })).toMatchObject({ status: 403 });
+            expect(await raw(port, `/__crossbind/session?challenge=${challenge}`)).toMatchObject({ status: 200 });
+            expect(await raw(port, 'http://[/')).toMatchObject({ status: 400 });
+            expect(reached).toEqual([]);
+            expect(await raw(port, '/__e2e/early', { [GATE_HEADER]: token })).toMatchObject({ status: 200, body: 'early' });
+            expect(reached).toEqual(['/__e2e/early']);
+        } finally {
+            await new Promise((done) => { server.close(done); });
+        }
     });
 });
 

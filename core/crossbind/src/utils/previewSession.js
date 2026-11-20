@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import path from 'node:path';
 
 // What the crossbind app and crossbind app preview read of each other: the session, the gate's header, the socket's
 // rule and the exports of the page API the app answers at PAGE_API_PATH. It rises for a change that breaks one of them,
@@ -57,11 +58,19 @@ export function protocolsLine(protocols, update) {
     return null;
 }
 
-// Whether a socket opens: Vite's ping, which closes at once and carries nothing, or one with Vite's token, which only
-// a page that came through the gate holds, with an Origin or without one.
-export function isSocketAllowed(protocol, url, webSocketToken) {
-    if (protocol === 'vite-ping') return true;
-    return isSameSecret(new URL(url, 'http://preview').searchParams.get('token'), webSocketToken);
+// A request's target read as a URL's path and query, or null where no URL reads it, as http://[/ is none.
+const targetOf = (url) => URL.parse(url, 'http://preview');
+
+// The path Vite's own socket takes, as Vite joins it from its base and server.ws.path.
+const socketPathOf = ({ base, server }) => (server.ws?.path ? path.posix.join(base, server.ws.path) : base);
+
+// Whether a socket opens: Vite's ping on Vite's own socket path, where it closes at once and carries nothing, or one with
+// Vite's token, which only a page that came through the gate holds, with an Origin or without one.
+export function isSocketAllowed(protocol, url, webSocketToken, socketPath) {
+    const target = targetOf(url);
+    if (!target) return false;
+    if (protocol === 'vite-ping' && target.pathname === socketPath) return true;
+    return isSameSecret(target.searchParams.get('token'), webSocketToken);
 }
 
 function send(res, status, type, body) {
@@ -71,15 +80,24 @@ function send(res, status, type, body) {
     res.end(body);
 }
 
-// The first middleware of a preview's dev server, before Vite's own: the session to anyone, 403 to any other request
-// without the gate's token, Vite's own paths among them, and the rest on to Vite.
+// What a preview's dev server answers before anything of Vite's or of its plugins': the session to anyone, 400 to a
+// target no URL reads, 403 to any other request without the gate's token, and the rest on. Each range of protocols an app
+// asked for is named once.
 export function previewGate(preview, logger) {
     const token = gateToken(preview.key);
+    const named = new Set();
     return (req, res, next) => {
-        const url = new URL(req.url, 'http://preview');
+        const url = targetOf(req.url);
+        if (!url) {
+            send(res, 400, 'text/plain; charset=utf-8', "crossbind: a request's target is the path of a URL");
+            return;
+        }
         if (url.pathname === SESSION_PATH) {
             const line = protocolsLine(url.searchParams.get('protocols'), preview.update);
-            if (line) logger.warn(line);
+            if (line && !named.has(line)) {
+                named.add(line);
+                logger.warn(line);
+            }
             const answer = answerSession(preview.key, url.searchParams.get('challenge'), preview.session);
             if (answer.json) send(res, answer.status, 'application/json', JSON.stringify(answer.json));
             else send(res, answer.status, 'text/plain; charset=utf-8', answer.text);
@@ -96,10 +114,20 @@ export function previewGate(preview, logger) {
     };
 }
 
-// The first listener of the server's upgrades: a socket that may not open goes before Vite sees it.
-export function previewSocketGate(webSocketToken, logger) {
+// The gate in front of the server's own handler, which holds every middleware of Vite's and of its plugins', whatever
+// their order and whenever they are added, so that none answers a request the gate refuses.
+export function guardServer(httpServer, gate) {
+    const handlers = httpServer.listeners('request');
+    httpServer.removeAllListeners('request');
+    httpServer.on('request', (req, res) => gate(req, res, () => handlers.forEach((handler) => handler.call(httpServer, req, res))));
+}
+
+// The first listener of the server's upgrades: a socket that may not open goes before Vite sees it. configOf gives Vite's
+// resolved config, its socket's token among it.
+export function previewSocketGate(configOf, logger) {
     return (req, socket) => {
-        if (isSocketAllowed(req.headers['sec-websocket-protocol'], req.url, webSocketToken())) return;
+        const config = configOf();
+        if (isSocketAllowed(req.headers['sec-websocket-protocol'], req.url, config.webSocketToken, socketPathOf(config))) return;
         logger.warn(`crossbind: refused a socket without the page's token from ${req.socket.remoteAddress}`);
         socket.destroy();
     };

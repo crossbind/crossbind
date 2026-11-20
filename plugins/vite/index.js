@@ -3,8 +3,8 @@ import {
     state, createLib, createBridgeFile, buildWasm, buildDependencies, getTargetParams, getFilteredBuildTargets, isSourceNewer, getRustJsScript,
     isAppSource, getFileHash, buildProjectApp, appLayout, appOutputName, appPlatform, appTargetParams, publishApp, buildForSimulator,
     openInSimulator, buildApk, openOnDevice, buildForIosDevice, openOnIosDevice, connectedIosDevice, iosDevServer, iosDeviceAppEnv,
-    resolveAppPageApi, findAppPageApi, isAppBuild, emptyAppOutDir, PAGE_API_PATH, PREVIEW_MODULE_ID, previewGate, previewModuleSource,
-    previewOf, previewSocketGate,
+    resolveAppPageApi, findAppPageApi, isAppBuild, emptyAppOutDir, PAGE_API_PATH, PREVIEW_MODULE_ID, guardServer, previewGate,
+    previewModuleSource, previewOf, previewSocketGate,
 } from 'crossbind';
 import rollupCrossbindPlugin from '@crossbind/plugin-rollup';
 
@@ -240,8 +240,10 @@ function previewPlugin() {
             return `throw new Error('crossbind: this page opens in the crossbind app, which serves ${PAGE_API_PATH} itself');`;
         },
         configureServer(server) {
-            server.middlewares.use(previewGate(preview, server.config.logger));
-            server.httpServer?.prependListener('upgrade', previewSocketGate(() => server.config.webSocketToken, server.config.logger));
+            // The gate stands in front of the server itself, which Vite's middleware mode leaves to another.
+            if (!server.httpServer) throw new Error("crossbind: a preview runs on Vite's own server: leave server.middlewareMode out.");
+            guardServer(server.httpServer, previewGate(preview, server.config.logger));
+            server.httpServer.prependListener('upgrade', previewSocketGate(() => server.config, server.config.logger));
             // The address is crossbind app preview's to print, with its key; Vite's own would open the gate's 403.
             server.printUrls = () => {};
         },
