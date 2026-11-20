@@ -34,6 +34,22 @@ BEGIN
         VALUES ('github', CAST(NEW.id AS TEXT), NEW.id, NEW.created_at);
 END;
 
+-- A deleted account's identities go with its row, unless build seconds of its id are left: then they stay under the
+-- id, so that signing in again does not bring a fresh month, and go when the daily prune deletes the last of those
+-- seconds. Deleting an account takes its earlier months at once, so the seconds left are the month's: neither trigger
+-- reads a clock.
+CREATE TRIGGER users_deleted_identities AFTER DELETE ON users
+    WHEN NOT EXISTS (SELECT 1 FROM build_usage WHERE user_id = OLD.id)
+BEGIN
+    DELETE FROM identities WHERE user_id = OLD.id;
+END;
+
+CREATE TRIGGER build_usage_gone_identities AFTER DELETE ON build_usage
+    WHEN OLD.user_id NOT IN (SELECT id FROM users) AND NOT EXISTS (SELECT 1 FROM build_usage WHERE user_id = OLD.user_id)
+BEGIN
+    DELETE FROM identities WHERE user_id = OLD.user_id;
+END;
+
 -- No cookie of the site made before this moment counts: signing out everywhere sets it.
 ALTER TABLE users ADD COLUMN signed_out_at TEXT;
 
