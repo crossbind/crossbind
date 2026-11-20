@@ -145,6 +145,7 @@ if (entry) {
 `;
 
 const STYLE = `:root { color-scheme: light dark; font: 16px/1.5 system-ui, sans-serif; }
+[hidden] { display: none !important; }
 body { margin: 0; }
 main { max-width: 40rem; margin: 0 auto; padding: 2rem 1rem; }
 h1 { font-size: 1.5rem; }

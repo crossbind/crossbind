@@ -200,7 +200,11 @@ async function decideOnPage(page, typed, approve = true) {
     const words = await page.textContent('#device-words');
     await page.click(`#device-asked button:has-text("${approve ? 'Approve' : 'Deny'}")`);
     const said = await (await page.waitForSelector('#device-said:not([hidden])', { timeout: STEP_MS })).textContent();
-    return { words, said, number: Number(/^Type (\d{2}) on your device\. It gets one try\.$/.exec(said)?.[1]) };
+    // Decided, the page shows what it said alone: the code's field and the question go.
+    const ended = await page.isHidden('#device-code') && await page.isHidden('#device-asked');
+    return {
+        words, said, ended, number: Number(/^Type (\d{2}) on your device\. It gets one try\.$/.exec(said)?.[1]),
+    };
 }
 
 // scripts/device-check.mjs playing the app: the code it prints entered on the page, and the number read there typed into
@@ -220,7 +224,8 @@ async function deviceCheck(page) {
         // An answer piped in is not echoed, so the check after the question shares its line.
         const passes = printed.match(/(?:PASS|FAIL) [^\n]*/g) ?? [];
         return {
-            ok: status === 0 && app.words === `The crossbind app 0.0.0 on macOS 0.0 asked just now, from ${COUNTRY_NAME}, to sign in as ${NAME}.` && passes.length === 4 && passes.every((line) => line.startsWith('PASS')),
+            ok: status === 0 && app.ended && app.words === `The crossbind app 0.0.0 on macOS 0.0 asked just now, from ${COUNTRY_NAME}, to sign in as ${NAME}.`
+                && passes.length === 4 && passes.every((line) => line.startsWith('PASS')),
             detail: `${app.words} ${app.said} ${passes.join('; ')}`,
         };
     } finally {
@@ -272,7 +277,7 @@ async function runDevice(browser, page) {
         const denied = await post('/v1/device/authorize', APP);
         const deny = await decideOnPage(page, denied.user_code, false);
         const after = await post('/v1/device/token', { device_code: denied.device_code });
-        return { ok: deny.said === 'Denied. That code no longer works.' && after.error === 'access_denied', detail: `${deny.said} ${after.error}` };
+        return { ok: deny.said === 'Denied. That code no longer works.' && deny.ended && after.error === 'access_denied', detail: `${deny.said} ${after.error}` };
     });
 
     await step('the site, another origin of the same site, approves no code: its JSON request blocked and its plain request refused, the code still waiting for the page', async () => {
