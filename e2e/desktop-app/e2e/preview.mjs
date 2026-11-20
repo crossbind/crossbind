@@ -296,10 +296,15 @@ async function checkNativeEdit(app) {
 
 // 11. Another machine on the network gets nothing of the project's but the session; the editor's path is asked only
 // once the gate refused the files, as without it this machine would open an editor.
-async function checkOtherMachine(source) {
+async function checkOtherMachine(source, token) {
     const file = join(project, 'package.json').replaceAll('\\', '/');
     const files = await statusOf(`${source}/@fs/${file.replace(/^\//, '')}`);
     expect(files === 403, `/@fs/ of the project's package.json got ${files} without the gate's token`);
+    // The fixture's path, which a middleware of a plugin before crossbind's answers, and the device still reaches.
+    const early = await statusOf(`${source}/__e2e/early`);
+    expect(early === 403, `/__e2e/early, which a plugin before crossbind's answers, got ${early} without the gate's token`);
+    const earlyWithToken = isFixture ? await (await fetch(`${source}/__e2e/early`, { headers: { 'x-crossbind-preview': token }, signal: AbortSignal.timeout(ASKED_MS) })).text() : null;
+    expect(!isFixture || earlyWithToken === 'early', `/__e2e/early with the gate's token got ${earlyWithToken}`);
     const editor = await statusOf(`${source}/__open-in-editor?file=${encodeURIComponent(file)}`);
     expect(editor === 403, `/__open-in-editor got ${editor} without the gate's token`);
     const sockets = [await socketOf(source), await socketOf(source, source)];
@@ -307,7 +312,9 @@ async function checkOtherMachine(source) {
     const session = await statusOf(`${source}/__crossbind/session?challenge=${randomBytes(32).toString('base64url')}`);
     const odd = await statusOf(`${source}/__crossbind/session?challenge=${'A'.repeat(42)}.`);
     expect(session === 200 && odd === 400, `the session answered ${session}, and a challenge of another form ${odd}`);
-    return { files, editor, sockets, session, odd };
+    return {
+        files, early, earlyWithToken, editor, sockets, session, odd,
+    };
 }
 
 // 13. The fixture's dependency, as Vite's optimizer bundled it, takes crossbind/app from the module of the project's side,
@@ -336,7 +343,7 @@ async function run() {
     const { load, paths, dialog } = await checkLoad();
     const js = await checkJsEdit(load);
     const cpp = await checkNativeEdit(opened);
-    const other = await checkOtherMachine(source);
+    const other = await checkOtherMachine(source, token);
     const dependency = await checkOptimizedDependency(source, token);
     checkPageApiAsked();
     const named = relative(repository, project).replaceAll('\\', '/');

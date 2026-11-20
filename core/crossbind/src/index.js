@@ -10,7 +10,7 @@ export { checkInstaller, shipApp } from './actions/appInstaller.js';
 export { findAppPageApi, resolveAppPageApi } from './utils/resolveAppHost.js';
 export { default as isAppBuild } from './utils/appBuild.js';
 export {
-    PAGE_API_PATH, previewGate, previewOf, previewSocketGate,
+    PAGE_API_PATH, guardServer, previewGate, previewOf, previewSocketGate,
 } from './utils/previewSession.js';
 export { PREVIEW_MODULE_ID, previewModuleSource } from './utils/previewModule.js';
 export { default as pageLicensesAsset } from './actions/pageLicenses.js';
