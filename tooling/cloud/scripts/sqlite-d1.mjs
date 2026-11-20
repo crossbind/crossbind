@@ -5,10 +5,11 @@ import { DatabaseSync } from 'node:sqlite';
 
 const MIGRATIONS = new URL('../migrations/', import.meta.url);
 
-export function sqliteD1(file = ':memory:') {
+// `before` names the first migration left out, for the tests of the one before it.
+export function sqliteD1(file = ':memory:', { before } = {}) {
     const db = new DatabaseSync(file);
     db.exec('PRAGMA foreign_keys = ON');
-    fs.readdirSync(MIGRATIONS).filter((name) => name.endsWith('.sql')).sort()
+    fs.readdirSync(MIGRATIONS).filter((name) => name.endsWith('.sql') && (before === undefined || name < before)).sort()
         .forEach((name) => db.exec(fs.readFileSync(new URL(name, MIGRATIONS), 'utf8')));
 
     const statement = (sql, params = []) => ({

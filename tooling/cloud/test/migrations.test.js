@@ -18,8 +18,16 @@ const dev = { id: '8000000001', login: 'made_up_dev' };
 const rows = async (db, sql) => (await db.prepare(sql).all()).results;
 const rowsOf = (db, sql) => db.prepare(sql).all().map((row) => ({ ...row }));
 const github = (id, createdAt) => ({ provider: 'github', subject: String(id), user_id: id, created_at: createdAt, unlinked_at: null });
-// An account as the code before identities made one: under its GitHub id.
-const accountOfToday = (db, { id, login }) => db.prepare('INSERT INTO users (id, login, created_at, last_login_at) VALUES (?1, ?2, ?3, ?3)').bind(id, login, AT).run();
+// An account's row alone, as the code before identities made one under its GitHub id; on a database as 0002 left it,
+// its trigger gives the row its identity.
+const rowAlone = (db, { id, login }) => db.prepare('INSERT INTO users (id, login, created_at, last_login_at) VALUES (?1, ?2, ?3, ?3)').bind(id, login, AT);
+// That account with the identity 0002 gave it.
+const accountOfToday = (db, { id, login }) => db.batch([
+    rowAlone(db, { id, login }),
+    db.prepare("INSERT INTO identities (provider, subject, user_id, created_at) VALUES ('github', ?1, ?2, ?3)").bind(String(id), Number(id), AT),
+]);
+// A database as 0002 left it, for the tests of what 0002 did.
+const SECOND_MIGRATION_ONLY = { before: '0003' };
 
 // A database as 0001 leaves it, as every deployed one was before 0002.
 function databaseBefore() {
@@ -64,7 +72,7 @@ test('gives every account, and every account deleted this month that has seconds
 });
 
 test('gives an account made under a GitHub id its identity, and an id of crossbind\'s own none', async () => {
-    const db = sqliteD1();
+    const db = sqliteD1(':memory:', SECOND_MIGRATION_ONLY);
     const insert = (id) => db.prepare('INSERT INTO users (id, login, created_at, last_login_at) VALUES (?, ?, ?, ?)').bind(id, '', AT, AT).run();
 
     for (const id of [8000000001, OWN_IDS_FROM - 1, OWN_IDS_FROM, Number.MAX_SAFE_INTEGER]) await insert(id);
@@ -178,9 +186,9 @@ const UNDO = [
 const SCHEMA = 'SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY name';
 
 test('only adds: dropping what it added leaves the schema before it, with its accounts and tokens', async () => {
-    const db = sqliteD1();
+    const db = sqliteD1(':memory:', SECOND_MIGRATION_ONLY);
     const accounts = createAccounts(db, () => NOW);
-    await accountOfToday(db, dev);
+    await rowAlone(db, dev).run();
     await accounts.issueToken(dev.id);
 
     for (const statement of UNDO) await db.prepare(statement).run();
@@ -192,4 +200,14 @@ test('only adds: dropping what it added leaves the schema before it, with its ac
         { id: 8000000001, login: 'made_up_dev', blocked: 0 },
         { id: 8000000001, login: 'made_up_dev', blocked: 0 },
     ]);
+});
+
+test('leaves no trigger that gives an account made under a GitHub id an identity, and the rest as 0002 left it', async () => {
+    const db = sqliteD1();
+    const before = sqliteD1(':memory:', SECOND_MIGRATION_ONLY);
+
+    await rowAlone(db, dev).run();
+
+    assert.deepEqual(await rows(db, 'SELECT * FROM identities'), []);
+    assert.deepEqual(await rows(db, SCHEMA), (await rows(before, SCHEMA)).filter((row) => row.name !== 'users_github_identity'));
 });
