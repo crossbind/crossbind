@@ -111,7 +111,9 @@
 /tutorial/packages/* /tutorial/library/ 301
 /tutorial/packages.md /tutorial/library.md 301
 
-# The account's page is crossbind cloud's own, on the origin of the routes it calls. 302: a browser keeps a 301 for
-# good, and where that page answers may move.
+# The account's pages are crossbind cloud's own, on the origin of the routes they call: the account's, and the device
+# page, where a device's sign-in is approved. 302: a browser keeps a 301 for good, and where a page answers may move.
 /login https://api.crossbind.dev/login 302
 /login/ https://api.crossbind.dev/login 302
+/device https://api.crossbind.dev/device 302
+/device/ https://api.crossbind.dev/device 302

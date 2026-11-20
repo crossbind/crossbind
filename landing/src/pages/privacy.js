@@ -10,7 +10,7 @@ export default {
     slug: 'privacy',
     title: 'Privacy',
     description: 'What crossbind.dev, the playground and crossbind cloud keep about you, for how long, how to delete it, and where a Google sign-in for publishing stays.',
-    lede: 'crossbind.dev has no analytics and sets no tracking cookies. The playground and crossbind cloud keep what they need to run and to stop abuse: your GitHub id and name, or Apple\'s id for you, once you sign in, and how much you used. No email, no GitHub or Apple token, nothing to pay with. A Google sign-in for publishing to Google Play stays on your machine. Last changed 20 November 2026.',
+    lede: 'crossbind.dev has no analytics and sets no tracking cookies. The playground and crossbind cloud keep what they need to run and to stop abuse: your GitHub id and name, or Apple\'s id for you, once you sign in, and how much you used. No email, no GitHub or Apple token, nothing to pay with. A Google sign-in for publishing to Google Play stays on your machine. Last changed 21 November 2026.',
     section: 'Privacy',
     path: '/privacy',
     href: '/privacy/',
@@ -37,7 +37,7 @@ export default {
         {
             type: 'ul',
             items: [
-                '`crossbind login` signs in with GitHub, asking for no permission. crossbind cloud keeps your GitHub id and name and when you signed in, and gives your machine a token of its own, which it keeps only as a hash and your machine keeps in `~/.crossbind/credentials.json`.',
+                '`crossbind login` signs in as a device does, below: with a code you approve on crossbind cloud\'s device page, signed in there with GitHub or with Apple. crossbind cloud gives your machine a token of its own, which it keeps only as a hash and your machine keeps in `~/.crossbind/credentials.json`.',
                 'A cloud build sends your native sources and build files to a runner of your own, a virtual machine that only your builds use. It reaches crates.io, ConanCenter and GitHub, and only to download. It is stopped and wiped a minute after your last step; the files a step produces come back to your machine.',
                 'crossbind cloud records how long your runners were up, per month and toolchain image, against your monthly minutes; `crossbind usage` shows it.',
             ],
@@ -51,6 +51,8 @@ export default {
                 'A first sign-in with a GitHub account or an Apple ID that crossbind does not know makes no account until you say so on that page. What the sign-in confirmed waits in your browser alone, for ten minutes.',
                 'Sign in with Apple asks Apple for no name and no email. crossbind keeps Apple\'s id for you, which Apple makes for crossbind alone, and no Apple token: the one a sign-in gives is revoked at once. To end it, unlink the Apple ID on your account\'s page or delete the account.',
                 'A sign-in unlinked from an account that has used cloud build minutes this month stays with that account until the month ends, so that it cannot start a fresh month of minutes elsewhere: until then it signs in to nothing, and can be linked back. Unlinked from an account without them, it is deleted at once.',
+                'A device signs in with a code: `crossbind login`, or the crossbind app. You enter the code on [api.crossbind.dev/device](https://api.crossbind.dev/device), signed in there, and approve it. The page shows what asked (the CLI or the app, its version, and the device\'s system and version) and the country it asked from, as Cloudflare reads it from the device\'s address, and once you approve, a number that you type on the device. The code works for ten minutes, and what it recorded, what asked and its country among it, is deleted within a day.',
+                'Your account\'s page lists the devices signed in to it, each machine of `crossbind login` and each crossbind app, by what asked and when each signed in and was last used: Sign out ends one, and Sign out everywhere ends them all, every browser included.',
             ],
         },
 
@@ -81,7 +83,8 @@ export default {
                 ['A sign-in unlinked from an account with build minutes this month', 'Until the month ends'],
                 ['A first sign-in waiting for your answer', 'Ten minutes, in your browser alone'],
                 ["Apple's tokens", 'None: each is revoked at once'],
-                ['CLI tokens, as hashes', 'Until you sign out, or 90 days unused'],
+                ["A device's sign-in code, with what asked and its country", 'It works ten minutes, and is deleted within a day'],
+                ['Tokens of the CLI and the crossbind app, as hashes', 'Until you sign out, or 90 days unused'],
                 ['Your Google sign-in for Google Play', "In your machine's keychain alone, until you end it"],
                 ['Cloud build minutes per month and image', 'The current month and the three before it'],
                 ['Files on your cloud runner', 'Until it stops, a minute after your last step'],

@@ -121,6 +121,15 @@ test('/login and /login/ lead to the account\'s page on crossbind cloud', () => 
     ]);
 });
 
+test('/device and /device/ lead to the device page on crossbind cloud', () => {
+    const rules = source('../public/_redirects').split('\n').map((line) => line.trim().split(/\s+/));
+
+    assert.deepEqual(rules.filter(([from]) => from.startsWith('/device')), [
+        ['/device', 'https://api.crossbind.dev/device', '302'],
+        ['/device/', 'https://api.crossbind.dev/device', '302'],
+    ]);
+});
+
 test('the playground signs in on crossbind cloud\'s account page, which offers each way in and comes back to it, and deletes the account there', () => {
     const client = source('../src/playground/client.js');
 
