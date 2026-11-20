@@ -22,6 +22,7 @@ import {
 import { publishHelp, publishersOf, uploadStores } from './actions/publish.js';
 import release from './actions/release.js';
 import storeGuide from './actions/storeGuide.js';
+import appPreview from './actions/appPreview.js';
 import appKeys from './actions/appKeys.js';
 import { iosDeviceOption } from './actions/iosDevice.js';
 import addExtension from './actions/addExtension.js';
@@ -129,7 +130,7 @@ function viteCliBesideEntry(require, packageDir) {
     }
 }
 
-function projectVite() {
+function projectViteManifest() {
     const require = createRequire(`${state.config.paths.project}/package.json`);
     let manifestPath;
     try {
@@ -137,8 +138,14 @@ function projectVite() {
     } catch {
         throw new Error("crossbind: crossbind app builds the app's page with the project's Vite, which the project does not have. Add vite and @crossbind/plugin-vite to it, as the desktop-app template has them.");
     }
+    return { require, manifestPath, ...JSON.parse(fs.readFileSync(manifestPath, 'utf8')) };
+}
+
+function projectVite() {
     // A workspace can map vite to a package of Vite's API alone, as vite-plus maps it to vite-plus-core.
-    const { name, version, bin } = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    const {
+        require, manifestPath, name, version, bin,
+    } = projectViteManifest();
     if (bin?.vite) return path.join(path.dirname(manifestPath), bin.vite);
     const cli = viteCliBesideEntry(require, path.dirname(manifestPath));
     if (!cli) {
@@ -188,6 +195,22 @@ const commandApp = program.command('app').description('build the project as an a
             process.exit(await runVite([...(name === 'build' ? ['build'] : []), ...command.args], env));
         });
 });
+
+// Hidden until the crossbind app that opens it is in the stores.
+commandApp.command('preview', { hidden: true })
+    .description("serve the project's web build to the crossbind app on a device of this network, as the address and key it prints say")
+    .option('--host <address>', "the address a device reaches this machine at (default: the default route's); 0.0.0.0 listens on every one")
+    .option('--port <port>', 'the port the dev server holds (default: the first free one from 5173)')
+    // Vite's own options, as --mode, go on to Vite.
+    .allowUnknownOption()
+    .allowExcessArguments()
+    .action(async ({ host, port }, command) => {
+        assertAppCommand();
+        const { name: viteName, version: viteVersion } = projectViteManifest();
+        process.exit(await appPreview({
+            host, port, args: command.args, viteName, viteVersion, runVite,
+        }));
+    });
 
 const commandKey = commandApp.command('key')
     .argument('[key]', 'the key to make: upload, or one an extension adds, as updater')

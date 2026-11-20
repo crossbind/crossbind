@@ -3,15 +3,20 @@ import {
     state, createLib, createBridgeFile, buildWasm, buildDependencies, getTargetParams, getFilteredBuildTargets, isSourceNewer, getRustJsScript,
     isAppSource, getFileHash, buildProjectApp, appLayout, appOutputName, appPlatform, appTargetParams, publishApp, buildForSimulator,
     openInSimulator, buildApk, openOnDevice, buildForIosDevice, openOnIosDevice, connectedIosDevice, iosDevServer, iosDeviceAppEnv,
-    resolveAppPageApi, findAppPageApi, isAppBuild, emptyAppOutDir,
+    resolveAppPageApi, findAppPageApi, isAppBuild, emptyAppOutDir, PAGE_API_PATH, PREVIEW_MODULE_ID, previewGate, previewModuleSource,
+    previewOf, previewSocketGate,
 } from 'crossbind';
 import rollupCrossbindPlugin from '@crossbind/plugin-rollup';
 
 import fs from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 
 const isApp = isAppBuild();
+// What crossbind app preview hands the web build's dev server it starts.
+const preview = isApp ? null : previewOf();
 // How long the app that runs gets to end before a new host opens.
 const STOP_TIMEOUT_MS = 5000;
 // An app's targets are what runs it during development, which appDevPlugin finds as the session starts.
@@ -200,6 +205,49 @@ function appDevPlugin() {
     };
 }
 
+// A preview, which crossbind app preview runs: the page takes crossbind/app from the crossbind app on the device, which
+// answers PAGE_API_PATH itself, through a module of the project's side, reads the device's platform as each module
+// starts, and opens its socket to this server at the one address a device reaches; the server answers the device that
+// opened it alone. Vite turns an external id that is no URL into one it loads, so PAGE_API_PATH loads a module that says
+// where it belongs; the dependency optimizer would bundle the project's own copy of crossbind/app, so it leaves it out.
+function previewPlugin() {
+    const host = net.isIPv6(preview.address) ? `[${preview.address}]` : preview.address;
+    return {
+        name: 'vite-plugin-crossbind-preview',
+        enforce: 'pre',
+        config() {
+            return {
+                define: { 'import.meta.env.CROSSBIND_APP_PLATFORM': 'globalThis.__crossbind_device?.platform' },
+                optimizeDeps: { exclude: ['crossbind/app', 'crossbind/app/core'] },
+                server: {
+                    host: preview.listen,
+                    port: preview.port,
+                    strictPort: true,
+                    ws: { host, clientPort: preview.port },
+                    forwardConsole: { unhandledErrors: true, logLevels: ['log', 'info', 'warn', 'error', 'debug'] },
+                    // Vite checks each request's Host, which an address passes and a name only as it is listed.
+                    ...(net.isIP(preview.address) ? {} : { allowedHosts: [preview.address] }),
+                },
+            };
+        },
+        resolveId(id) {
+            if (id === 'crossbind/app' || id === 'crossbind/app/core') return PREVIEW_MODULE_ID;
+            return id === PAGE_API_PATH ? { id: PAGE_API_PATH, external: true } : null;
+        },
+        async load(id) {
+            if (id === PREVIEW_MODULE_ID) return previewModuleSource(await import(pathToFileURL(resolveAppPageApi()).href));
+            if (id !== PAGE_API_PATH) return null;
+            return `throw new Error('crossbind: this page opens in the crossbind app, which serves ${PAGE_API_PATH} itself');`;
+        },
+        configureServer(server) {
+            server.middlewares.use(previewGate(preview, server.config.logger));
+            server.httpServer?.prependListener('upgrade', previewSocketGate(() => server.config.webSocketToken, server.config.logger));
+            // The address is crossbind app preview's to print, with its key; Vite's own would open the gate's 403.
+            server.printUrls = () => {};
+        },
+    };
+}
+
 const viteCrossbindPlugin = (options) => {
     if (isApp) {
         return [rollupCrossbindPlugin(options), appDevPlugin()];
@@ -252,12 +300,15 @@ const viteCrossbindPlugin = (options) => {
     const sourceRegex = new RegExp(`\\.(${state.config.ext.source.join('|')})$`);
 
     return [
+        ...(preview ? [previewPlugin()] : []),
         rollupCrossbindPlugin(options, bridges),
         {
             name: 'vite-plugin-crossbind',
             // A page an app shares with its web build takes crossbind/app from the app host here too, and reads that it is
-            // built for no app's platform, which leaves the apps' code out of the build.
+            // built for no app's platform, which leaves the apps' code out of the build. A preview's page takes both from
+            // the device's app instead.
             config() {
+                if (preview) return {};
                 const pageApi = findAppPageApi();
                 if (!pageApi) return {};
                 return {
