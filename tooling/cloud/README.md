@@ -46,7 +46,7 @@ The account's own page is the Worker's, on this same origin (`worker/account-pag
 The CLI talks to it under `/v1` (`worker/account-api.js`), with a token and without cookies or CORS:
 
 - `POST /v1/login/device` and `POST /v1/login/token`: `crossbind login`, GitHub's device flow. The user enters a code on github.com; the Worker, not the CLI, asks GitHub for the outcome, so no GitHub token leaves it. The CLI polls `/v1/login/token` (202 until the code is approved) and then receives a token of crossbind cloud's own (`cbt_…`). A GitHub account crossbind does not know gets its account at once.
-- `GET /v1/usage`: the month's cloud build seconds by toolchain image against the monthly allowance (`BUILD_SECONDS_MONTHLY`), and the day's playground compiles.
+- `GET /v1/usage`: the month's cloud build seconds by toolchain image against the monthly allowance (`BUILD_SECONDS_MONTHLY`), and the day's playground compiles. A new account's allowance is 0, with `opensOn`, the day its minutes open.
 - `GET /v1/account`: the account the token signs in to, `{"id": "…", "name": "…"}`.
 - `DELETE /v1/token` and `DELETE /v1/tokens`: `crossbind logout`, for the token sent, or `--all`, which signs the account out everywhere as its page does.
 - `DELETE /v1/account`: `crossbind account delete`, open to a blocked account too.
@@ -54,6 +54,8 @@ The CLI talks to it under `/v1` (`worker/account-api.js`), with a token and with
 Every token has a kind (`tokens.kind`). The CLI's, `cli`, takes every route, the runners' included, and is every token issued so far. The crossbind app's, `app`, takes `GET /v1/account` and the three deletions alone. A route refuses any other kind with 403.
 
 Builds under `RUNNER=REMOTE` talk to it under `/runner/<image>/v1/*`, the runner protocol of `docs/api/remote-runner.md`, with the same token (`worker/runner-api.js`, below).
+
+An account with no GitHub account linked is new for its first 30 days (`MIN_GITHUB_ACCOUNT_DAYS`, as a GitHub account must be that old to sign in): it compiles in the playground as itself, `NEW_ACCOUNT_DAILY` a day and without the browser check, and has no cloud build minutes, its runner routes answering 403 with the day they open. Linking a GitHub account ends it at once. Nothing new is stored for it: the account's `created_at` and its identities say it.
 
 Every route counts requests per network (an IPv4 address or an IPv6 /64) with Workers rate limiting, before anything that costs: 120 a minute, 10 CLI sign-ins started, and 1,200 runner requests, since a build makes several per step. Limits, allowed origins, the networks that may not compile without signing in (`BLOCKED_NETWORKS`, as `198.51.100.9,2001:db8:85a3:42::`) and the kill switch (`PLAYGROUND_ENABLED`) are `vars` in `wrangler.jsonc`. Deleting the `GITHUB_CLIENT_ID` secret turns signing in with GitHub off, and deleting any of the four `APPLE_*` secrets signing in with Apple, whose button then leaves the page.
 

@@ -104,6 +104,37 @@ test('compiles for a signed-in user without the browser check, against their own
     assert.equal(calls.siteverify.length, 0);
 });
 
+test('counts a new account\'s compiles for the account, on a day of its own and without the browser check, until it is 30 days old or links GitHub', async () => {
+    const madeAt = Date.parse('2026-11-20T10:00:00Z');
+    // NEW_ACCOUNT_DAILY unset, as 20 is its default, but for the last.
+    const accounts = {
+        'new, no GitHub': [{ github: false }, madeAt + 60_000],
+        'a moment before its 30th day ends': [{ github: false }, madeAt + 30 * 24 * 3600 * 1000 - 1],
+        '30 days old': [{ github: false }, madeAt + 30 * 24 * 3600 * 1000],
+        'new, with GitHub linked': [{ github: true }, madeAt + 60_000],
+        'new, NEW_ACCOUNT_DAILY set': [{ github: false }, madeAt + 60_000, { ...env, NEW_ACCOUNT_DAILY: '7' }],
+    };
+
+    const limits = {};
+    for (const [name, [standing, now, environment = env]] of Object.entries(accounts)) {
+        const { deps, calls } = setup({ standing: { ...standing, createdAt: new Date(madeAt).toISOString(), name: 'Apple account …7776' } });
+        deps.now = () => now;
+        // A cookie of a sign-in a minute before, whatever the account's age.
+        const session = `${SESSION_COOKIE}=${await signSession({ id: '1099511627776', name: 'Apple account …7776' }, env.SESSION_SECRET, now - 60_000)}`;
+        await handleRequest(compileRequest({ cookie: session, body: { files } }), environment, deps);
+        const told = await (await handleRequest(new Request(`${API}/session`, { headers: { origin: PAGE, cookie: session } }), environment, deps)).json();
+        limits[name] = [calls.reserve[0].limit, calls.reserve[0].key, calls.siteverify.length, told.limit];
+    }
+
+    assert.deepEqual(limits, {
+        'new, no GitHub': [20, 'user:1099511627776', 0, 20],
+        'a moment before its 30th day ends': [20, 'user:1099511627776', 0, 20],
+        '30 days old': [100, 'user:1099511627776', 0, 100],
+        'new, with GitHub linked': [100, 'user:1099511627776', 0, 100],
+        'new, NEW_ACCOUNT_DAILY set': [7, 'user:1099511627776', 0, 7],
+    });
+});
+
 test('turns away an anonymous compile without a passing browser check before spending any quota', async () => {
     const missing = setup();
     const wrongSite = setup({ turnstile: { success: true, action: 'compile', hostname: 'evil.example' } });

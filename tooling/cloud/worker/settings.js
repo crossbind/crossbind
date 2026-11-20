@@ -1,7 +1,7 @@
 import { networkOf } from './http.js';
 
 const DEFAULT_LIMITS = Object.freeze({
-    anonymousDaily: 5, userDaily: 100, globalDaily: 1000, buildSecondsMonthly: 3600, globalBuildHoursMonthly: 100, globalBuildHoursDaily: 10,
+    anonymousDaily: 5, userDaily: 100, newAccountDaily: 20, globalDaily: 1000, buildSecondsMonthly: 3600, globalBuildHoursMonthly: 100, globalBuildHoursDaily: 10,
 });
 const HOUR_SECONDS = 3600;
 
@@ -16,6 +16,8 @@ export function settingsOf(env) {
         origins: list(env.ALLOWED_ORIGINS),
         anonymousDaily: numberOr(env.ANONYMOUS_DAILY, DEFAULT_LIMITS.anonymousDaily),
         userDaily: numberOr(env.USER_DAILY, DEFAULT_LIMITS.userDaily),
+        // An account in its first days with no GitHub account linked (worker/accounts.js buildsOpenOn).
+        newAccountDaily: numberOr(env.NEW_ACCOUNT_DAILY, DEFAULT_LIMITS.newAccountDaily),
         globalDaily: numberOr(env.GLOBAL_DAILY, DEFAULT_LIMITS.globalDaily),
         cloudBuildsEnabled: env.CLOUD_BUILDS_ENABLED === 'true',
         buildSecondsMonthly: numberOr(env.BUILD_SECONDS_MONTHLY, DEFAULT_LIMITS.buildSecondsMonthly),

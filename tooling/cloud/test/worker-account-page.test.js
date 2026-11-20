@@ -153,7 +153,7 @@ test('takes a form from the account\'s own page alone: crossbind.dev, another si
     assert.equal(answers.length, 45);
     assert.deepEqual(answers.filter((answer) => answer.status !== 403 || answer.cookie !== null || answer.error !== 'This is accepted from the account\'s page only.'), []);
     assert.deepEqual(await accounts.standing(user.id), {
-        exists: true, blocked: false, login: 'made_up_dev', name: 'made_up_dev', signedOutAt: null,
+        exists: true, blocked: false, login: 'made_up_dev', name: 'made_up_dev', signedOutAt: null, createdAt: new Date(NOW).toISOString(), github: true,
     });
     assert.equal((await accounts.userOfToken(token)).login, 'made_up_dev');
     assert.equal(await signsIn(send, cookie), true);
@@ -228,7 +228,7 @@ test('sends a form posted without a cookie that counts back to the page, and cha
     assert.deepEqual(answers, Array(6).fill([303, `${API}/login`]));
     assert.equal((await accounts.userOfToken(token)).login, 'made_up_dev');
     assert.deepEqual(await accounts.standing(user.id), {
-        exists: true, blocked: false, login: 'made_up_dev', name: 'made_up_dev', signedOutAt: null,
+        exists: true, blocked: false, login: 'made_up_dev', name: 'made_up_dev', signedOutAt: null, createdAt: new Date(NOW).toISOString(), github: true,
     });
 });
 

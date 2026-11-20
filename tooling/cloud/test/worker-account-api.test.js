@@ -200,6 +200,25 @@ test('shows the signed-in account what it used this month and what is left', asy
     });
 });
 
+test('tells a new account with no GitHub account linked when cloud builds open to it, and its own day of compiles', async () => {
+    const { call, db, accounts } = setup({ environment: { ...env, NEW_ACCOUNT_DAILY: '20' } });
+    await db.batch([
+        db.prepare("INSERT INTO users (id, login, created_at, last_login_at) VALUES (?1, '', ?2, ?2)").bind(OWN_ID, new Date(NOW).toISOString()),
+        db.prepare("INSERT INTO identities (provider, subject, user_id, created_at) VALUES ('apple', '000123.made0up0apple0id.0001', ?1, ?2)").bind(OWN_ID, new Date(NOW).toISOString()),
+    ]);
+    const token = await accounts.issueToken(String(OWN_ID));
+
+    const response = await call('GET', '/usage', { token });
+
+    assert.deepEqual(await response.json(), {
+        login: `Apple account …${String(OWN_ID).slice(-4)}`,
+        builds: {
+            month: '2026-10', limitSeconds: 0, usedSeconds: 0, byImage: {}, opensOn: '2026-11-07',
+        },
+        playground: { limit: 20, remaining: 20 },
+    });
+});
+
 test('answers 401 without a valid token, and 403 to a blocked account', async () => {
     const { call, db, token } = await signedIn();
 

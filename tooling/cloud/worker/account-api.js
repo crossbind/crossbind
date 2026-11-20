@@ -1,5 +1,5 @@
 import {
-    ACCOUNT_BLOCKED, dayWords, nameOf, userKey,
+    ACCOUNT_BLOCKED, buildsOpenOn, dayWords, nameOf, userKey,
 } from './accounts.js';
 import {
     BodyTooLarge, SECURITY_HEADERS, bearerToken, jsonResponse, log, readLimited,
@@ -85,15 +85,23 @@ async function tokenRoute({ request, env, deps }) {
     return jsonResponse(200, { token: await deps.accounts.issueToken(user.id), login: user.login });
 }
 
-async function usageRoute({ deps, settings }, user) {
-    const month = new Date(now(deps)).toISOString().slice(0, 7);
+// A new account has no build minutes until `opensOn` (accounts.js buildsOpenOn), and the playground's day of a new one.
+async function usageRoute({ env, deps, settings }, user) {
+    const at = now(deps);
+    const month = new Date(at).toISOString().slice(0, 7);
     const byImage = await deps.accounts.buildSeconds(user.id, month);
+    const opensOn = buildsOpenOn(user, minAccountDays(env), at);
+    const daily = opensOn ? settings.newAccountDaily : settings.userDaily;
     return jsonResponse(200, {
         login: nameOf(user),
         builds: {
-            month, limitSeconds: settings.buildSecondsMonthly, usedSeconds: Object.values(byImage).reduce((sum, seconds) => sum + seconds, 0), byImage,
+            month,
+            limitSeconds: opensOn ? 0 : settings.buildSecondsMonthly,
+            usedSeconds: Object.values(byImage).reduce((sum, seconds) => sum + seconds, 0),
+            byImage,
+            ...(opensOn ? { opensOn } : {}),
         },
-        playground: { limit: settings.userDaily, remaining: await deps.quota.remaining({ key: userKey(user.id), limit: settings.userDaily }) },
+        playground: { limit: daily, remaining: await deps.quota.remaining({ key: userKey(user.id), limit: daily }) },
     });
 }
 

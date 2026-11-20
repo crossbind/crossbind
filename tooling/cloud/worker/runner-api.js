@@ -1,6 +1,7 @@
 import { authenticate } from './account-api.js';
-import { userKey } from './accounts.js';
+import { buildsOpenOn, dayWords, userKey } from './accounts.js';
 import { bearerToken, jsonResponse, log } from './http.js';
+import { minAccountDays } from './oauth.js';
 
 // /runner/<image>/v1/*: crossbind cloud's runners, one per user and toolchain image (worker/runner.js), for builds
 // under RUNNER=REMOTE signed in with `crossbind login`. The caller's token stays here; the runner learns whose
@@ -50,6 +51,10 @@ export async function handleRunnerRequest(context) {
     }
     const { user, answer } = await callerOf(context);
     if (answer) return answer;
+    const opensOn = buildsOpenOn(user, minAccountDays(context.env), (deps.now ?? Date.now)());
+    if (opensOn) {
+        return jsonResponse(403, { error: `Cloud builds open to this account on ${dayWords(opensOn)}, or as soon as a GitHub account is linked; build with CROSSBIND_RUNNER=DOCKER_RUN meanwhile.` });
+    }
     const headers = new Headers(FORWARDED_HEADERS.filter((name) => request.headers.has(name)).map((name) => [name, request.headers.get(name)]));
     headers.set(USER_HEADER, user.id);
     const hasBody = !['GET', 'HEAD'].includes(request.method);
