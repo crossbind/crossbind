@@ -611,8 +611,9 @@ jobs:
                   # arm64 runner.
                   architecture: ${{ matrix.arch }}
             - name: Install the conformance kit, and what previews e2e/app-preview
-              # The leg's config imports the kit; nothing is built on these runners.
-              run: pnpm install --frozen-lockfile --prod --filter "@crossbind/e2e-desktop-app..." --filter "@crossbind/e2e-app-preview..."
+              # The leg's config imports the kit; nothing is built on these runners. The preview imports the app host's
+              # crossbind/app in Node, which reaches crossbind through the host's own development packages.
+              run: pnpm install --frozen-lockfile --filter "@crossbind/e2e-desktop-app..." --filter "@crossbind/e2e-app-preview..."
             - name: Restore the app
               uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
               with:
