@@ -13,6 +13,7 @@ const inApp = () => {
 
 afterEach(() => {
     delete globalThis.Crossbind;
+    delete globalThis.__crossbind_page_api;
     delete globalThis.__crossbind_token;
     delete globalThis.__crossbind_device;
     host.mockClear();
@@ -65,6 +66,32 @@ describe("crossbind/app, an app's own functions", () => {
         globalThis.Crossbind = { initNative: () => {} };
 
         await expect(app.paths()).rejects.toThrow('update @crossbind/core-app-host');
+    });
+
+    test("goes to the page API a served origin's page imports, also once the page's own crossbind.js, a web build's, took globalThis.Crossbind", async () => {
+        globalThis.__crossbind_token = 'token';
+        const served = vi.fn(async () => ({ data: '/data' }));
+        const on = vi.fn(() => () => {});
+        globalThis.__crossbind_page_api = { app: served, on, takesMessages: true };
+        globalThis.Crossbind = { initNative: () => {} };
+        const signal = new AbortController().signal;
+
+        await expect(app.paths()).resolves.toEqual({ data: '/data' });
+        await invoke('probe.role', {}, { signal });
+        events.on('ping', () => {});
+
+        expect(served).toHaveBeenCalledWith('app.paths', {});
+        expect(served).toHaveBeenLastCalledWith('probe.role', {}, { onMessage: undefined, signal });
+        expect(on).toHaveBeenCalledWith('ping', expect.any(Function));
+    });
+
+    test("goes to the page API before the app's own crossbind.js, where both are", async () => {
+        const served = vi.fn(async () => 'served');
+        globalThis.__crossbind_page_api = { app: served };
+        inApp();
+
+        await expect(app.quit()).resolves.toBe('served');
+        expect(host).not.toHaveBeenCalled();
     });
 
     test("goes to the app's host by name with its options", async () => {

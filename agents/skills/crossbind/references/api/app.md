@@ -1301,10 +1301,11 @@ and a Java side that R8, off by default, would shrink. What a sample app weighs 
   on Android and Windows. The top frame of each page of one gets a token of that origin's in each window, which the
   host takes at that origin alone, and calls with the origin's role: it reaches the functions that name the role, and
   never the module, the events the app holds, `crossbind/app`'s functions or another function of the role `app`; it
-  hears only the events sent to its page. It loads neither the app's own origins nor another served one, which the host
-  refuses it before any holder of `page-navigation` hears of them. Its dialogs, file inputs, downloads, drops and device
-  requests reach their holders with its role, and the host's own `page-permissions` allows `app.permissions`' devices to
-  pages of the role `app` alone.
+  hears only the events sent to its page. It imports `crossbind/app` from `/__crossbind/app.js`,
+  which the host answers from the app's own files, never the origin's handler. It loads neither the app's own origins
+  nor another served one, which the host refuses it before any holder of `page-navigation` hears of them. Its dialogs,
+  file inputs, downloads, drops and device requests reach their holders with its role, and the host's own
+  `page-permissions` allows `app.permissions`' devices to pages of the role `app` alone.
 - The host's `fetch()`, with which such an origin's handler asks its source, sends no cookies or credentials, keeps no
   cache, checks TLS as the system does, and follows no redirect out of the URL's origin. On Android an app sends plain
   http to `localhost` and `127.0.0.1` alone, unless an extension of its asks for `app.android.cleartext`

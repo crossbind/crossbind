@@ -16,7 +16,9 @@ import {
 } from '@crossbind/conformance/native/confextras.h';
 import { Counter } from './native/counter.rs';
 import { reportWebFeatures } from './web-features.js';
-import { checkServedReports, isServedPage, runProjectPage, runServedRoundTrip } from './served-origins.js';
+import {
+    checkPageApi, checkServedReports, isServedPage, runPageApiTrip, runProjectPage, runServedRoundTrip,
+} from './served-origins.js';
 import {
     ACTIVITIES, AGAIN_FILE, FIRST_ARGS, FIRST_FILES, LAUNCH_ARGS, LAUNCH_URL, NOTIFICATION, OPENED_FILE, PHONE_FILE_TEXT, PHONE_FILES, PHONE_LINKS,
     PHONE_URL, PROBE_URLS, SHORTCUTS, TRASHED_FILE, TRAY,
@@ -1023,11 +1025,13 @@ else initNative().then(async (m) => {
             throw new Error(`the page is ${innerWidth} × ${innerHeight}, not the 800 × 600 app.window gives`);
         }
         // The probe's origins first, whose round trip sends the window to a project's page and back, each time to this page
-        // anew; a development session has no endpoint to serve the project's page.
-        const served = import.meta.env.DEV ? null : await runServedRoundTrip(isAndroid);
+        // anew; a development session has no endpoint to serve the project's page, and serves the dev server's page that
+        // imports crossbind/app alone.
+        const served = import.meta.env.DEV ? await runPageApiTrip() : await runServedRoundTrip(isAndroid);
         if (served === false) return;
         const features = await reportWebFeatures(isAndroid);
-        if (served) checkServedReports(served, features);
+        await checkPageApi(served);
+        if (!import.meta.env.DEV) checkServedReports(served, features);
         await checkPageFeel(isAndroid);
         // A desktop page may show an element full screen.
         if (isDesktop && !(document.fullscreenEnabled ?? document.webkitFullscreenEnabled)) throw new Error('the page cannot show an element full screen');

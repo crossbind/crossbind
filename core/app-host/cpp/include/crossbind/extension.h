@@ -178,7 +178,8 @@ public:
     const std::string &query() const;
     // The value of the request's header of this name, in any case, or "" without one.
     std::string header(std::string_view name) const;
-    // The page that asks.
+    // The page that asks; of a served origin's request, the page its window shows as the request arrives, which a frame,
+    // a worker or a page on its way out asks for as well, so a handler decides nothing by it.
     Page page() const;
     // Answers with body, of the type a Content-Type header names, application/octet-stream without one; a HEAD gets the
     // headers alone. A webview follows no redirect of an app's URLs, so status is not 3xx.
@@ -747,8 +748,9 @@ private:
 // letters and digits, which dashes may join, 63 at most, neither "app" nor a name served now. role is what its pages
 // are, of the same letters, not "app". handler gets each GET and HEAD of the origin as a route gets its own: a Request
 // whose path starts at the origin's "/", on the thread the webview asks on, which it must not hold up. The host answers
-// another method with 405 and the paths under /__crossbind/b/ itself, the calls its pages make with their token; what
-// handler throws answers 500.
+// another method with 405, and itself the paths under /__crossbind/b/, the calls its pages make with their token, and
+// /__crossbind/app.js, crossbind/app as the app's build bundled it, which its pages import; what handler throws answers
+// 500.
 Origin serveOrigin(const std::string &name, const std::string &role, std::function<void(Request)> handler);
 
 // What a server answered a fetch(): its status, its headers, their names in lower case, and its body.

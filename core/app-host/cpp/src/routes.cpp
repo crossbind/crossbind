@@ -306,6 +306,12 @@ void answerOriginRequest(const std::string &name, std::function<void(Request)> h
         return;
     }
     std::string path = request.path;
+    // crossbind/app as the app's build bundled it, which no source and no handler puts before the origin's pages.
+    if (path == "/__crossbind/app.js") {
+        const auto pageApi = [](Request asked) { asked.respondFile(::resourceDir() + "/served-page.js"); };
+        answerRequest("the origin " + name, std::move(path), pageApi, std::move(request), std::move(respond));
+        return;
+    }
     answerRequest("the origin " + name, std::move(path), handler, std::move(request), std::move(respond));
 }
 

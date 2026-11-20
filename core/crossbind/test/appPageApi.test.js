@@ -60,3 +60,15 @@ describe('a function of an extension an app does not have', () => {
         delete globalThis.Crossbind;
     });
 });
+
+describe("crossbind/app as a served origin's page imports it from /__crossbind/app.js", () => {
+    test("holds what the app's own page imports, under a name of its own, and leaves globalThis.Crossbind to the page's crossbind.js", async () => {
+        const served = await import('../../app-host/js/served-page.js');
+        const channel = globalThis.__crossbind_page_api;
+        delete globalThis.__crossbind_page_api;
+
+        expect(Object.keys(served).sort()).toEqual(Object.keys(pageApi).sort());
+        expect(Object.keys(channel).sort()).toEqual(['app', 'on', 'takesMessages']);
+        expect(globalThis.Crossbind).toBeUndefined();
+    });
+});

@@ -37,7 +37,7 @@ import { carriedFilesOf, copyCarriedFiles } from '../utils/appFiles.js';
 import { activityTypeOwners, fileTypeOwners, linkOwners, macDocumentTypes, shortcutItemOwners } from '../utils/appLaunches.js';
 import { unreasonedApis, unreasonedWarning } from '../utils/requiredReasonApis.js';
 import {
-    appExtensionsOf, extensionCmakeArgs, extensionPart, mergedEntitlements, mergedPlist, mergedPrivacy, registrationSource,
+    appExtensionsOf, extensionCmakeArgs, extensionPart, mergedEntitlements, mergedPlist, mergedPrivacy, ownExtensions, registrationSource,
 } from '../utils/appExtensions.js';
 import { androidIcons, iosIcon, linuxIcon, macIcon, readAppIcon, windowsIcon } from '../utils/appIcon.js';
 import writeIfChanged from '../utils/writeIfChanged.js';
@@ -204,11 +204,20 @@ const runtimeModules = () => ({
         : null),
 });
 
-async function bundle(input, file, plugins) {
+async function bundle(input, file, plugins, format = 'iife') {
     const build = await rollup({ input, plugins, onwarn: suppressNodeBuiltinWarnings });
-    await build.write({ file, format: 'iife' });
+    await build.write({ file, format });
     await build.close();
 }
+
+// crossbind/app as the page of an origin an extension serves imports it, which the host answers at /__crossbind/app.js
+// from the file of this name beside its bytecode, in a built app and a development session alike: the app's own version,
+// whatever the page's source holds. It bundles the host's scripts, crossbind/app/core and the page side of each of
+// crossbind's own extensions.
+const SERVED_PAGE_API = 'served-page.js';
+const servedPageApiInputs = (appHostRoot) => [
+    `${state.config.paths.cli}/app/index.js`, ...ownExtensions(appHostRoot).map(({ root }) => `${root}/page.js`),
+];
 
 // A development build claims no scheme, no file type and no user activity: the built app, of the same id, owns them, and
 // a link it opens shows its own page.
@@ -244,10 +253,11 @@ const infoPlist = (name, version, hasIcon, urlSchemes, fileTypes, activityTypes)
 // The app's own files, as app.files lists them, by the project's folder.
 const ownFiles = () => ({ root: state.config.paths.project, paths: appFiles(state.config) });
 
-// The host's bytecode and the data the packages ship, beside the page's folder.
+// The host's bytecode, with the page API beside it, and the data the packages ship, beside the page's folder.
 function copyAppFiles(dir, hbc, target) {
     fs.mkdirSync(`${dir}/page`, { recursive: true });
     fs.copyFileSync(hbc, `${dir}/host.hbc`);
+    fs.copyFileSync(`${path.dirname(hbc)}/${SERVED_PAGE_API}`, `${dir}/${SERVED_PAGE_API}`);
     Object.entries(getData('data', target)).forEach(([source, dataName]) => {
         if (fs.existsSync(source)) fs.cpSync(source, `${dir}/data/${dataName}`, { recursive: true });
     });
@@ -602,6 +612,7 @@ export default async function buildApp(target, { bridges = [], force = false } =
             `${appHostRoot}/cpp`, `${appHostRoot}/js`, `${appHostRoot}/third_party`, `${jsiRoot}/cpp/src`, `${jsiRoot}/js`,
             `${state.config.paths.cli}/assets/js-runtime/adapters`,
         ])),
+        pageApi: getFilesFingerprint(servedPageApiInputs(appHostRoot)),
         extraSources: getFilesFingerprint(extraSources),
         // An iOS app's frameworks reach its Xcode project through what the host's build writes.
         extensions: {
@@ -674,6 +685,7 @@ export default async function buildApp(target, { bridges = [], force = false } =
     run(null, [`${hermes}/bin/hermesc`, '-O', '-Xes6-block-scoping', '-emit-binary', '-out', `${workDir}/host.hbc`, `${workDir}/host.js`],
         platformPrefix, target);
     await bundle(`${appHostRoot}/js/page.js`, `${build}/${target.appJsName}`, []);
+    await bundle(`${appHostRoot}/js/served-page.js`, `${workDir}/${SERVED_PAGE_API}`, [nodeResolve()], 'es');
     if (target.platform === 'ios') {
         const frameworks = extensions.frameworks.flatMap((framework) => ['-framework', framework]);
         assembleIosPart(target, { library: `${workDir}/lib${name}.a`, linkArgs: [...linkArgs, ...frameworks, ...swiftLink], hbc: `${workDir}/host.hbc`, hermes });
