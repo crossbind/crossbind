@@ -225,7 +225,14 @@ test('shows a held Apple ID the day it signs in again, once, from the notice its
     const { response } = await signIn(send);
     const notice = `${NOTICE_COOKIE}=${cookiesOf(response)[NOTICE_COOKIE]}`;
     const shown = await send('/login', { cookie: notice });
-    const forged = await (await send('/login', { cookie: `${NOTICE_COOKIE}=${Buffer.from(JSON.stringify({ said: 'held', provider: 'apple', day: '<b>' })).toString('base64url')}` })).text();
+    const forge = async (notice) => (await send('/login', { cookie: `${NOTICE_COOKIE}=${Buffer.from(JSON.stringify(notice)).toString('base64url')}` })).text();
+    const forged = [
+        await forge({ said: 'held', provider: 'apple', day: '<b>' }),
+        await forge({ said: 'held', provider: 'gitlab', day: '2026-12-01' }),
+        await forge({ said: 'link-taken', provider: 'apple', name: 'x'.repeat(81) }),
+        await forge({ said: 'link-has-one', provider: 'github', name: 42 }),
+        await forge({ said: 'toString', provider: 'apple' }),
+    ].join('\n');
 
     assert.deepEqual([response.headers.get('location'), cookiesOf(response)[SESSION_COOKIE]], [`${API}/login`, undefined]);
     assert.ok((await shown.text()).includes('<p class="notice" role="status">This Apple ID was unlinked from a crossbind account this month: it signs in again from 1 December 2026, and can be linked back to that account now.</p>'));

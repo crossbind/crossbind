@@ -15,11 +15,12 @@ import {
 const MAX_FORM_BYTES = 1024;
 const DEVICE_REF = new RegExp(`^[0-9a-f]{${DEVICE_REF_LENGTH}}$`);
 // same-origin and not no-referrer: a form's POST from a no-referrer page carries `Origin: null`, which the origin rule
-// refuses. Chromium holds a form's POST whose redirect leaves `form-action`, and making an account goes on to the
-// playground: its origin is listed.
+// refuses. Chromium holds a form's POST whose redirect leaves `form-action`: linking goes on to the providers, and
+// making an account to the playground, so their origins are listed.
+const FORM_TARGETS = Object.freeze(["'self'", 'https://github.com', 'https://appleid.apple.com']);
 const pageHeaders = (env) => ({
     'content-type': 'text/html; charset=utf-8',
-    'content-security-policy': `default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; form-action ${["'self'", URL.parse(env.PLAYGROUND_URL ?? '')?.origin].filter(Boolean).join(' ')}; frame-ancestors 'none'; base-uri 'none'`,
+    'content-security-policy': `default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; form-action ${[...FORM_TARGETS, URL.parse(env.PLAYGROUND_URL ?? '')?.origin].filter(Boolean).join(' ')}; frame-ancestors 'none'; base-uri 'none'`,
     'referrer-policy': 'same-origin',
     'x-content-type-options': 'nosniff',
     'cache-control': 'no-store',
@@ -40,17 +41,36 @@ const notices = (env) => ({
 const PROVIDER_NAMES = Object.freeze({ github: 'GitHub', apple: 'Apple' });
 const IDENTITY_WORDS = Object.freeze({ github: 'GitHub account', apple: 'Apple ID' });
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_NOTICE_NAME = 80;
 
 // The words of a notice that came in its cookie (session.js), which any browser can make up for itself: each is checked
 // before it is worded, and a notice that does not check out shows nothing.
 const SAID = Object.freeze({
     held: ({ provider, day }) => `This ${IDENTITY_WORDS[provider]} was unlinked from a crossbind account this month: it signs in again from ${dayWords(day)}, and can be linked back to that account now.`,
+    'link-linked': ({ provider }) => `The ${IDENTITY_WORDS[provider]} is linked: it signs in to this account too.`,
+    'link-already': ({ provider }) => `This ${IDENTITY_WORDS[provider]} already signs in to this account.`,
+    'link-has-one': ({ provider, name }) => (provider === 'github' ? `This account already has a GitHub account linked (${name}): unlink it first.` : 'This account already has an Apple ID linked: unlink it first.'),
+    'link-taken': ({ provider, name }) => `This ${IDENTITY_WORDS[provider]} already signs in to another crossbind account (${name}). To link it here, sign in with it and delete that account, then link it again.`,
+    'link-held': ({ provider, day }) => `This ${IDENTITY_WORDS[provider]} belonged to another crossbind account this month: it can be linked here from ${dayWords(day)}.`,
+    'link-too-new': (notice, env) => `This GitHub account is too new: it can be linked ${minAccountDays(env)} days after it was created.`,
+    'link-blocked': ({ provider }) => `This ${IDENTITY_WORDS[provider]} may not use crossbind cloud.`,
+    'link-failed': () => 'Linking did not work; try again.',
+    unlinked: ({ provider }) => `The ${IDENTITY_WORDS[provider]} is unlinked: it no longer signs in to this account.`,
+    'unlinked-held': ({ provider, day }) => `The ${IDENTITY_WORDS[provider]} is unlinked. As this account has cloud build minutes this month, it signs in to nothing until ${dayWords(day)}, and can be linked back here before then.`,
+});
+const NEEDS = Object.freeze({
+    held: ['day'], 'link-held': ['day'], 'unlinked-held': ['day'], 'link-taken': ['name'],
 });
 
-function wordsOf(notice) {
+function wordsOf(notice, env) {
     const word = Object.hasOwn(SAID, notice?.said ?? '') ? SAID[notice.said] : null;
-    if (!word || !Object.hasOwn(IDENTITY_WORDS, notice.provider ?? '') || (notice.day !== undefined && !DAY.test(notice.day))) return null;
-    return word(notice);
+    if (!word || !Object.hasOwn(IDENTITY_WORDS, notice.provider ?? '')) return null;
+    const fits = {
+        day: DAY.test(notice.day ?? ''),
+        name: typeof notice.name === 'string' && notice.name.length <= MAX_NOTICE_NAME,
+    };
+    if ((NEEDS[notice.said] ?? []).some((field) => !fits[field]) || (notice.name !== undefined && !fits.name)) return null;
+    return word(notice, env);
 }
 
 const SCRIPT = `const shown = [...document.querySelectorAll('[data-notice]')].find((notice) => '#' + notice.dataset.notice === location.hash);
@@ -67,11 +87,11 @@ h1 { font-size: 1.5rem; }
 h2 { font-size: 1.15rem; margin-top: 2rem; }
 .notice { padding: 0.5rem 0.75rem; border-left: 3px solid; }
 .question { padding: 0 1rem 0.5rem; border: 1px solid; border-radius: 6px; }
-.devices { list-style: none; padding: 0; }
-.devices li { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; align-items: center; padding: 0.5rem 0; }
+.devices, .sign-ins { list-style: none; padding: 0; }
+.devices li, .sign-ins li { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; align-items: center; padding: 0.5rem 0; }
 .when { opacity: 0.75; font-size: 0.9rem; }
 form { margin: 0.5rem 0; }
-.devices form { margin: 0; }
+.devices form, .sign-ins form { margin: 0; }
 button, .button { font: inherit; padding: 0.3rem 0.8rem; color: inherit; background: none; border: 1px solid; border-radius: 6px; cursor: pointer; text-decoration: none; }
 `;
 
@@ -85,10 +105,30 @@ function device({
 <form method="post" action="/account/tokens/revoke"><input type="hidden" name="ref" value="${escape(ref)}"><button type="submit">Sign out</button></form></li>`;
 }
 
-function signedInPart(user, devices) {
+const LINK_WORDS = Object.freeze({ github: 'Link a GitHub account', apple: 'Link an Apple ID' });
+
+// The ways into the account, each with Unlink unless it is the last, and Link for each provider set up that it lacks.
+function signInsPart(env, providers, login) {
+    const linked = providers.map((provider) => {
+        const what = provider === 'github' ? `GitHub account <strong>${escape(login)}</strong>` : 'Apple ID';
+        const unlink = providers.length > 1
+            ? ` <form method="post" action="/account/unlink"><input type="hidden" name="provider" value="${provider}"><button type="submit">Unlink</button></form>` : '';
+        return `<li><span>${what}</span>${unlink}</li>`;
+    });
+    const links = signInProviders(env).filter((provider) => !providers.includes(provider))
+        .map((provider) => `<form method="post" action="/account/link/${provider}"><button type="submit">${LINK_WORDS[provider]}</button></form>`);
+    return `<h2>Sign-ins</h2>
+<p>Each signs in to this account. The last one cannot be unlinked.</p>
+<ul class="sign-ins">\n${linked.join('\n')}\n</ul>${links.length === 0 ? '' : `\n${links.join('\n')}`}`;
+}
+
+function signedInPart(env, {
+    user, devices, providers, login,
+}) {
     const list = devices.length === 0 ? '<p>No device is signed in.</p>' : `<ul class="devices">\n${devices.map(device).join('\n')}\n</ul>`;
     return `<p>Signed in as <strong>${escape(user.name)}</strong>.</p>
 <form method="post" action="/account/logout"><button type="submit">Sign out</button></form>
+${signInsPart(env, providers, login)}
 <h2>Devices</h2>
 <p>The machines signed in with crossbind login.</p>
 ${list}
@@ -101,12 +141,21 @@ ${list}
 <button type="submit">Delete account</button></form>`;
 }
 
-// A first sign-in's question (oauth.js): no account is made until its person says so.
-function questionPart(pending) {
+// A first sign-in's question (oauth.js): no account is made until its person says so. Signed out, the other answer is
+// to sign in with the other provider, which comes back here; signed in, it is to link the identity to this account.
+function questionPart(env, pending, signedIn) {
+    const identity = IDENTITY_WORDS[pending.provider];
+    const other = Object.keys(IDENTITY_WORDS).find((provider) => provider !== pending.provider);
+    const answers = signedIn
+        ? ['<form method="post" action="/account/link-pending"><button type="submit">Link it to this account</button></form>',
+            '<form method="post" action="/account/new"><button type="submit">Make a new account with it</button></form>']
+        : ['<form method="post" action="/account/new"><button type="submit">Make a new account</button></form>',
+            ...(signInProviders(env).includes(other)
+                ? [`<p><a class="button" href="/account/login/${other}">I have an account with ${PROVIDER_NAMES[other]}: sign in with it to link this ${identity}</a></p>`] : [])];
     return `<section class="question">
-<h2>A new crossbind account?</h2>
-<p>No crossbind account signs in with this ${IDENTITY_WORDS[pending.provider]} yet.</p>
-<form method="post" action="/account/new"><button type="submit">Make a new account</button></form>
+<h2>${signedIn ? `Link this ${identity}?` : 'A new crossbind account?'}</h2>
+<p>No crossbind account signs in with this ${identity} yet.</p>
+${answers.join('\n')}
 </section>`;
 }
 
@@ -121,7 +170,7 @@ function signedOutPart(env, next) {
 }
 
 function page(env, {
-    user, devices, said, next, pending,
+    user, devices, providers, login, said, next, pending,
 }) {
     const shown = Object.entries(notices(env)).map(([key, words]) => `<p class="notice" data-notice="${key}" hidden>${escape(words)}</p>`);
     if (said) shown.unshift(`<p class="notice" role="status">${escape(said)}</p>`);
@@ -138,8 +187,10 @@ function page(env, {
 <main>
 <h1>crossbind account</h1>
 ${shown.join('\n')}
-${pending && Object.hasOwn(IDENTITY_WORDS, pending.provider) ? questionPart(pending) : ''}
-${user ? signedInPart(user, devices) : signedOutPart(env, next)}
+${pending && Object.hasOwn(IDENTITY_WORDS, pending.provider) ? questionPart(env, pending, Boolean(user)) : ''}
+${user ? signedInPart(env, {
+        user, devices, providers, login,
+    }) : signedOutPart(env, next)}
 </main>
 </body>
 </html>
@@ -171,14 +222,16 @@ const nextOf = (request) => (new URL(request.url).searchParams.get('next') === '
 
 // A notice that came in its cookie is shown once: the page that shows it clears it.
 async function loginPage({ request, env, deps }) {
-    const user = await signedInUser({ request, env, deps });
+    const now = (deps.now ?? Date.now)();
+    const { user, standing } = await readSignedIn(request, env.SESSION_SECRET, deps.accounts, now);
     const devices = user ? await deps.accounts.devices(user.id) : [];
-    const pending = await readPending(request, env.SESSION_SECRET, (deps.now ?? Date.now)());
+    const providers = user ? await deps.accounts.providersOf(user.id) : [];
+    const pending = await readPending(request, env.SESSION_SECRET, now);
     const notice = readNotice(request);
     const headers = new Headers(pageHeaders(env));
     if (notice) headers.append('set-cookie', clearCookie(NOTICE_COOKIE));
     return new Response(page(env, {
-        user, devices, said: wordsOf(notice), next: nextOf(request), pending,
+        user, devices, providers, login: standing?.login, said: wordsOf(notice, env), next: nextOf(request), pending,
     }), { headers });
 }
 
@@ -241,6 +294,37 @@ async function newAccountRoute({ request, env, deps }) {
     return redirectAfterPost(`${target}#login=ok`, [cleared, sessionCookie(SESSION_COOKIE, session, SESSION_TTL_MS / 1000)]);
 }
 
+// Linking starts as a sign-in does, with a navigation the Worker sends to the provider, from the page's form: the state,
+// Apple's nonce and GitHub's verifier stay in this browser's HttpOnly cookie, so no script holds what the callback
+// compares, and the purpose names the account the callback links to.
+const linkRoute = (provider) => ({ request, env }, user) => startLogin(request, env, { provider, next: 'account', purpose: `link:${user.id}` });
+
+const UNLINK_REFUSED = 'Unlink a sign-in from the list on the account\'s page.';
+
+async function unlinkRoute({ request, deps }, user) {
+    const { form, error } = await readForm(request);
+    if (error) return error;
+    const provider = form.get('provider') ?? '';
+    const { outcome, freeFrom } = await deps.accounts.unlink(user.id, provider);
+    if (outcome === 'last') return jsonResponse(409, { error: 'This is the only way into your account: link another first, or delete the account.' });
+    if (outcome === 'none') return jsonResponse(400, { error: UNLINK_REFUSED });
+    log({ event: 'identity-unlinked', who: userKey(user.id), provider });
+    return seeOther(request, '/login', [noticeCookie({ said: outcome === 'held' ? 'unlinked-held' : 'unlinked', provider, day: freeFrom })]);
+}
+
+// "Link it to this account": the identity a first sign-in confirmed in this browser, from its sealed cookie.
+async function linkPendingRoute({ request, env, deps }, user) {
+    const pending = await readPending(request, env.SESSION_SECRET, (deps.now ?? Date.now)());
+    if (!pending) return seeOther(request, '/login#waited');
+    const { outcome, name, freeFrom } = await deps.accounts.link(user.id, pending);
+    if (outcome === 'linked') log({ event: 'identity-linked', who: userKey(user.id), provider: pending.provider });
+    const cookies = [noticeCookie({
+        said: `link-${outcome}`, provider: pending.provider, name, day: freeFrom,
+    })];
+    if (outcome === 'linked' || outcome === 'already') cookies.push(clearCookie(PENDING_COOKIE));
+    return seeOther(request, '/login', cookies);
+}
+
 const ROUTES = Object.freeze({
     'GET /login': loginPage,
     'GET /account.css': () => asset(STYLE, 'text/css; charset=utf-8'),
@@ -252,6 +336,10 @@ const ROUTES = Object.freeze({
     'POST /account/logout-everywhere': fromThePage(signedIn(everywhereRoute)),
     'POST /account/delete': fromThePage(signedIn(deleteRoute)),
     'POST /account/new': fromThePage(newAccountRoute),
+    'POST /account/link/github': fromThePage(signedIn(linkRoute('github'))),
+    'POST /account/link/apple': fromThePage(signedIn(linkRoute('apple'))),
+    'POST /account/link-pending': fromThePage(signedIn(linkPendingRoute)),
+    'POST /account/unlink': fromThePage(signedIn(unlinkRoute)),
 });
 
 export const isAccountPath = (pathname) => ['/login', '/account.css', '/account.js'].includes(pathname) || pathname.startsWith('/account/');

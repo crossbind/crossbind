@@ -253,6 +253,39 @@ test('unlinks a way into an account, never its last: free at once without build 
     assert.deepEqual(await accounts.signIn(madeUp), { freeFrom: '2026-11-01' });
 });
 
+test('moves to the account that links it an identity left free, links an account\'s own held identity back, and answers a link that lost a race', async () => {
+    const { db, accounts } = setup();
+    await rowAlone(db, { id: OWN[0], login: '' }).run();
+    await db.prepare("INSERT INTO identities (provider, subject, user_id, created_at, unlinked_at) VALUES ('apple', ?1, ?2, ?3, NULL), ('github', '583231', ?4, ?3, '2026-09-30T23:59:59.999Z'), ('github', '8000000002', ?5, ?3, NULL)")
+        .bind(APPLE[0], OWN[0], AT, OWN[1], OWN[2]).run();
+    // OWN[1] unlinked its GitHub account in September; OWN[2] was deleted with build seconds of September alone.
+    await db.prepare("INSERT INTO build_usage (user_id, month, image, seconds) VALUES (?, '2026-09', 'web', 60)").bind(OWN[2]).run();
+
+    const fromLastMonth = await accounts.link(String(OWN[0]), github);
+    await accounts.unlink(String(OWN[0]), 'github');
+    const leftWithoutSeconds = await accounts.link(String(OWN[0]), madeUp);
+    await accounts.addBuildSeconds(String(OWN[0]), NOW, 'web', 60);
+    await accounts.unlink(String(OWN[0]), 'github');
+    const ownHeld = await accounts.link(String(OWN[0]), madeUp);
+    const racing = createAccounts({
+        ...db,
+        prepare: db.prepare,
+        batch: async () => { throw new Error('D1_ERROR: UNIQUE constraint failed: identities.user_id, identities.provider: SQLITE_CONSTRAINT'); },
+    }, () => NOW);
+    await accounts.unlink(String(OWN[0]), 'github');
+    const raced = await racing.link(String(OWN[0]), github);
+
+    assert.deepEqual([fromLastMonth, leftWithoutSeconds, ownHeld, raced], [{ outcome: 'linked' }, { outcome: 'linked' }, { outcome: 'linked' }, { outcome: 'failed' }]);
+    assert.deepEqual(await identitiesOf(db), [
+        { provider: 'apple', subject: APPLE[0], user_id: OWN[0], unlinked_at: null },
+        { provider: 'github', subject: '8000000002', user_id: OWN[0], unlinked_at: AT },
+    ]);
+    // Unlinking GitHub blanked the account's GitHub name; linking one writes its name.
+    assert.deepEqual(await rows(db, 'SELECT login FROM users'), [{ login: '' }]);
+    assert.deepEqual(await accounts.link(String(OWN[0]), github), { outcome: 'linked' });
+    assert.deepEqual(await rows(db, 'SELECT login FROM users'), [{ login: 'octocat' }]);
+});
+
 test('prunes an identity unlinked in an earlier month, and keeps one unlinked this month and every linked one', async () => {
     const { db, accounts } = setup();
     await db.prepare("INSERT INTO users (id, login, created_at, last_login_at) VALUES (?1, '', ?2, ?2)").bind(OWN[0], AT).run();

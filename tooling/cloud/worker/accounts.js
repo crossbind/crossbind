@@ -150,6 +150,45 @@ export function createAccounts(db, now = () => Date.now(), drawId = randomAccoun
             ]);
         },
 
+        // Links an identity to a live account: { outcome } of 'linked', 'already', 'has-one' with the account's GitHub
+        // name, 'taken' with the name of the account the identity signs in to, 'blocked', 'held' with { freeFrom }, or
+        // 'failed' when another request linked or signed in meanwhile. No identity moves from another account: one
+        // that account holds, live, deleted with build seconds this month, or unlinked from it this month (signIn),
+        // stays. Linking GitHub writes the account's GitHub name, and ends its first 30 days without one.
+        async link(userId, { provider, subject, login }) {
+            const row = await db.prepare(`SELECT identities.user_id, identities.unlinked_at, users.id IS NOT NULL AS live, users.login, users.blocked
+                FROM identities LEFT JOIN users ON users.id = identities.user_id WHERE provider = ? AND subject = ?`).bind(provider, subject).first();
+            const mine = row !== null && String(row.user_id) === userId;
+            if (mine && row.unlinked_at === null) return { outcome: 'already' };
+            const own = await db.prepare(`SELECT users.login FROM identities JOIN users ON users.id = identities.user_id
+                WHERE identities.user_id = ? AND identities.provider = ? AND identities.unlinked_at IS NULL`).bind(userId, provider).first();
+            if (own) return { outcome: 'has-one', name: own.login };
+            if (row && !mine) {
+                if (row.unlinked_at === null && row.live === 1) {
+                    return row.blocked === 1 ? { outcome: 'blocked' } : { outcome: 'taken', name: nameOf({ id: row.user_id, login: row.login }) };
+                }
+                const held = row.unlinked_at === null ? await hasSecondsThisMonth(row.user_id) : isThisMonth(row.unlinked_at);
+                if (held) return { outcome: 'held', freeFrom: firstOfNextMonth(now()) };
+            }
+            try {
+                await db.batch([
+                    db.prepare('DELETE FROM identities WHERE provider = ? AND subject = ?').bind(provider, subject),
+                    db.prepare('INSERT INTO identities (provider, subject, user_id, created_at) VALUES (?, ?, ?, ?)').bind(provider, subject, userId, timestamp()),
+                    ...(provider === 'github' ? [db.prepare('UPDATE users SET login = ? WHERE id = ?').bind(login, userId)] : []),
+                ]);
+            } catch (error) {
+                if (/UNIQUE constraint failed: identities\./.test(error.message)) return { outcome: 'failed' };
+                throw error;
+            }
+            return { outcome: 'linked' };
+        },
+
+        // The providers an account signs in with, for its page.
+        async providersOf(userId) {
+            const { results } = await db.prepare('SELECT provider FROM identities WHERE user_id = ? AND unlinked_at IS NULL ORDER BY provider').bind(userId).all();
+            return results.map((row) => row.provider);
+        },
+
         // A way into the account taken away, never the last one: { outcome } of 'unlinked', 'held' with { freeFrom },
         // 'last' or 'none'. Without build seconds this month the identity is free at once; with them it is held under
         // the account until the month ends (signIn), so that no other account starts a fresh month with it. Unlinking
