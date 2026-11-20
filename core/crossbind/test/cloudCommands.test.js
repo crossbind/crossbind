@@ -9,9 +9,15 @@ import { DEFAULT_CLOUD_URL, cloudUrl, cloudCredentials } from '../src/utils/clou
 
 const URL_ = 'https://api.crossbind.dev';
 const TOKEN = `cbt_${'a'.repeat(43)}`;
+const VERSION = '2.0.0-beta.80';
+const DEVICE_CODE = 'D'.repeat(43);
 const DEVICE = {
-    deviceCode: 'the-device-code', userCode: 'WDJB-MJHT', verificationUri: 'https://github.com/login/device', expiresIn: 900, interval: 5,
+    device_code: DEVICE_CODE, user_code: 'NPCC-CNQN', verification_uri: `${URL_}/device`, expires_in: 600, interval: 5,
 };
+const SIGNED_IN = { access_token: TOKEN, token_type: 'Bearer', account: { id: '1099511627777', name: 'octocat' } };
+const QUESTION = 'crossbind: once you approve, the page shows a number: type it here (one try): ';
+// An answer of the device sign-in's token route, as RFC 8628 words a refusal.
+const refusal = (error, words = `the words of ${error}`) => [400, { error, error_description: words }];
 const USAGE = {
     login: 'octocat',
     builds: { month: '2026-10', limitSeconds: 3600, usedSeconds: 754.25, byImage: { web: 694.25, android: 60 } },
@@ -64,96 +70,116 @@ describe('cloudUrl', () => {
 });
 
 describe('crossbind login', () => {
-    test('shows the GitHub code, waits for its approval at the pace asked and keeps the token for this address only', async () => {
+    // What a person at a terminal answers to each question, in turn, and the questions asked.
+    const typing = (...answers) => {
+        const questions = [];
+        return { questions, ask: async (question) => { questions.push(question); return answers.shift(); } };
+    };
+    const at = (fetcher, more = {}) => ({
+        url: URL_, version: VERSION, file, fetcher, sleep: async () => {}, print: () => {}, isTerminal: () => true, ...typing('47'), ...more,
+    });
+
+    test('shows the code and the cloud\'s own page, asks for the number once the code is approved, and keeps the token for this address only', async () => {
         save({ 'https://staging.example.dev': { token: 'cbt_other', login: 'someone' } });
-        const { fetcher, calls } = server([[200, DEVICE], [202, { pending: true }], [202, { pending: true, interval: 10 }], [200, { token: TOKEN, login: 'octocat' }]]);
+        const { fetcher, calls } = server([[200, DEVICE], refusal('authorization_pending'), refusal('matching_required'), [200, SIGNED_IN]]);
+        const person = typing('47');
         const waits = [];
         const printed = [];
 
-        const result = await login({
-            url: URL_, file, fetcher, sleep: async (ms) => { waits.push(ms); }, print: (line) => printed.push(line),
-        });
+        const result = await login(at(fetcher, { ...person, sleep: async (ms) => { waits.push(ms); }, print: (line) => printed.push(line) }));
 
         expect(result).toEqual({ login: 'octocat' });
-        expect(printed.join('\n')).toContain('https://github.com/login/device');
-        expect(printed.join('\n')).toContain('WDJB-MJHT');
-        expect(waits).toEqual([5000, 5000, 10000]);
-        expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual([
-            `POST ${URL_}/v1/login/device`, ...Array(3).fill(`POST ${URL_}/v1/login/token`),
+        expect(printed).toEqual([`crossbind: open ${URL_}/device and enter the code NPCC-CNQN to sign in with GitHub or Apple.`]);
+        expect(person.questions).toEqual([QUESTION]);
+        // The number goes at once, as its person typed it: no wait after the question.
+        expect(waits).toEqual([5000, 5000]);
+        expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual([`POST ${URL_}/v1/device/authorize`, ...Array(3).fill(`POST ${URL_}/v1/device/token`)]);
+        expect(calls.map((call) => call.body)).toEqual([
+            { client: 'cli', version: VERSION }, { device_code: DEVICE_CODE }, { device_code: DEVICE_CODE }, { device_code: DEVICE_CODE, match: 47 },
         ]);
-        expect(calls[1].body).toEqual({ deviceCode: 'the-device-code' });
         expect(saved()).toEqual({
             'https://staging.example.dev': { token: 'cbt_other', login: 'someone' }, [URL_]: { token: TOKEN, login: 'octocat' },
         });
         if (process.platform !== 'win32') expect(fs.statSync(file).mode & 0o777).toBe(0o600);
     });
 
-    test('stops with the reason the cloud gives and keeps nothing', async () => {
-        const tooNew = server([[200, DEVICE], [403, { error: 'This GitHub account is too new.' }]]);
-        const unavailable = server([[503, { error: 'Signing in with GitHub is not set up.' }]]);
-        const options = { url: URL_, file, sleep: async () => {}, print: () => {} };
+    test('asks again for a number that is not two digits, so that a slip spends no try, and sends the number once', async () => {
+        const { fetcher, calls } = server([[200, DEVICE], refusal('matching_required'), [200, SIGNED_IN]]);
+        const person = typing('4', 'forty-seven', '07', ' 47 ');
 
-        await expect(login({ ...options, fetcher: tooNew.fetcher })).rejects.toThrow('This GitHub account is too new.');
-        await expect(login({ ...options, fetcher: unavailable.fetcher })).rejects.toThrow('Signing in with GitHub is not set up.');
+        await login(at(fetcher, person));
+
+        expect(person.questions).toEqual([QUESTION, ...Array(3).fill('crossbind: type the two digits the page shows: ')]);
+        expect(calls.slice(1).map((call) => call.body)).toEqual([{ device_code: DEVICE_CODE }, { device_code: DEVICE_CODE, match: 47 }]);
+    });
+
+    test('stops with the words the cloud gives, a wrong number included, and keeps nothing', async () => {
+        const wrong = server([[200, DEVICE], refusal('matching_required'), refusal('access_denied', 'The number did not match, and the code no longer works; start again.')]);
+        const busy = server([[429, { error: 'slow_down', error_description: 'Too many sign-ins are starting right now; try again in a minute.' }]]);
+        const unset = server([[503, { error: 'temporarily_unavailable', error_description: 'Signing in is not set up.' }]]);
+
+        await expect(login(at(wrong.fetcher))).rejects.toThrow('crossbind: The number did not match, and the code no longer works; start again.');
+        await expect(login(at(busy.fetcher))).rejects.toThrow('crossbind: Too many sign-ins are starting right now; try again in a minute.');
+        await expect(login(at(unset.fetcher))).rejects.toThrow('crossbind: Signing in is not set up.');
         expect(fs.existsSync(file)).toBe(false);
     });
 
-    test('refuses a sign-in page off github.com and a token not shaped like one, and keeps nothing', async () => {
-        const options = { url: URL_, file, sleep: async () => {}, print: () => {} };
-        const elsewhere = server([[200, { ...DEVICE, verificationUri: 'https://github.com.evil.example/login/device' }]]);
-        const malformed = server([[200, DEVICE], [200, { token: 'cbt_short', login: 'octocat' }]]);
+    test('refuses a sign-in page off the cloud\'s own origin, and a token not shaped like one, and keeps nothing', async () => {
+        const pages = ['https://api.crossbind.dev.evil.example/device', 'https://github.com/login/device', 'http://api.crossbind.dev/device', 'not a page'];
+        for (const page of pages) {
+            await expect(login(at(server([[200, { ...DEVICE, verification_uri: page }]]).fetcher))).rejects.toThrow(`crossbind: crossbind cloud sent a sign-in page that is not its own, at ${URL_}.`);
+        }
+        const malformed = server([[200, DEVICE], refusal('matching_required'), [200, { ...SIGNED_IN, access_token: 'cbt_short' }]]);
 
-        await expect(login({ ...options, fetcher: elsewhere.fetcher })).rejects.toThrow(/github\.com/);
-        await expect(login({ ...options, fetcher: malformed.fetcher })).rejects.toThrow(/token/);
+        await expect(login(at(malformed.fetcher))).rejects.toThrow(/token/);
         expect(fs.existsSync(file)).toBe(false);
     });
 
-    test('never polls faster than every 5 seconds, whatever interval it is told', async () => {
-        const { fetcher } = server([[200, { ...DEVICE, interval: 0 }], [202, { pending: true, interval: -1 }], [202, { pending: true, interval: 'soon' }], [200, { token: TOKEN, login: 'octocat' }]]);
+    test('never polls faster than every 5 seconds, and waits five seconds more each time it is told to slow down', async () => {
+        const { fetcher } = server([[200, { ...DEVICE, interval: 0 }], refusal('slow_down'), refusal('authorization_pending'), refusal('slow_down'), refusal('matching_required'), [200, SIGNED_IN]]);
         const waits = [];
 
-        await login({
-            url: URL_, file, fetcher, sleep: async (ms) => { waits.push(ms); }, print: () => {},
-        });
+        await login(at(fetcher, { sleep: async (ms) => { waits.push(ms); } }));
 
-        expect(waits).toEqual([5000, 5000, 5000]);
+        expect(waits).toEqual([5000, 10000, 10000, 15000]);
+    });
+
+    test('stops before it asks the cloud for anything when no terminal is there to type the number', async () => {
+        const { fetcher, calls } = server([]);
+
+        await expect(login(at(fetcher, { isTerminal: () => false }))).rejects.toThrow('crossbind: crossbind login asks for a number: run it in a terminal.');
+        expect(calls).toEqual([]);
     });
 
     test('revokes the token it replaces once the new one is kept', async () => {
         const previous = `cbt_${'b'.repeat(43)}`;
         save({ [URL_]: { token: previous, login: 'octocat' } });
-        const { fetcher, calls } = server([[200, DEVICE], [200, { token: TOKEN, login: 'octocat' }], [204]]);
+        const { fetcher, calls } = server([[200, DEVICE], refusal('matching_required'), [200, SIGNED_IN], [204]]);
 
-        await login({
-            url: URL_, file, fetcher, sleep: async () => {}, print: () => {},
-        });
+        await login(at(fetcher));
 
-        expect(calls[2]).toMatchObject({ method: 'DELETE', url: `${URL_}/v1/token`, headers: { authorization: `Bearer ${previous}` } });
+        expect(calls[3]).toMatchObject({ method: 'DELETE', url: `${URL_}/v1/token`, headers: { authorization: `Bearer ${previous}` } });
         expect(saved()[URL_].token).toBe(TOKEN);
     });
 
     test('prints no control characters from the cloud\'s answers', async () => {
-        const { fetcher } = server([[200, { ...DEVICE, userCode: 'WDJB\u001b[2J-MJHT' }], [200, { token: TOKEN, login: 'octo\u0007cat' }]]);
+        const { fetcher } = server([[200, { ...DEVICE, user_code: 'NPCC\u001b[2J-CNQN' }], refusal('matching_required'), [200, { ...SIGNED_IN, account: { id: '1', name: 'octo\u0007cat' } }]]);
         const printed = [];
 
-        const result = await login({
-            url: URL_, file, fetcher, sleep: async () => {}, print: (line) => printed.push(line),
-        });
+        const result = await login(at(fetcher, { print: (line) => printed.push(line) }));
 
-        expect(printed.join('\n')).toContain('WDJB[2J-MJHT');
+        expect(printed.join('\n')).toContain('NPCC[2J-CNQN');
         expect(printed.join(' ')).not.toMatch(/\p{Cc}/u);
         expect(result.login).toBe('octocat');
     });
 
     test('gives up once the code has expired, even if the cloud keeps saying not yet', async () => {
-        const { fetcher } = server([[200, { ...DEVICE, expiresIn: 12 }], ...Array(5).fill([202, { pending: true }])]);
+        const { fetcher } = server([[200, { ...DEVICE, expires_in: 12 }], ...Array(5).fill(refusal('authorization_pending'))]);
         let clock = 0;
 
-        const attempt = login({
-            url: URL_, file, fetcher, now: () => clock, sleep: async (ms) => { clock += ms; }, print: () => {},
-        });
+        const attempt = login(at(fetcher, { now: () => clock, sleep: async (ms) => { clock += ms; } }));
 
-        await expect(attempt).rejects.toThrow(/expired/);
+        await expect(attempt).rejects.toThrow('crossbind: the code expired before it was approved; run crossbind login again.');
     });
 });
 
@@ -224,10 +250,10 @@ describe('crossbind usage', () => {
         fs.writeFileSync(elsewhere, '{}');
         fs.mkdirSync(path.dirname(file), { recursive: true });
         fs.symlinkSync(elsewhere, file);
-        const { fetcher } = server([[200, DEVICE], [200, { token: TOKEN, login: 'octocat' }]]);
+        const { fetcher } = server([[200, DEVICE], refusal('matching_required'), [200, SIGNED_IN]]);
 
         await login({
-            url: URL_, file, fetcher, sleep: async () => {}, print: () => {},
+            url: URL_, version: VERSION, file, fetcher, sleep: async () => {}, print: () => {}, isTerminal: () => true, ask: async () => '47',
         });
 
         expect(fs.readFileSync(elsewhere, 'utf8')).toBe('{}');
@@ -252,5 +278,22 @@ describe('crossbind usage', () => {
         ]);
         expect(usageLines({ ...USAGE, builds: { ...USAGE.builds, usedSeconds: 3700, byImage: { web: 3700 } } })[1])
             .toBe('Cloud builds in 2026-10: 61m 40s of 60m used, 0s left.');
+    });
+
+    test('tells a new account the day cloud builds open to it, worded without a locale, and an answer out of its form as before', () => {
+        const fresh = {
+            login: 'Apple account …7777',
+            builds: {
+                month: '2026-11', limitSeconds: 0, usedSeconds: 0, byImage: {}, opensOn: '2026-12-20',
+            },
+            playground: { limit: 20, remaining: 20 },
+        };
+
+        expect(usageLines(fresh)).toEqual([
+            'Signed in as Apple account …7777.',
+            'Cloud builds open to this account on 20 December 2026, or as soon as a GitHub account is linked.',
+            'Playground: 20 of 20 compiles left today.',
+        ]);
+        expect(usageLines({ ...fresh, builds: { ...fresh.builds, opensOn: '2026-13-20' } })[1]).toBe('Cloud builds in 2026-11: 0s of 0s used, 0s left.');
     });
 });

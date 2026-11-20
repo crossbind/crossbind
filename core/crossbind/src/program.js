@@ -38,10 +38,10 @@ export const createProgram = () => new Command()
 
 export function addSystemCommands(program) {
     program.command('login')
-        .description('sign in to crossbind cloud with your GitHub account')
+        .description('sign in to crossbind cloud with GitHub or Apple, on its device page')
         .action(async () => {
             const url = cloudUrl(loadSystemConfig());
-            const { login } = await loginToCloud({ url });
+            const { login } = await loginToCloud({ url, version: packageJSON.version });
             console.log(`crossbind: signed in to ${url} as ${login}.`);
         });
 
