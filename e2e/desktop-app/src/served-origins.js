@@ -303,8 +303,9 @@ export async function runPageApiTrip() {
 }
 
 // What public/page-api.html got from PAGE_API, which the host answers, so the origin's handler never got it: the names of
-// the app's own page's crossbind/app, and an app's function refused naming the role, also once a web build's
-// crossbind.js took globalThis.Crossbind.
+// the app's own page's crossbind/app; an app's function refused naming the role, also once a web build's crossbind.js
+// took globalThis.Crossbind; and the system's message dialog, which waited for its user until the probe closed it, where
+// a refused call answers at once.
 export async function checkPageApi({ pageApi: got }) {
     if (!got || got.failure) throw new Error(`${PAGE_API_PAGE} of ${PROJECT} failed: ${got?.failure ?? 'it told nothing'}`);
     const names = Object.keys(ownApi).sort();
@@ -312,6 +313,8 @@ export async function checkPageApi({ pageApi: got }) {
     const refusal = 'a page of the role project does not reach app.paths, which pages of the role app call';
     if (got.role !== 'project' || !got.paths?.includes(refusal)) throw new Error(`app.paths of ${PAGE_API} in a page of the role ${got.role} got ${got.paths}`);
     if (!got.pathsAfter?.includes(refusal)) throw new Error(`app.paths of ${PAGE_API}, once a web build's crossbind.js took globalThis.Crossbind, got ${got.pathsAfter}`);
+    if (got.dialog !== 'shown') throw new Error(`dialog.message of a project's page answered at once: ${got.dialog}`);
+    if (got.closed !== true || !/^answered \d+$/.test(got.dialogClosed)) throw new Error(`no message dialog of the project's page was there to close: ${got.closed}, ${got.dialogClosed}`);
     const handled = await invoke('probe.handled', { name: PROJECT, path: PAGE_API });
     if (handled !== 0) throw new Error(`the handler of ${PROJECT} got ${PAGE_API} ${handled} times`);
     show('page-api', { ...got, names: got.names.length, handled });

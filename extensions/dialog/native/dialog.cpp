@@ -111,7 +111,8 @@ void crossbind_extension_dialog(crossbind::Registry &registry) {
                                          filters(options)};
         showFileDialog(showSaveDialog, call.page().windowId(), std::move(save), [call](std::optional<std::string> file) { call.resolve(file ? Value(*file) : Value()); });
     });
-    registry.function("dialog.message", [](Call call) {
+    // A page of a served origin's of the role project shows a message too, which reaches no path of the app's.
+    registry.function("dialog.message", {"app", "project"}, [](Call call) {
         const Value &options = call.options();
         showMessage(call.page().windowId(), {options["message"].asString(""), options["detail"].asString(""), kindOf(options["kind"].asString("")), texts(options["buttons"])},
                     [call](int button) { call.resolve(button); });

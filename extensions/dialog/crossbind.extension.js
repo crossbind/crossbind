@@ -1,7 +1,7 @@
 export default function dialog() {
     return {
         name: 'dialog',
-        contract: 1,
+        contract: 3,
         root: import.meta.dirname,
         app: {
             sources: ['native/dialog.cpp'],

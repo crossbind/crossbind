@@ -594,7 +594,8 @@ What its pages reach:
   anywhere else, as it refuses the app's own at a served origin.
 - The app's module, `events.held()` and the functions of the role `app`, which `function(name, fn)` adds and
   `crossbind/app`'s own functions are, refuse it, naming the function and both roles: "crossbind: a page of the role
-  project does not reach app.paths, which pages of the role app call". Of the events, it hears the ones
+  project does not reach app.paths, which pages of the role app call". Of `crossbind/app`'s functions, the host's
+  `dialog.message` takes pages of the role `project` as well. Of the events, it hears the ones
   `emit(name, value, page)` sends it.
 - `crossbind/app`, which it imports from `/__crossbind/app.js`: the host answers that path for every served origin from
   a file the app's build puts beside the host's own, in a built app and during development alike, so the page gets the
@@ -1170,7 +1171,8 @@ An extension named as one of the host's own takes its place with the roles it he
 crossbind may add one of a name an app has already. One named as a role that another of the host's holds, as `tray`, stops
 the build.
 
-- `dialog`: `dialog.open`, `dialog.save` and `dialog.message`, with the page's options.
+- `dialog`: `dialog.open`, `dialog.save` and `dialog.message`, with the page's options; `dialog.message` for pages of
+  the role `project` as well, as [Origins](#origins) tells.
 - `shell`: `shell.openExternal` with `{ url }`; `shell.openPath`, `shell.revealInFolder` and `shell.trash` with
   `{ path }`.
 - `updater`: `updater.check` and `updater.install`, with none.

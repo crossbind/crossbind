@@ -7,6 +7,9 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ShortcutInfo;
 import android.content.pm.ShortcutManager;
+import android.view.View;
+import android.view.inspector.WindowInspector;
+import android.widget.TextView;
 
 import dev.crossbind.app.Extension;
 import dev.crossbind.app.ExtensionHost;
@@ -90,6 +93,20 @@ public final class ProbeExtension implements Extension {
                     waiting.add(call);
                 }
                 case "cancels" -> call.resolve(cancels);
+                // The message dialog of this message among the windows of the app's process, closed as its user's click
+                // of its first button closes it: false for none.
+                case "closeDialog" -> {
+                    String message = options.getString("message");
+                    View button = null;
+                    for (View root : WindowInspector.getGlobalWindowViews()) {
+                        TextView text = root.findViewById(android.R.id.message);
+                        if (root != activity.getWindow().getDecorView() && text != null && message.contentEquals(text.getText())) {
+                            button = root.findViewById(android.R.id.button1);
+                        }
+                    }
+                    if (button != null) button.performClick();
+                    call.resolve(button != null);
+                }
                 // The bytes the page passed, reversed, and how many.
                 case "bytes" -> {
                     byte[] data = (byte[]) options.get("data");

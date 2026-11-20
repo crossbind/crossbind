@@ -6,6 +6,11 @@
 #include <stdexcept>
 #include <string>
 
+void closeMessageDialog(const std::string &message, std::function<void(bool)> done) {
+    crossbind::android::callJava("probe", "closeDialog", crossbind::Value::Object{{"message", message}},
+        [done](std::optional<std::string> failure, crossbind::Value result) { done(!failure && result.asBool(false)); });
+}
+
 void probePlatform(crossbind::Registry &registry) {
     using crossbind::Call;
     using crossbind::Value;

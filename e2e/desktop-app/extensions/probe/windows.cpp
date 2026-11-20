@@ -35,7 +35,26 @@ std::string toastTemplate() {
     return isMade ? "ok" : "failed: " + std::to_string(result);
 }
 
+// A task dialog of the app's, the class of Windows' dialogs, shown.
+BOOL CALLBACK findDialog(HWND window, LPARAM found) {
+    DWORD process = 0;
+    GetWindowThreadProcessId(window, &process);
+    wchar_t name[8] = {};
+    if (process != GetCurrentProcessId() || !IsWindowVisible(window) || GetClassNameW(window, name, 8) == 0 || std::wcscmp(name, L"#32770") != 0) return TRUE;
+    *reinterpret_cast<HWND *>(found) = window;
+    return FALSE;
+}
+
 }  // namespace
+
+// The dialog's modal loop runs in a task of the UI thread's, which holds the next one, so the close goes from here, as
+// Escape closes it.
+void closeMessageDialog(const std::string &, std::function<void(bool)> done) {
+    HWND dialog = nullptr;
+    EnumWindows(findDialog, reinterpret_cast<LPARAM>(&dialog));
+    if (dialog) PostMessageW(dialog, WM_CLOSE, 0, 0);
+    done(dialog != nullptr);
+}
 
 void probePlatform(crossbind::Registry &registry) {
     registry.function("probe.close", [](crossbind::Call call) {
