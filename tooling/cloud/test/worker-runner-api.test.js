@@ -46,6 +46,36 @@ async function setup({ overLimit = {}, runnerThrows = false } = {}) {
     };
 }
 
+test('gives a new account with no GitHub account linked no runner, says when it gets one, and gives it one once GitHub is linked or 30 days pass', async () => {
+    const { db, forwarded, call, advance } = await setup();
+    const at = new Date(NOW).toISOString();
+    await db.prepare("INSERT INTO users (id, login, created_at, last_login_at) VALUES (1099511627776, '', ?1, ?1)").bind(at).run();
+    await db.prepare("INSERT INTO identities (provider, subject, user_id, created_at) VALUES ('apple', '000123.made0up0apple0id.0001', 1099511627776, ?1)").bind(at).run();
+    const token = await createAccounts(db, () => NOW).issueToken('1099511627776');
+
+    const refused = await call('/web/v1/missing', { bearer: token });
+    await db.prepare("INSERT INTO identities (provider, subject, user_id, created_at) VALUES ('github', '8000000001', 1099511627776, ?1)").bind(at).run();
+    advance(31 * 1000);
+    const linked = await call('/web/v1/missing', { bearer: token });
+
+    assert.deepEqual([refused.status, (await refused.json()).error], [403, 'Cloud builds open to this account on 7 November 2026, or as soon as a GitHub account is linked; build with CROSSBIND_RUNNER=DOCKER_RUN meanwhile.']);
+    assert.equal(linked.status, 200);
+    assert.deepEqual(forwarded.map(({ userId }) => userId), ['1099511627776']);
+});
+
+test('gives an account with no GitHub account linked a runner once it is 30 days old', async () => {
+    const { db, forwarded, call } = await setup();
+    const madeAt = new Date(NOW - 30 * 24 * 3600 * 1000).toISOString();
+    await db.prepare("INSERT INTO users (id, login, created_at, last_login_at) VALUES (1099511627776, '', ?1, ?1)").bind(madeAt).run();
+    await db.prepare("INSERT INTO identities (provider, subject, user_id, created_at) VALUES ('apple', '000123.made0up0apple0id.0001', 1099511627776, ?1)").bind(madeAt).run();
+    const token = await createAccounts(db, () => NOW).issueToken('1099511627776');
+
+    const response = await call('/web/v1/missing', { bearer: token });
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(forwarded.map(({ userId }) => userId), ['1099511627776']);
+});
+
 test('hands a signed-in user\'s request to their own runner of that image, without their token or cookies', async () => {
     const { forwarded, call } = await setup();
 

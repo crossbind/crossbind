@@ -92,7 +92,9 @@ test('signs an account made before it in as itself through that identity, a dele
     assert.deepEqual(await accounts.signIn(identity), { user: { ...dev, blocked: false } });
     const token = await accounts.issueToken(dev.id);
 
-    assert.deepEqual(await accounts.userOfToken(token), { ...dev, blocked: false, kind: 'cli' });
+    assert.deepEqual(await accounts.userOfToken(token), {
+        ...dev, blocked: false, kind: 'cli', createdAt: new Date(NOW).toISOString(), github: true,
+    });
     assert.deepEqual(await rows(db, 'SELECT kind, label FROM tokens'), [{ kind: 'cli', label: 'crossbind CLI' }]);
     assert.deepEqual(await rows(db, 'SELECT * FROM identities'), [github(8000000001, AT)]);
     assert.equal((await accounts.buildBudget(dev.id, NOW)).mine, 600);

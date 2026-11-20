@@ -52,6 +52,17 @@ export const nameOf = ({ id, login }) => login || `Apple account …${String(id)
 
 export const isTokenShaped = (token) => typeof token === 'string' && TOKEN_PATTERN.test(token);
 
+// An account with no GitHub account linked is new for its first `days` days, as a GitHub account must be that old to
+// sign in: it has no cloud build minutes, and the playground's compiles of a new account. The day they open to it, or
+// null for an account that is not new.
+export function buildsOpenOn({ createdAt, github }, days, at) {
+    const opens = Date.parse(createdAt) + days * DAY_MS;
+    return !github && opens > at ? new Date(opens).toISOString().slice(0, 10) : null;
+}
+
+// Whether a GitHub account is linked to the row's account.
+const LINKED_GITHUB = "EXISTS (SELECT 1 FROM identities WHERE identities.user_id = users.id AND identities.provider = 'github' AND identities.unlinked_at IS NULL)";
+
 // An id of crossbind's own, drawn evenly: 53 random bits, drawn again below OWN_IDS_FROM.
 export function randomAccountId() {
     let id;
@@ -125,15 +136,18 @@ export function createAccounts(db, now = () => Date.now(), drawId = randomAccoun
         },
 
         // Whether an account still exists, as a session of another browser may outlive it, whether it is blocked, its
-        // GitHub name and the name it goes by, and when it last signed out everywhere: no cookie made before then counts.
+        // GitHub name and the name it goes by, when it last signed out everywhere (no cookie made before then counts),
+        // and when it was made and whether a GitHub account is linked (buildsOpenOn).
         async standing(id) {
-            const row = await db.prepare('SELECT login, blocked, signed_out_at FROM users WHERE id = ?').bind(id).first();
+            const row = await db.prepare(`SELECT login, blocked, signed_out_at, created_at, ${LINKED_GITHUB} AS github FROM users WHERE id = ?`).bind(id).first();
             return {
                 exists: row !== null,
                 blocked: row?.blocked === 1,
                 login: row?.login ?? '',
                 name: row ? nameOf({ id, login: row.login }) : '',
                 signedOutAt: row?.signed_out_at ?? null,
+                createdAt: row?.created_at ?? null,
+                github: row?.github === 1,
             };
         },
 
@@ -234,8 +248,8 @@ export function createAccounts(db, now = () => Date.now(), drawId = randomAccoun
         async userOfToken(token) {
             if (!isTokenShaped(token)) return null;
             const hash = await hashOf(token);
-            const row = await db.prepare(`SELECT users.id, users.login, users.blocked, tokens.last_used_at, tokens.kind FROM tokens
-                JOIN users ON users.id = tokens.user_id WHERE tokens.hash = ?`).bind(hash).first();
+            const row = await db.prepare(`SELECT users.id, users.login, users.blocked, users.created_at, ${LINKED_GITHUB} AS github, tokens.last_used_at, tokens.kind
+                FROM tokens JOIN users ON users.id = tokens.user_id WHERE tokens.hash = ?`).bind(hash).first();
             if (!row) return null;
             const idle = now() - Date.parse(row.last_used_at);
             if (idle >= TOKEN_IDLE_DAYS * DAY_MS) {
@@ -245,7 +259,9 @@ export function createAccounts(db, now = () => Date.now(), drawId = randomAccoun
             if (idle >= TOUCH_EVERY_MS) {
                 await db.prepare('UPDATE tokens SET last_used_at = ? WHERE hash = ?').bind(timestamp(), hash).run();
             }
-            return { ...userOf(row), kind: row.kind };
+            return {
+                ...userOf(row), kind: row.kind, createdAt: row.created_at, github: row.github === 1,
+            };
         },
 
         async revokeToken(token) {

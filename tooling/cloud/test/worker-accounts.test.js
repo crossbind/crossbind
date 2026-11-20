@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import {
-    createAccounts, dayWords, randomAccountId, DEVICE_REF_LENGTH, MAX_TOKENS_PER_USER, OWN_IDS_BELOW, OWN_IDS_FROM, TOKEN_IDLE_DAYS,
+    buildsOpenOn, createAccounts, dayWords, randomAccountId, DEVICE_REF_LENGTH, MAX_TOKENS_PER_USER, OWN_IDS_BELOW, OWN_IDS_FROM, TOKEN_IDLE_DAYS,
 } from '../worker/accounts.js';
 import { sqliteD1 } from '../scripts/sqlite-d1.mjs';
 
@@ -93,10 +93,10 @@ test('reports a blocked account at sign-in and when asked', async () => {
 
     assert.deepEqual(await accounts.signIn(github), signedInAs(octocat.id, 'octocat', true));
     assert.deepEqual(await accounts.standing('583231'), {
-        exists: true, blocked: true, login: 'octocat', name: 'octocat', signedOutAt: null,
+        exists: true, blocked: true, login: 'octocat', name: 'octocat', signedOutAt: null, createdAt: AT, github: true,
     });
     assert.deepEqual(await accounts.standing('1'), {
-        exists: false, blocked: false, login: '', name: '', signedOutAt: null,
+        exists: false, blocked: false, login: '', name: '', signedOutAt: null, createdAt: null, github: false,
     });
 });
 
@@ -298,6 +298,33 @@ test('prunes an identity unlinked in an earlier month, and keeps one unlinked th
     assert.deepEqual(await rows(db, 'SELECT subject FROM identities ORDER BY subject'), [{ subject: APPLE[0] }, { subject: '8000000002' }]);
 });
 
+test('keeps cloud builds from an account with no GitHub account linked for its first 30 days, and opens them once one is linked', () => {
+    const createdAt = '2026-11-20T10:00:00.000Z';
+    const at = (time) => Date.parse(time);
+
+    assert.deepEqual([
+        buildsOpenOn({ createdAt, github: false }, 30, at('2026-11-20T10:00:00Z')),
+        buildsOpenOn({ createdAt, github: false }, 30, at('2026-12-20T09:59:59.999Z')),
+        buildsOpenOn({ createdAt, github: false }, 30, at('2026-12-20T10:00:00Z')),
+        buildsOpenOn({ createdAt, github: true }, 30, at('2026-11-20T10:00:00Z')),
+        buildsOpenOn({ createdAt, github: false }, 60, at('2026-12-20T10:00:00Z')),
+    ], ['2026-12-20', '2026-12-20', null, null, '2027-01-19']);
+});
+
+test('reads a GitHub account as linked to an account while it is, and not once it is unlinked and held', async () => {
+    const { db, accounts } = setup();
+    await withBoth(db, OWN[0], github, APPLE[0]);
+    const token = await accounts.issueToken(String(OWN[0]));
+    await accounts.addBuildSeconds(String(OWN[0]), NOW, 'web', 60);
+
+    const linked = [(await accounts.standing(String(OWN[0]))).github, (await accounts.userOfToken(token)).github];
+    await accounts.unlink(String(OWN[0]), 'github');
+    const held = [(await accounts.standing(String(OWN[0]))).github, (await accounts.userOfToken(token)).github];
+
+    assert.deepEqual([linked, held], [[true, true], [false, false]]);
+    assert.deepEqual([(await accounts.standing(String(OWN[0]))).createdAt, (await accounts.userOfToken(token)).createdAt], [AT, AT]);
+});
+
 test('words a day without a locale\'s data', (t) => {
     t.mock.method(Date.prototype, 'toLocaleDateString', () => { throw new Error('no locale data here'); });
     t.mock.method(Intl, 'DateTimeFormat', () => { throw new Error('no locale data here'); });
@@ -314,7 +341,9 @@ test('issues a token it keeps only as a hash, and finds the account by it', asyn
     assert.match(token, /^cbt_[A-Za-z0-9_-]{43}$/);
     const [stored] = await rows(db, 'SELECT hash FROM tokens');
     assert.match(stored.hash, /^[0-9a-f]{64}$/);
-    assert.deepEqual(await accounts.userOfToken(token), { ...octocat, blocked: false, kind: 'cli' });
+    assert.deepEqual(await accounts.userOfToken(token), {
+        ...octocat, blocked: false, kind: 'cli', createdAt: AT, github: true,
+    });
 });
 
 test('reads a token\'s kind, the CLI\'s for every token it issues', async () => {
@@ -324,8 +353,12 @@ test('reads a token\'s kind, the CLI\'s for every token it issues', async () => 
     await db.prepare("UPDATE tokens SET kind = 'app'").run();
     const cli = await accounts.issueToken(octocat.id);
 
-    assert.deepEqual(await accounts.userOfToken(cli), { ...octocat, blocked: false, kind: 'cli' });
-    assert.deepEqual(await accounts.userOfToken(app), { ...octocat, blocked: false, kind: 'app' });
+    assert.deepEqual(await accounts.userOfToken(cli), {
+        ...octocat, blocked: false, kind: 'cli', createdAt: AT, github: true,
+    });
+    assert.deepEqual(await accounts.userOfToken(app), {
+        ...octocat, blocked: false, kind: 'app', createdAt: AT, github: true,
+    });
 });
 
 test('finds no account for an unknown, malformed or revoked token', async () => {

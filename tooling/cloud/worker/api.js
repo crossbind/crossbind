@@ -1,11 +1,13 @@
 import { validateRequest, InvalidRequest, MAX_BODY_BYTES } from '../compiler/validate.js';
 import { handleAccountRequest } from './account-api.js';
 import { handleAccountPage, isAccountPath } from './account-page.js';
-import { userKey } from './accounts.js';
+import { buildsOpenOn, userKey } from './accounts.js';
 import {
     BodyTooLarge, SECURITY_HEADERS, jsonResponse, log, networkOf, readLimited,
 } from './http.js';
-import { startLogin, finishLogin, signInProviders } from './oauth.js';
+import {
+    finishLogin, minAccountDays, signInProviders, startLogin,
+} from './oauth.js';
 import { handleRunnerRequest } from './runner-api.js';
 import { readSignedIn, clearCookie, SESSION_COOKIE } from './session.js';
 import { settingsOf } from './settings.js';
@@ -49,18 +51,21 @@ async function cacheUrl(version, project) {
     return `${CACHE_ORIGIN}/${[...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')}`;
 }
 
-// `session` is the account the cookie names, with `standing` its row; `user` is the account it signs in, if any.
+// `session` is the account the cookie names, with `standing` its row; `user` is the account it signs in, if any. A new
+// account compiles as itself, on a day's count of its own.
 async function callerOf({
     request, env, deps, settings, ip, network,
 }) {
-    const { session, standing, user } = await readSignedIn(request, env.SESSION_SECRET, deps.accounts, (deps.now ?? Date.now)());
+    const at = (deps.now ?? Date.now)();
+    const { session, standing, user } = await readSignedIn(request, env.SESSION_SECRET, deps.accounts, at);
+    const isNew = user !== null && buildsOpenOn(standing, minAccountDays(env), at) !== null;
     return {
         session,
         standing,
         user,
         ip,
         key: user ? userKey(user.id) : `ip:${network}`,
-        limit: user ? settings.userDaily : settings.anonymousDaily,
+        limit: (user ? (isNew ? settings.newAccountDaily : settings.userDaily) : settings.anonymousDaily),
     };
 }
 
