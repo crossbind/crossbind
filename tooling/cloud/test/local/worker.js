@@ -4,6 +4,7 @@
 import { createAccounts } from '../../worker/accounts.js';
 import { handleRequest } from '../../worker/api.js';
 import { createDeviceCodes } from '../../worker/devices.js';
+import { createProjectSessions } from '../../worker/project-sessions.js';
 import { createQuota } from '../../worker/quota.js';
 import { memoryStorage } from '../../scripts/memory-storage.mjs';
 
@@ -87,6 +88,7 @@ export default {
             },
             accounts: createAccounts(env.DB),
             devices: createDeviceCodes(env.DB),
+            sessions: createProjectSessions(env.DB),
             quota,
             compiler: { fetch: async () => Response.json({ error: 'This run has no compiler.' }, { status: 503 }) },
             fetcher: (url, init) => (url.startsWith('https://appleid.apple.com/') ? apple(url, init, env) : github(url, init, env)),

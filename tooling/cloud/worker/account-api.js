@@ -10,9 +10,10 @@ import {
 import {
     isDeviceLoginConfigured, minAccountDays, pollDeviceCode, requestDeviceCode, signInProviders,
 } from './oauth.js';
+import { devSessionOf, isSessionId, MAX_SESSIONS_PER_ACCOUNT } from './project-sessions.js';
 
-// The API of `crossbind login`, `logout` and `usage`, of the crossbind app, and the account's own, under /v1. No browser
-// calls it: it sends no CORS headers and reads no cookies, only the token in the Authorization header.
+// The API of `crossbind login`, `logout`, `usage` and `app preview`, of the crossbind app, and the account's own, under
+// /v1. No browser calls it: it sends no CORS headers and reads no cookies, only the token in the Authorization header.
 
 const MAX_BODY_BYTES = 1024;
 const MAX_DEVICE_CODE_LENGTH = 128;
@@ -32,6 +33,10 @@ const MISMATCH = 'The number did not match, and the code no longer works; start 
 // The kinds of token a route takes (tokens.kind): builds and usage take the CLI's alone, the account itself any.
 const CLI_ONLY = Object.freeze(['cli']);
 const EVERY_KIND = Object.freeze(['cli', 'app']);
+// Sessions are read by the crossbind app alone, which opens them; the CLI registers and removes them.
+const APP_ONLY = Object.freeze(['app']);
+const SESSION_PATH = /^\/v1\/sessions\/([^/]+)$/;
+const NO_SESSION = 'No session of this account has this id.';
 
 const now = (deps) => (deps.now ?? Date.now)();
 const noContent = () => new Response(null, { status: 204, headers: SECURITY_HEADERS });
@@ -193,6 +198,29 @@ const authenticated = (route, options) => async (context) => {
     return answer ?? route(context, user, token);
 };
 
+// crossbind app preview registers its dev server's session, and renews it with the same body while it runs.
+async function putSessionRoute({ request, deps, sessionId }, user) {
+    if (!isSessionId(sessionId)) return jsonResponse(400, { error: 'A session\'s id is 16 random bytes in base64url.' });
+    const session = devSessionOf(await readJson(request));
+    if (!session) return jsonResponse(400, { error: 'Send {"source": "dev", "project": {"id", "name"}, "addresses", "protocol", "key"}: a dev server at a local address alone.' });
+    const registered = await deps.sessions.register(user.id, sessionId, session);
+    if (registered.error === 'taken') return jsonResponse(409, { error: 'This session id is in use by another run; make a new one.' });
+    if (registered.error === 'full') return jsonResponse(429, { error: `This account has ${MAX_SESSIONS_PER_ACCOUNT} previews running, as many as it may: stop one first.` });
+    return jsonResponse(200, { id: sessionId, expiresAt: registered.expiresAt });
+}
+
+const SESSION_ROUTES = Object.freeze({
+    PUT: authenticated(putSessionRoute),
+    DELETE: authenticated(async ({ deps, sessionId }, user) => {
+        const removed = isSessionId(sessionId) && await deps.sessions.remove(user.id, sessionId);
+        return removed ? noContent() : jsonResponse(404, { error: NO_SESSION });
+    }),
+    GET: authenticated(async ({ deps, sessionId }, user) => {
+        const session = isSessionId(sessionId) ? await deps.sessions.find(user.id, sessionId) : null;
+        return session ? jsonResponse(200, session) : jsonResponse(404, { error: NO_SESSION });
+    }, { kinds: APP_ONLY }),
+});
+
 const ROUTES = Object.freeze({
     'POST /v1/login/device': deviceRoute,
     'POST /v1/login/token': tokenRoute,
@@ -200,6 +228,7 @@ const ROUTES = Object.freeze({
     'POST /v1/device/token': deviceTokenRoute,
     'GET /v1/usage': authenticated(usageRoute),
     'GET /v1/account': authenticated((context, user) => jsonResponse(200, { id: user.id, name: nameOf(user) }), { kinds: EVERY_KIND }),
+    'GET /v1/sessions': authenticated(async ({ deps }, user) => jsonResponse(200, { sessions: await deps.sessions.list(user.id) }), { kinds: APP_ONLY }),
     'DELETE /v1/token': authenticated(async ({ deps }, user, token) => {
         await deps.accounts.revokeToken(token);
         log({ event: 'token-revoked', who: userKey(user.id), all: false });
@@ -221,6 +250,9 @@ const ROUTES = Object.freeze({
 
 // context: the request, env, deps, settings and caller's network of worker/api.js.
 export function handleAccountRequest(context) {
-    const route = ROUTES[`${context.request.method} ${new URL(context.request.url).pathname}`];
-    return route ? route(context) : jsonResponse(404, { error: 'Not found.' });
+    const { method } = context.request;
+    const { pathname } = new URL(context.request.url);
+    const session = SESSION_PATH.exec(pathname);
+    const route = session ? SESSION_ROUTES[method] : ROUTES[`${method} ${pathname}`];
+    return route ? route({ ...context, sessionId: session?.[1] }) : jsonResponse(404, { error: 'Not found.' });
 }
