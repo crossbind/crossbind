@@ -5,6 +5,8 @@ export const MAX_TOKENS_PER_USER = 20;
 export const TOKEN_IDLE_DAYS = 90;
 
 const TOKEN_PATTERN = /^cbt_[A-Za-z0-9_-]{43}$/;
+// A device on the account's page is named by the first 64 bits of its token's hash.
+export const DEVICE_REF_LENGTH = 16;
 const DAY_MS = 24 * 3600 * 1000;
 // Every authenticated call reads its token; writing back each use would turn every read into a write.
 const TOUCH_EVERY_MS = 3600 * 1000;
@@ -87,9 +89,11 @@ export function createAccounts(db, now = () => Date.now(), drawId = randomAccoun
             for (let attempt = 0; attempt < MAX_SIGN_IN_ATTEMPTS; attempt += 1) {
                 const identity = await db.prepare('SELECT user_id, unlinked_at FROM identities WHERE provider = ? AND subject = ?').bind(provider, subject).first();
                 if (identity?.unlinked_at === null) {
+                    // A blocked account's row stays as it is: the sign-in it refuses writes nothing to it.
                     const row = await db.prepare(`INSERT INTO users (id, login, created_at, last_login_at) VALUES (?1, ?2, ?3, ?3)
-                        ON CONFLICT (id) DO UPDATE SET login = excluded.login, last_login_at = excluded.last_login_at
-                        RETURNING id, login, blocked`).bind(identity.user_id, login, timestamp()).first();
+                        ON CONFLICT (id) DO UPDATE SET login = excluded.login, last_login_at = excluded.last_login_at WHERE users.blocked = 0
+                        RETURNING id, login, blocked`).bind(identity.user_id, login, timestamp()).first()
+                        ?? await db.prepare('SELECT id, login, blocked FROM users WHERE id = ?').bind(identity.user_id).first();
                     return { user: userOf(row) };
                 }
                 if (identity) {
@@ -102,10 +106,13 @@ export function createAccounts(db, now = () => Date.now(), drawId = randomAccoun
             throw new Error(`no account could be made for this ${provider} sign-in`);
         },
 
-        // Whether an account still exists, as a session of another browser may outlive it, and whether it is blocked.
+        // Whether an account still exists, as a session of another browser may outlive it, whether it is blocked, its
+        // name, and when it last signed out everywhere: no cookie made before then counts.
         async standing(id) {
-            const blocked = await db.prepare('SELECT blocked FROM users WHERE id = ?').bind(id).first('blocked');
-            return { exists: blocked !== null, blocked: blocked === 1 };
+            const row = await db.prepare('SELECT login, blocked, signed_out_at FROM users WHERE id = ?').bind(id).first();
+            return {
+                exists: row !== null, blocked: row?.blocked === 1, login: row?.login ?? '', signedOutAt: row?.signed_out_at ?? null,
+            };
         },
 
         // The account and its tokens go at once. Its seconds of the current month stay under the bare id until the
@@ -165,8 +172,28 @@ export function createAccounts(db, now = () => Date.now(), drawId = randomAccoun
             if (isTokenShaped(token)) await db.prepare('DELETE FROM tokens WHERE hash = ?').bind(await hashOf(token)).run();
         },
 
-        async revokeTokens(userId) {
-            await db.prepare('DELETE FROM tokens WHERE user_id = ?').bind(userId).run();
+        // Every token of the account, and every cookie of the site made before this moment.
+        async signOutEverywhere(userId) {
+            await db.batch([
+                db.prepare('UPDATE users SET signed_out_at = ? WHERE id = ?').bind(timestamp(), userId),
+                db.prepare('DELETE FROM tokens WHERE user_id = ?').bind(userId),
+            ]);
+        },
+
+        // The account's devices, its tokens by the last use, each named by a reference that is neither the token nor
+        // its whole hash.
+        async devices(userId) {
+            const { results } = await db.prepare(`SELECT substr(hash, 1, ${DEVICE_REF_LENGTH}) AS ref, kind, label, created_at, last_used_at FROM tokens
+                WHERE user_id = ? ORDER BY last_used_at DESC, created_at DESC`).bind(userId).all();
+            return results.map((row) => ({
+                ref: row.ref, kind: row.kind, label: row.label, createdAt: row.created_at, lastUsedAt: row.last_used_at,
+            }));
+        },
+
+        // Whether a device of the account had that reference, whose token is now revoked.
+        async revokeDevice(userId, ref) {
+            const { meta } = await db.prepare(`DELETE FROM tokens WHERE user_id = ? AND substr(hash, 1, ${DEVICE_REF_LENGTH}) = ?`).bind(userId, ref).run();
+            return meta.changes > 0;
         },
 
         // Seconds a cloud runner was up until `at`, for its user and image, and for everyone's month and day.

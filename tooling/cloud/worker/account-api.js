@@ -125,8 +125,9 @@ const ROUTES = Object.freeze({
         log({ event: 'token-revoked', who: userKey(user.id), all: false });
         return noContent();
     }, { kinds: EVERY_KIND }),
+    // `crossbind logout --all` does what the account's page does as "Sign out everywhere": the browsers go too.
     'DELETE /v1/tokens': authenticated(async ({ deps }, user) => {
-        await deps.accounts.revokeTokens(user.id);
+        await deps.accounts.signOutEverywhere(user.id);
         log({ event: 'token-revoked', who: userKey(user.id), all: true });
         return noContent();
     }, { kinds: EVERY_KIND }),
