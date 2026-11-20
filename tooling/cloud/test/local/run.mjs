@@ -1,11 +1,12 @@
 // The account's page against a local Worker: `wrangler dev` of wrangler.jsonc beside this file, on a local D1 made for
-// the run, and Chromium signing in on /login through a stand-in for GitHub's page, signing devices out, signing out
-// everywhere and deleting the account, while the site, an origin of the same site as the API's, is refused. Made-up
-// accounts alone; Chromium resolves no name but localhost, so nothing leaves this machine, a redirect included.
-// Chromium comes from the workspace's Playwright.
+// the run, and Chromium signing in on /login through stand-ins for GitHub's page and Apple's, signing devices out,
+// signing out everywhere and deleting the account, while the site, an origin of the same site as the API's, is refused;
+// then a first sign-in's question, linking and unlinking both ways, and an identity held with the day workerd words.
+// Made-up accounts alone, and an Apple key made for the run; Chromium resolves no name but localhost, so nothing leaves
+// this machine, a redirect included. Chromium comes from the workspace's Playwright.
 // usage: node test/local/run.mjs
 import { execFileSync, spawn } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, webcrypto } from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
 import net from 'node:net';
@@ -17,12 +18,13 @@ import { chromium } from '@playwright/test';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PACKAGE_DIR = path.resolve(HERE, '../..');
 const CONFIG = path.join(HERE, 'wrangler.jsonc');
-// The GitHub account the stand-in answers for (wrangler.jsonc).
+// The GitHub account the stand-in answers for, and Apple's Services ID (wrangler.jsonc).
 const NAME = 'made_up_local';
-const GITHUB_AUTHORIZE = 'https://github.com/login/oauth/authorize';
-const SIGN_IN_STARTS = new Set(['/account/login/github', '/playground/login/github']);
+const SERVICES_ID = 'dev.made-up.local';
+const AUTHORIZE = Object.freeze({ github: 'https://github.com/login/oauth/authorize', apple: 'https://appleid.apple.com/auth/authorize' });
+// A sign-in's start, a link, or a link's, a form of the page.
+const SIGN_IN_STARTS = /^\/account\/(login|link)\/(github|apple)$|^\/playground\/login\/github$/;
 const READY_MS = 60_000;
-const POLICY = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
 
 const results = [];
 function check(name, ok, detail) {
@@ -46,6 +48,13 @@ const API = `http://localhost:${apiPort}`;
 // cookie with its requests, and the Worker takes it for the playground (ALLOWED_ORIGINS) and for nothing of the account.
 const SITE = `http://localhost:${sitePort}`;
 const PLAYGROUND = `${SITE}/playground/`;
+const POLICY = `default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; form-action 'self' https://github.com https://appleid.apple.com ${SITE}; frame-ancestors 'none'; base-uri 'none'`;
+// Apple's key for this run alone, and the public key its stand-in checks the client secret with.
+const APPLE_KEYS = await webcrypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+const [APPLE_PRIVATE_KEY, APPLE_PUBLIC_KEY] = [
+    Buffer.from(await webcrypto.subtle.exportKey('pkcs8', APPLE_KEYS.privateKey)).toString('base64'),
+    Buffer.from(await webcrypto.subtle.exportKey('spki', APPLE_KEYS.publicKey)).toString('base64'),
+];
 const wranglerArgs = (args) => ['exec', 'wrangler', ...args, '--config', CONFIG, '--persist-to', state];
 const wranglerEnv = { ...process.env, WRANGLER_SEND_METRICS: 'false' };
 
@@ -80,22 +89,24 @@ async function ready(output) {
     throw new Error(`wrangler dev did not answer on ${API}/login within ${READY_MS / 1000} s:\n${output.join('')}`);
 }
 
-// What the Worker sent each browser to GitHub with.
-const githubAsked = [];
+// What the Worker sent each browser to GitHub and to Apple with.
+const asked = { github: [], apple: [] };
 
-// A browser of its own. GitHub's sign-in page is played at the start of a sign-in: the Worker's redirect to it is read,
-// and the browser goes straight back to the callback it names, with a code that carries the challenge, as GitHub's page
-// would after its user's yes. Playwright routes no redirect's target, so the start is where it can be played.
+// A browser of its own. The provider's sign-in page is played at the start of a sign-in or a link: the Worker's redirect
+// to it is read, and the browser goes straight back to the callback it names, with a code that carries the challenge
+// or the nonce, as the provider's page would after its user's yes. Playwright routes no redirect's target, so the start
+// is where it can be played; a link's start, a form's POST, is sent with its Origin and the browser's cookies.
 async function newBrowser(browser) {
     const context = await browser.newContext();
-    await context.route((url) => url.origin === API && SIGN_IN_STARTS.has(url.pathname), async (route) => {
+    await context.route((url) => url.origin === API && SIGN_IN_STARTS.test(url.pathname), async (route) => {
         const started = await route.fetch({ maxRedirects: 0 });
-        const asked = new URL(started.headers().location);
-        githubAsked.push(asked);
-        if (`${asked.origin}${asked.pathname}` !== GITHUB_AUTHORIZE) return route.fulfill({ response: started });
-        const back = new URL(asked.searchParams.get('redirect_uri'));
-        back.searchParams.set('code', Buffer.from(JSON.stringify({ challenge: asked.searchParams.get('code_challenge') })).toString('base64url'));
-        back.searchParams.set('state', asked.searchParams.get('state'));
+        const location = started.headers().location ? new URL(started.headers().location) : null;
+        const provider = Object.keys(AUTHORIZE).find((name) => location && `${location.origin}${location.pathname}` === AUTHORIZE[name]);
+        if (!provider) return route.fulfill({ response: started });
+        asked[provider].push(location);
+        const back = new URL(location.searchParams.get('redirect_uri'));
+        back.searchParams.set('code', Buffer.from(JSON.stringify({ challenge: location.searchParams.get('code_challenge'), nonce: location.searchParams.get('nonce') })).toString('base64url'));
+        back.searchParams.set('state', location.searchParams.get('state'));
         return route.fulfill({ response: started, headers: { ...started.headers(), location: back.href } });
     });
     return context.newPage();
@@ -106,6 +117,22 @@ async function signIn(page) {
     await page.click('a:has-text("Sign in with GitHub")');
     const notice = await (await page.waitForSelector('[data-notice]:not([hidden])')).getAttribute('data-notice');
     if (notice !== 'login=ok') throw new Error(`signing in ended with ${notice} at ${page.url()}`);
+}
+
+// A click that leaves the page, and the notice the page it lands on shows from its cookie, if any.
+async function submit(page, selector) {
+    await Promise.all([page.waitForNavigation({ waitUntil: 'load' }), page.click(selector)]);
+    const notice = page.locator('p.notice[role="status"]');
+    return (await notice.count()) === 0 ? null : notice.textContent();
+}
+
+// The first of next month in words, as Node's own locale words it: the held identity's day, which the Worker words
+// without a locale under workerd.
+function firstOfNextMonth() {
+    const now = new Date();
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toLocaleDateString('en-GB', {
+        day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
+    });
 }
 
 const signedIn = async (page) => (await page.textContent('main')).includes(`Signed in as ${NAME}`);
@@ -125,10 +152,10 @@ async function run(browser) {
     const headers = first.headers();
     check('/login comes from the Worker with its policy', first.status() === 200 && headers['content-security-policy'] === POLICY
         && headers['referrer-policy'] === 'same-origin' && headers['x-content-type-options'] === 'nosniff' && headers['cache-control'] === 'no-store', headers['content-security-policy']);
-    check('signed out, it offers to sign in with GitHub', await page.isVisible('a:has-text("Sign in with GitHub")'));
+    check('signed out, it offers to sign in with GitHub and with Apple', await page.isVisible('a:has-text("Sign in with GitHub")') && await page.isVisible('a:has-text("Sign in with Apple")'));
 
     const [kept, revoked] = [await cliSignIn(), await cliSignIn()];
-    check('two machines signed in with crossbind login as the same GitHub account', [kept, revoked].every((token) => /^cbt_/.test(token ?? '')) && await usage(kept) === 200);
+    check('two machines signed in with crossbind login as the same GitHub account, whose account its route of before made at once', [kept, revoked].every((token) => /^cbt_/.test(token ?? '')) && await usage(kept) === 200);
 
     await signIn(page);
     check('signed in through the stand-in for GitHub: the notice shown, the address cleared, the name and both devices listed',
@@ -165,15 +192,92 @@ async function run(browser) {
     await page.waitForSelector('[data-notice="deleted"]:not([hidden])');
     check('deleted from the page once its box is ticked, and this browser signed out', heldUnticked && !(await signedIn(page)));
 
-    const back = [];
-    for (const start of ['/account/login/github?next=playground', '/playground/login/github']) {
-        await page.goto(`${API}${start}`);
-        await page.waitForURL((url) => url.href.startsWith(PLAYGROUND));
-        back.push(page.url());
-    }
-    check('the playground\'s sign-in, by the new start and by the one of before, comes back to the playground', back.every((url) => url === `${PLAYGROUND}#login=ok`), back.join(', '));
-    check('every sign-in went to GitHub\'s page with the callback GitHub knows, PKCE and no scope', githubAsked.length === 5 && githubAsked.every((asked) => `${asked.origin}${asked.pathname}` === GITHUB_AUTHORIZE
-        && asked.searchParams.get('redirect_uri') === `${API}/playground/callback/github` && asked.searchParams.get('code_challenge_method') === 'S256' && !asked.searchParams.has('scope')), `${githubAsked.length} sign-ins`);
+    // The GitHub account's crossbind account is gone with no build seconds, so the GitHub account is new again.
+    await page.goto(`${API}/login?next=playground`);
+    await page.click('a:has-text("Sign in with GitHub")');
+    await page.waitForSelector('.question');
+    const question = await page.textContent('.question');
+    await Promise.all([page.waitForURL((url) => url.href.startsWith(PLAYGROUND)), page.click('button:has-text("Make a new account")')]);
+    const made = page.url();
+    await page.goto(`${API}/playground/login/github`);
+    await page.waitForURL((url) => url.href.startsWith(PLAYGROUND));
+    check('the playground\'s Sign in: its page asks a first sign-in, Make a new account goes on to the playground, a form\'s redirect the policy lets out, and the start of before comes back to it',
+        question.includes('No crossbind account signs in with this GitHub account yet.') && made === `${PLAYGROUND}#login=ok` && page.url() === `${PLAYGROUND}#login=ok`, `${made}, ${page.url()}`);
+
+    await runApple(browser, page);
+
+    const seen = await (await fetch(`${API}/__standin/apple`)).json();
+    const github = asked.github.every((each) => `${each.origin}${each.pathname}` === AUTHORIZE.github
+        && each.searchParams.get('redirect_uri') === `${API}/playground/callback/github` && each.searchParams.get('code_challenge_method') === 'S256' && !each.searchParams.has('scope'));
+    const apple = asked.apple.every((each) => each.searchParams.get('client_id') === SERVICES_ID && each.searchParams.get('redirect_uri') === `${API}/playground/callback/apple`
+        && each.searchParams.get('response_type') === 'code' && each.searchParams.get('response_mode') === 'query' && /^[A-Za-z0-9_-]{43}$/.test(each.searchParams.get('nonce') ?? '') && !each.searchParams.has('scope'));
+    check('every sign-in and link went to its provider\'s page with the callback it lists and no scope, GitHub\'s with PKCE and Apple\'s in query mode with a nonce; each of Apple\'s codes was exchanged with a client secret its stand-in verified, and each refresh token revoked',
+        github && apple && asked.apple.length > 0 && seen.secrets === asked.apple.length && seen.refused === 0 && new Set(seen.revoked).size === asked.apple.length,
+        `${asked.github.length} to GitHub, ${asked.apple.length} to Apple, ${seen.secrets} secrets verified, ${seen.revoked.length} revoked`);
+}
+
+// Apple's part, after the GitHub account's own: `owner` is signed in to the account the GitHub account made from the
+// playground.
+async function runApple(browser, owner) {
+    const apple = await newBrowser(browser);
+    await apple.goto(`${API}/login`);
+    await apple.click('a:has-text("Sign in with Apple")');
+    await apple.waitForSelector('.question');
+    const question = await apple.textContent('.question');
+    await submit(apple, 'button:has-text("Make a new account")');
+    const named = /Signed in as Apple account …\d{4}\./.exec(await apple.textContent('main'))?.[0];
+    check('a first sign-in with Apple asks, and Make a new account makes an account named by the last four digits of its id',
+        question.includes('No crossbind account signs in with this Apple ID yet.') && named !== undefined, named);
+
+    // A browser of the same account whose link goes to GitHub's page itself: the policy lets the form's redirect leave
+    // for it, and the resolver finds no name there, so nothing leaves this machine.
+    const bare = await browser.newContext();
+    await bare.addCookies(await apple.context().cookies());
+    const leaving = await bare.newPage();
+    const refusals = [];
+    leaving.on('console', (message) => { if (/Content Security Policy/.test(message.text())) refusals.push(message.text()); });
+    const failed = new Promise((resolve) => { leaving.on('requestfailed', (request) => { if (request.url().startsWith(AUTHORIZE.github)) resolve(request.failure()?.errorText); }); });
+    await leaving.goto(`${API}/login`);
+    await leaving.click('button:has-text("Link a GitHub account")');
+    const left = await Promise.race([failed, new Promise((resolve) => { setTimeout(() => resolve('no request'), 5000); })]);
+    await bare.close();
+    check('a link\'s form leaves for the provider\'s page, a redirect its form-action lets out', left === 'net::ERR_NAME_NOT_RESOLVED' && refusals.length === 0, `${left}; ${refusals.join(' ')}`);
+
+    const taken = await submit(apple, 'button:has-text("Link a GitHub account")');
+    check('a GitHub account that signs in to another account does not link, and the page names that account',
+        taken === `This GitHub account already signs in to another crossbind account (${NAME}). To link it here, sign in with it and delete that account, then link it again.`, taken);
+
+    await owner.goto(`${API}/login`);
+    await owner.check('input[name="confirm"]');
+    await submit(owner, 'button:has-text("Delete account")');
+    const linked = await submit(apple, 'button:has-text("Link a GitHub account")');
+    check('once that account is deleted, the GitHub account links: one account with both, named by GitHub',
+        linked === 'The GitHub account is linked: it signs in to this account too.' && (await apple.textContent('main')).includes(`Signed in as ${NAME}`) && await apple.locator('.sign-ins li').count() === 2, linked);
+
+    const unlinked = await submit(apple, 'li:has-text("Apple ID") button:has-text("Unlink")');
+    const other = await newBrowser(browser);
+    await other.goto(`${API}/login`);
+    await other.click('a:has-text("Sign in with Apple")');
+    await other.waitForSelector('.question');
+    await submit(other, 'a:has-text("I have an account with GitHub")');
+    const offered = await other.isVisible('text=Link this Apple ID?');
+    const linkedBack = await submit(other, 'button:has-text("Link it to this account")');
+    check('an Apple ID unlinked with no build seconds is free at once: its next sign-in asks again, and the question\'s other answer, GitHub\'s sign-in, links it to the account',
+        unlinked === 'The Apple ID is unlinked: it no longer signs in to this account.' && offered && linkedBack === 'The Apple ID is linked: it signs in to this account too.', `${unlinked}; ${linkedBack}`);
+
+    await fetch(`${API}/__standin/seconds?provider=apple`, { method: 'POST' });
+    await apple.goto(`${API}/login`);
+    const held = await submit(apple, 'li:has-text("GitHub account") button:has-text("Unlink")');
+    const elsewhere = await newBrowser(browser);
+    await elsewhere.goto(`${API}/login`);
+    const refused = await submit(elsewhere, 'a:has-text("Sign in with GitHub")');
+    const day = firstOfNextMonth();
+    check(`with build seconds this month, the unlinked GitHub account is held until ${day}: workerd words the day as Node's locale does`,
+        held === `The GitHub account is unlinked. As this account has cloud build minutes this month, it signs in to nothing until ${day}, and can be linked back here before then.`
+        && refused === `This GitHub account was unlinked from a crossbind account this month: it signs in again from ${day}, and can be linked back to that account now.`, `${held}; ${refused}`);
+
+    const back = await submit(apple, 'button:has-text("Link a GitHub account")');
+    check('the held GitHub account links back to the account it left', back === 'The GitHub account is linked: it signs in to this account too.', back);
 }
 
 const output = [];
@@ -181,7 +285,8 @@ let browser;
 let dev;
 try {
     execFileSync('pnpm', wranglerArgs(['d1', 'migrations', 'apply', 'DB', '--local']), { cwd: PACKAGE_DIR, env: wranglerEnv, stdio: 'inherit' });
-    dev = spawn('pnpm', wranglerArgs(['dev', '--port', String(apiPort), '--var', `ALLOWED_ORIGINS:${SITE}`, '--var', `PLAYGROUND_URL:${PLAYGROUND}`]), {
+    dev = spawn('pnpm', wranglerArgs(['dev', '--port', String(apiPort), '--var', `ALLOWED_ORIGINS:${SITE}`, '--var', `PLAYGROUND_URL:${PLAYGROUND}`,
+        '--var', `APPLE_PRIVATE_KEY:${APPLE_PRIVATE_KEY}`, '--var', `STANDIN_APPLE_PUBLIC_KEY:${APPLE_PUBLIC_KEY}`]), {
         cwd: PACKAGE_DIR, env: wranglerEnv, stdio: ['ignore', 'pipe', 'pipe'], detached: true,
     });
     dev.stdout.on('data', (chunk) => output.push(chunk.toString()));
