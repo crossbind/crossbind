@@ -5,8 +5,10 @@ import PRIVACY_PAGE from '../src/pages/privacy.js';
 import { SITE_ROUTES } from '../src/site-pages.js';
 import { PLAY_SCOPE } from '../../extensions/google-play/src/googlePlay.js';
 import { TOKEN_IDLE_DAYS, USAGE_MONTHS_KEPT } from '../../tooling/cloud/worker/accounts.js';
-import { SESSION_TTL_MS } from '../../tooling/cloud/worker/session.js';
+import { minAccountDays } from '../../tooling/cloud/worker/oauth.js';
+import { PENDING_TTL_SECONDS, SESSION_TTL_MS } from '../../tooling/cloud/worker/session.js';
 import { RUNNER_IDLE_SECONDS } from '../../tooling/cloud/worker/runner-api.js';
+import { settingsOf } from '../../tooling/cloud/worker/settings.js';
 
 const DAY_MS = 24 * 3600 * 1000;
 const text = JSON.stringify(PRIVACY_PAGE);
@@ -23,6 +25,18 @@ test('names the periods crossbind cloud enforces', () => {
     assert.equal(RUNNER_IDLE_SECONDS, 60);
     assert.ok(text.includes('a minute after your last step'));
     assert.ok(!text.includes('two minutes'));
+});
+
+test('names what an account with no GitHub account linked has, and how long a first sign-in waits', () => {
+    const wrangler = readFileSync(new URL('../../tooling/cloud/wrangler.jsonc', import.meta.url), 'utf8');
+    const production = wrangler.slice(0, wrangler.indexOf('"env"'));
+    // The Worker's own defaults, and production's vars, which deploy over them.
+    assert.equal(minAccountDays({}), 30);
+    assert.equal(settingsOf({}).newAccountDaily, 20);
+    assert.ok(production.includes('"MIN_GITHUB_ACCOUNT_DAYS": "30"') && production.includes('"NEW_ACCOUNT_DAILY": "20"'));
+    assert.ok(text.includes('compiles 20 a day of its own') && text.includes('for its first 30 days'));
+    assert.equal(PENDING_TTL_SECONDS, 600);
+    assert.ok(text.includes('for ten minutes') && text.includes('Ten minutes, in your browser alone'));
 });
 
 test("names the one permission the CLI's Google Play sign-in asks for, and the keychain entry it keeps", () => {
