@@ -4,12 +4,13 @@ import { randomBytes } from 'node:crypto';
 import { createAccounts } from '../worker/accounts.js';
 import { handleRequest } from '../worker/api.js';
 import {
-    createProjectSessions, isLocalAddress, DEV_SESSION_SECONDS, MAX_SESSIONS_PER_ACCOUNT,
+    createProjectSessions, devSessionOf, isLocalAddress, DEV_SESSION_SECONDS, MAX_SESSIONS_PER_ACCOUNT,
 } from '../worker/project-sessions.js';
 import { createQuota } from '../worker/quota.js';
 import { memoryStorage } from '../scripts/memory-storage.mjs';
 import { sqliteD1 } from '../scripts/sqlite-d1.mjs';
 import { isLocalSource } from '../../../core/crossbind/src/utils/previewAddress.js';
+import { listedNameProblem } from '../../../core/crossbind/src/utils/previewSession.js';
 
 // The sessions crossbind app preview registers for an account's devices: the CLI's token registers, renews and removes
 // one, the crossbind app's lists them with their keys, and nothing of one reaches another account.
@@ -304,6 +305,14 @@ test('takes a dev server\'s address as crossbind app preview\'s own rule does, i
 
     assert.deepEqual(hosts.map((host) => isLocalAddress(asSent(host))), hosts.map((host) => isLocalSource(host)));
     assert.deepEqual(['192.168.001.6:5173', 'MADE-UP.local:5173', '[FD00::1]:5173', '[fd00:0::1]:5173'].map(isLocalAddress), [false, false, false, false]);
+});
+
+test('takes a project\'s name as crossbind app preview\'s own rule does, which stops a preview before it asks', () => {
+    const names = ['demo', '@made-up/app 2.0_x', 'ünlü-uygulama', '例え', 'a'.repeat(64), '', 'a'.repeat(65), 'made-up#app', 'tab\tname', 'emoji🙂'];
+    const taken = (name) => devSessionOf(devSession({ project: { id: newId(), name } })) !== null;
+
+    assert.deepEqual(names.map(taken), names.map((name) => listedNameProblem(name) === null));
+    assert.deepEqual(names.map(taken), [true, true, true, true, true, false, false, false, false, false]);
 });
 
 test('logs nothing of a session: no id, key, address or project', async (t) => {

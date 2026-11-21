@@ -168,6 +168,23 @@ describe('crossbind app preview', () => {
         }
     });
 
+    test('stops before it asks crossbind cloud anything where the project\'s name is one the cloud lists no project by, saying what to set', async () => {
+        const cloud = await standInCloud();
+        signIn(cloud);
+        try {
+            for (const name of ['a'.repeat(65), 'made-up#app']) {
+                projectWith(`export default { general: { name: ${JSON.stringify(name)} } };\n`);
+                const { status, stdout, stderr } = await previewWith(cloud);
+                expect(status).toBe(1);
+                expect(stderr).toContain(`crossbind: crossbind app preview lists this project on your account by its name, ${JSON.stringify(name)}, which crossbind cloud takes as 1 to 64 letters, digits, spaces and ._@/- alone: set general.name in crossbind.config.js to such a name.`);
+                expect(stdout).not.toContain('VITE');
+            }
+            expect(cloud.calls).toEqual([]);
+        } finally {
+            cloud.close();
+        }
+    });
+
     test('stops before Vite, asking for crossbind login, where this machine is not signed in, or its sign-in no longer holds', async () => {
         projectWith('export default {};\n');
         const cloud = await standInCloud();

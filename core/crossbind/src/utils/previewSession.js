@@ -14,8 +14,17 @@ const KEY_BYTES = 32;
 const BASE64URL_32 = /^[A-Za-z0-9_-]{43}$/;
 // A range of protocols an app takes, as it asks for a session: least-most.
 const PROTOCOLS = /^(\d{1,6})-(\d{1,6})$/;
+// What crossbind cloud lists a project by on the account's list (tooling/cloud/worker/project-sessions.js).
+const LISTED_NAME = /^[\p{L}\p{N} ._@/-]{1,64}$/u;
 
 export const newPreviewKey = () => crypto.randomBytes(KEY_BYTES).toString('base64url');
+
+// The words that stop a preview whose project's name crossbind cloud does not list a project by, before it asks the
+// cloud anything, or null: the cloud's refusal would name no cause.
+export function listedNameProblem(name) {
+    if (typeof name === 'string' && LISTED_NAME.test(name)) return null;
+    return `crossbind: crossbind app preview lists this project on your account by its name, ${JSON.stringify(name)}, which crossbind cloud takes as 1 to 64 letters, digits, spaces and ._@/- alone: set general.name in crossbind.config.js to such a name.`;
+}
 
 // 32 bytes in base64url in the one form that decodes to them, so no other text stands for the same bytes: a key and a
 // challenge.
