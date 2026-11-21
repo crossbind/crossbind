@@ -143,10 +143,12 @@ export function previewSocketGate(configOf, logger) {
 }
 
 // What crossbind app preview hands the dev server it starts, in CROSSBIND_APP_PREVIEW: the key, where it listens and
-// the address and port a device reaches it at, and the session; null where it started none.
+// the address and port a device reaches it at, and the session; or { build: true } for the web build --cloud uploads,
+// which serves nothing and takes no key; null where it started none.
 export function previewOf(env = process.env) {
     if (!env.CROSSBIND_APP_PREVIEW) return null;
     const preview = JSON.parse(env.CROSSBIND_APP_PREVIEW);
+    if (preview?.build === true) return preview;
     if (!isBase64url32(preview?.key)) throw new Error('crossbind: CROSSBIND_APP_PREVIEW holds no key: crossbind app preview sets it.');
     return preview;
 }

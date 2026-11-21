@@ -210,15 +210,21 @@ function appDevPlugin() {
 // starts, and opens its socket to this server at the one address a device reaches; the server answers the device that
 // opened it alone. Vite turns an external id that is no URL into one it loads, so PAGE_API_PATH loads a module that says
 // where it belongs; the dependency optimizer would bundle the project's own copy of crossbind/app, so it leaves it out.
+// The web build --cloud uploads takes the page's part alone: no server, and no key.
 function previewPlugin() {
-    const host = net.isIPv6(preview.address) ? `[${preview.address}]` : preview.address;
     return {
         name: 'vite-plugin-crossbind-preview',
         enforce: 'pre',
-        config() {
-            return {
+        config(userConfig, { command }) {
+            const page = {
                 define: { 'import.meta.env.CROSSBIND_APP_PLATFORM': 'globalThis.__crossbind_device?.platform' },
                 optimizeDeps: { exclude: ['crossbind/app', 'crossbind/app/core'] },
+            };
+            if (command !== 'serve') return page;
+            if (preview.build) throw new Error("crossbind: CROSSBIND_APP_PREVIEW names a preview's web build, which serves nothing: crossbind app preview sets it.");
+            const host = net.isIPv6(preview.address) ? `[${preview.address}]` : preview.address;
+            return {
+                ...page,
                 server: {
                     host: preview.listen,
                     port: preview.port,
