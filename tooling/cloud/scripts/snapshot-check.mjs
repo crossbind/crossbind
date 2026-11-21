@@ -3,7 +3,7 @@
 // up. A test client signs in twice with codes approved on the cloud's device page by the account to check: as
 // `crossbind login` does, to upload, and as the crossbind app does, to list and open, as the app's proxy asks the
 // snapshot host. Its uploads are of a made-up project, the same at each run, so the account keeps one snapshot of it, for
-// 30 days after its last upload. With --session, the link `crossbind app preview --cloud` printed for that account, it
+// 30 days after its last upload: its row then holds 513,024 bytes, the archive of 500 files that hold 3,435. With --session, the link `crossbind app preview --cloud` printed for that account, it
 // first opens that snapshot. About 100 MB go up in all. Both tokens are signed out; no token, key or id is printed.
 // usage: node scripts/snapshot-check.mjs [--session <link>] [--url https://api-staging.crossbind.dev] [--snapshots https://snapshots-staging.crossbind.dev]
 import { createHash, createHmac, randomBytes } from 'node:crypto';

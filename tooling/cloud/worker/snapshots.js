@@ -298,10 +298,12 @@ export function createSnapshots(db, bucket, now = () => Date.now(), indexes = IS
             let done;
             try {
                 await bucket.put(keys[1], JSON.stringify(passed.entries));
-                // Live only while the snapshot is: one that ended meanwhile goes back through start(), which counts it.
+                // Live only while the snapshot is: one that ended meanwhile goes back through start(), which counts it. The row's
+                // bytes are what R2 holds of the upload, its archive's length, which the total reads; the caps and the
+                // answer count its files' bytes.
                 done = await db.prepare(`UPDATE sessions SET upload = ?1, bytes = ?2, version = version + 1, expires_at = ?3
                     WHERE id = ?4 AND user_id = ?5 AND source = 'snapshot' AND expires_at > ?6 RETURNING version, expires_at`)
-                    .bind(upload, passed.bytes, timestamp(at + SNAPSHOT_DAYS * DAY_MS), id, userId, timestamp(now())).first();
+                    .bind(upload, declared, timestamp(at + SNAPSHOT_DAYS * DAY_MS), id, userId, timestamp(now())).first();
             } catch (error) {
                 await discard();
                 throw failed(error);
