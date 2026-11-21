@@ -10,7 +10,7 @@ export default {
     slug: 'privacy',
     title: 'Privacy',
     description: 'What crossbind.dev, the playground and crossbind cloud keep about you, for how long, how to delete it, and where a Google sign-in for publishing stays.',
-    lede: 'crossbind.dev has no analytics and sets no tracking cookies. The playground and crossbind cloud keep what they need to run and to stop abuse: your GitHub id and name, or Apple\'s id for you, once you sign in, and how much you used. No email, no GitHub or Apple token, nothing to pay with. A Google sign-in for publishing to Google Play stays on your machine. Last changed 21 November 2026.',
+    lede: 'crossbind.dev has no analytics and sets no tracking cookies. The playground and crossbind cloud keep what they need to run and to stop abuse: your GitHub id and name, or Apple\'s id for you, once you sign in, how much you used, and a project\'s web build that you upload as a snapshot. No email, no GitHub or Apple token, nothing to pay with. A Google sign-in for publishing to Google Play stays on your machine. Last changed 21 November 2026.',
     section: 'Privacy',
     path: '/privacy',
     href: '/privacy/',
@@ -41,6 +41,7 @@ export default {
                 'A cloud build sends your native sources and build files to a runner of your own, a virtual machine that only your builds use. It reaches crates.io, ConanCenter and GitHub, and only to download. It is stopped and wiped a minute after your last step; the files a step produces come back to your machine.',
                 'crossbind cloud records how long your runners were up, per month and toolchain image, against your monthly minutes; `crossbind usage` shows it.',
                 'While `crossbind app preview` runs, crossbind cloud keeps its session on your account\'s list, for your own devices: the project\'s name, an id made from its name and folder, the dev server\'s address on your network, and the key that pairs a device with it. Only the crossbind app signed in to your account reads them. Stopping the preview deletes its session; one that ends without stopping, as when its machine sleeps, leaves your devices\' list within ten minutes, and is deleted within a day.',
+                '`crossbind app preview --cloud` uploads your project\'s web build to crossbind cloud as a snapshot, which the crossbind app signed in to your account opens from anywhere: its files, kept at Cloudflare (R2), with the project\'s name, an id made from its name and folder, and the key that pairs a device with it. Only the crossbind app signed in to your account reads them. A snapshot is kept for 30 days after its last upload; a new upload replaces it, and deleting your account deletes it at once. Its files are looked at only to answer a report of abuse.',
             ],
         },
 
@@ -87,6 +88,7 @@ export default {
                 ["A device's sign-in code, with what asked and its country", 'It works ten minutes, and is deleted within a day'],
                 ['Tokens of the CLI and the crossbind app, as hashes', 'Until you sign out, or 90 days unused'],
                 ["A preview's session: the project's name and id, the dev server's address, the key that pairs a device", 'Until the preview stops; within ten minutes if it ends without stopping, and deleted within a day'],
+                ["A snapshot: your project's web build, its name and id, the key that pairs a device", '30 days after its last upload, or until a new upload replaces it'],
                 ['Your Google sign-in for Google Play', "In your machine's keychain alone, until you end it"],
                 ['Cloud build minutes per month and image', 'The current month and the three before it'],
                 ['Files on your cloud runner', 'Until it stops, a minute after your last step'],
@@ -103,7 +105,7 @@ export default {
         { type: 'code', file: 'shell', code: 'crossbind account delete --yes' },
         {
             type: 'p',
-            text: 'Or sign in on [your account\'s page](https://api.crossbind.dev/login) and press Delete account. Either deletes your account, with the sessions of its previews, and signs out every machine at once. Two things stay after it, under your account\'s id with the GitHub account or Apple ID it signed in with: this month\'s build minutes, until the month ends, so that signing in again does not bring a fresh month; and, for an account blocked for abuse, the block. To also remove crossbind from your GitHub account, revoke it under Settings, Applications, Authorized OAuth Apps.',
+            text: 'Or sign in on [your account\'s page](https://api.crossbind.dev/login) and press Delete account. Either deletes your account, with the sessions of its previews and its snapshots, and signs out every machine at once. Two things stay after it, under your account\'s id with the GitHub account or Apple ID it signed in with: this month\'s build minutes, until the month ends, so that signing in again does not bring a fresh month; and, for an account blocked for abuse, the block. To also remove crossbind from your GitHub account, revoke it under Settings, Applications, Authorized OAuth Apps.',
         },
 
         { type: 'h2', id: 'who', text: 'Who runs it' },
