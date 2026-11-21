@@ -2,6 +2,7 @@ import { askLine, hasTerminal } from '../utils/ask.js';
 import {
     CREDENTIALS_FILE, cloudCredentials, readCredentials, writeCredentials,
 } from '../utils/cloudAccount.js';
+import { archiveLength, archiveStream, webBuildFiles } from '../utils/snapshotArchive.js';
 
 // `crossbind login`, `logout` and `usage`, and crossbind app preview's account and session, against
 // tooling/cloud/worker/account-api.js.
@@ -19,6 +20,8 @@ const NUMBER = /^\s*([1-9]\d)\s*$/;
 const DAY = /^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 const MONTH_NAMES = Object.freeze(['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']);
 const NOT_SIGNED_IN = 'crossbind: crossbind app preview opens on your devices through your crossbind account: run crossbind login first.';
+const NO_SNAPSHOT = 'crossbind: crossbind cloud sent no snapshot.';
+const SNAPSHOT_ID = /^[A-Za-z0-9_-]{22}$/;
 // The cloud lists a dev session ten minutes after its last renewal (tooling/cloud/worker/project-sessions.js).
 export const RENEW_MS = 5 * 60 * 1000;
 // A renewal or the removal waits this long for the cloud, so that a preview never stops on it.
@@ -29,16 +32,22 @@ const wait = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 const printable = (value) => String(value ?? '').replace(/\p{Cc}/gu, '');
 const paceOf = (seconds, fallback) => Math.max(MIN_INTERVAL_SECONDS, Number.isFinite(seconds) ? seconds : fallback);
 
+// `body` goes as JSON; `archive`, { stream, length }, as a snapshot's archive of that length, sent as it is read.
 async function call(fetcher, url, route, {
-    method = 'GET', token, body, signal,
+    method = 'GET', token, body, archive, signal,
 } = {}) {
     let response;
     try {
         // A redirect would carry the token to an address nobody configured.
         response = await fetcher(`${url}${route}`, {
             method,
-            headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...(body ? { 'content-type': 'application/json' } : {}) },
-            body: body && JSON.stringify(body),
+            headers: {
+                ...(token ? { authorization: `Bearer ${token}` } : {}),
+                ...(body ? { 'content-type': 'application/json' } : {}),
+                ...(archive ? { 'content-type': 'application/x-tar', 'content-length': String(archive.length) } : {}),
+            },
+            body: archive ? archive.stream : body && JSON.stringify(body),
+            ...(archive ? { duplex: 'half' } : {}),
             redirect: 'error',
             signal,
         });
@@ -202,6 +211,25 @@ export async function listSession({
     };
 }
 
+// crossbind app preview --cloud's upload (tooling/cloud/worker/snapshots.js): the account's snapshot of the project, made
+// or found again, and the web build in `dir` sent to it as one archive, each file read as it goes. A file at a path the
+// cloud keeps none at stops it before anything is sent. { id, version, expiresOn } as the cloud answers.
+export async function uploadSnapshot({
+    url, token, project, protocol, dir, fetcher = fetch,
+}) {
+    const files = webBuildFiles(dir);
+    const started = await call(fetcher, url, '/v1/snapshots', { method: 'POST', token, body: { project, protocol } });
+    if (!started.ok) throw refused(started);
+    const { id } = started.body;
+    if (!SNAPSHOT_ID.test(id ?? '')) throw new Error(NO_SNAPSHOT);
+    const uploaded = await call(fetcher, url, `/v1/snapshots/${id}`, { method: 'PUT', token, archive: { stream: archiveStream(files), length: archiveLength(files) } });
+    if (!uploaded.ok) throw refused(uploaded);
+    const { version, expiresAt } = uploaded.body;
+    const expiresOn = String(expiresAt).slice(0, 10);
+    if (!Number.isInteger(version) || !DAY.test(expiresOn)) throw new Error(NO_SNAPSHOT);
+    return { id, version, expiresOn };
+}
+
 function formatSeconds(seconds) {
     const whole = Math.max(0, Math.round(seconds));
     const minutes = Math.floor(whole / 60);
@@ -211,7 +239,7 @@ function formatSeconds(seconds) {
 }
 
 // 2026-12-20 as "20 December 2026", as the cloud words its days.
-function dayWords(day) {
+export function dayWords(day) {
     const [, year, month, date] = DAY.exec(day);
     return `${Number(date)} ${MONTH_NAMES[Number(month) - 1]} ${year}`;
 }

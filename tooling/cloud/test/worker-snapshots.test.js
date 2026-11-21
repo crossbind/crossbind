@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHmac, randomBytes } from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { createAccounts } from '../worker/accounts.js';
 import { handleRequest } from '../worker/api.js';
 import { createProjectSessions, MAX_SESSIONS_PER_ACCOUNT } from '../worker/project-sessions.js';
@@ -11,6 +14,7 @@ import {
 import { sqliteD1 } from '../scripts/sqlite-d1.mjs';
 import { archiveOf, memoryBucket } from './support/bucket.mjs';
 import { gateToken, provenText } from '../../../core/crossbind/src/utils/previewSession.js';
+import { archiveLength, archiveStream, webBuildFiles } from '../../../core/crossbind/src/utils/snapshotArchive.js';
 
 // Snapshots crossbind app preview --cloud uploads: the CLI's token makes one and uploads to it as a stream, the cloud
 // keeps it within its caps in a bucket, lists it for the account's crossbind app, and serves it from a host of its own to
@@ -172,6 +176,36 @@ test('makes a snapshot for the CLI\'s token, finds it again for the same project
     });
     assert.match(session.key, /^[A-Za-z0-9_-]{43}$/);
     assert.deepEqual(found.body, session);
+});
+
+test('takes the archive crossbind app preview --cloud writes of a web build, read as it is sent, and serves each file as it was', async () => {
+    const {
+        call, host, signedIn,
+    } = setup();
+    const owner = await signedIn(dev);
+    const build = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-cloud-build-'));
+    // A path past a header's 100 characters, which the archive cuts at a slash, and an empty file.
+    const contents = {
+        'index.html': PAGE, 'assets/app.js': SCRIPT.repeat(40), [`assets/${'d'.repeat(60)}/${'f'.repeat(47)}.js`]: 'long', 'empty.txt': '',
+    };
+    try {
+        Object.entries(contents).forEach(([name, text]) => {
+            fs.mkdirSync(path.dirname(path.join(build, name)), { recursive: true });
+            fs.writeFileSync(path.join(build, name), text);
+        });
+        const files = webBuildFiles(build);
+        const { body: { id } } = await start(call, owner);
+
+        const put = await call('PUT', `/v1/snapshots/${id}`, { token: owner.cli, archive: archiveStream(files), length: archiveLength(files) });
+        const { key } = (await call('GET', `/v1/sessions/${id}`, { token: owner.app })).body;
+        const served = [];
+        for (const name of Object.keys(contents)) served.push((await host(`/${id}/${name}`, { key })).body);
+
+        assert.deepEqual([put.status, put.body.files, put.body.bytes], [200, 4, Object.values(contents).reduce((sum, each) => sum + each.length, 0)]);
+        assert.deepEqual(served, Object.values(contents));
+    } finally {
+        fs.rmSync(build, { recursive: true, force: true });
+    }
 });
 
 test('serves a snapshot\'s files from its host to the device that holds its key alone, as files of nothing that runs there', async () => {

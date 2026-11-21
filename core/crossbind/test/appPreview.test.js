@@ -14,6 +14,16 @@ const CLI = fileURLToPath(new URL('../src/cli.js', import.meta.url));
 const TOKEN = `cbt_${'a'.repeat(43)}`;
 const ACCOUNT = { id: '1099511627777', name: 'made-up-dev' };
 const NOT_SIGNED_IN = 'crossbind: crossbind app preview opens on your devices through your crossbind account: run crossbind login first.';
+const SNAPSHOT = 'IRVUB8Fpwuh0lT_7NkiJ8Q';
+// A Vite that builds: it prints what crossbind app preview hands it, and writes a web build of two files into --outDir.
+const BUILDING_VITE = `const fs = require('node:fs');
+const args = process.argv.slice(2);
+console.log(\`VITE \${args.join(' ')} \${process.env.CROSSBIND_APP_PREVIEW}\`);
+const out = args[args.indexOf('--outDir') + 1];
+fs.mkdirSync(out + '/assets', { recursive: true });
+fs.writeFileSync(out + '/index.html', '<!doctype html><title>demo</title>');
+fs.writeFileSync(out + '/assets/app.js', 'console.log(1);');
+`;
 
 let dir;
 beforeEach(() => {
@@ -34,20 +44,30 @@ function projectWith(config, viteVersion = '8.3.8') {
 const preview = (...args) => spawnSync(process.execPath, [CLI, 'app', 'preview', ...args], { cwd: dir, encoding: 'utf8', env: { ...process.env, HOME: dir, USERPROFILE: dir } });
 
 // crossbind cloud as a preview asks it, on this machine: the account TOKEN signs in to, and the session's registration,
-// which `refuse` answers with its [status, body], and its removal; each call recorded.
-function standInCloud({ refuse } = {}) {
+// which `refuse` answers with its [status, body], and its removal; a snapshot made, and its upload, which `refuseUpload`
+// answers; each call recorded with its body, JSON or the bytes sent, and the length it said.
+function standInCloud({ refuse, refuseUpload } = {}) {
     const calls = [];
     const server = http.createServer((request, response) => {
-        let text = '';
-        request.on('data', (chunk) => { text += chunk; });
+        const chunks = [];
+        request.on('data', (chunk) => { chunks.push(chunk); });
         request.on('end', () => {
+            const sent = Buffer.concat(chunks);
             calls.push({
-                call: `${request.method} ${request.url}`, authorization: request.headers.authorization, body: text ? JSON.parse(text) : undefined,
+                call: `${request.method} ${request.url}`,
+                authorization: request.headers.authorization,
+                body: request.headers['content-type'] === 'application/json' ? JSON.parse(sent) : (sent.length > 0 && sent) || undefined,
+                length: request.headers['content-length'],
             });
             const answer = (status, body) => response.writeHead(status, { 'content-type': 'application/json' }).end(body === undefined ? undefined : JSON.stringify(body));
             const isSession = request.url.startsWith('/v1/sessions/');
             if (request.url === '/v1/account') answer(...(request.headers.authorization === `Bearer ${TOKEN}` ? [200, ACCOUNT] : [401, { error: 'Sign in with crossbind login.' }]));
-            else if (isSession && request.method === 'PUT') answer(...(refuse ?? [200, { id: request.url.slice('/v1/sessions/'.length), expiresAt: '2026-11-21T10:10:00.000Z' }]));
+            else if (request.url === '/v1/snapshots' && request.method === 'POST') answer(200, { id: SNAPSHOT });
+            else if (request.url === `/v1/snapshots/${SNAPSHOT}` && request.method === 'PUT') {
+                answer(...(refuseUpload ?? [200, {
+                    id: SNAPSHOT, version: 3, files: 2, bytes: 49, expiresAt: '2026-12-21T10:00:00.000Z',
+                }]));
+            } else if (isSession && request.method === 'PUT') answer(...(refuse ?? [200, { id: request.url.slice('/v1/sessions/'.length), expiresAt: '2026-11-21T10:10:00.000Z' }]));
             else if (isSession && request.method === 'DELETE') answer(204);
             else answer(404, { error: 'Not found.' });
         });
@@ -180,6 +200,66 @@ describe('crossbind app preview', () => {
                 expect(stdout).not.toContain('VITE');
             }
             expect(cloud.calls).toEqual([]);
+        } finally {
+            cloud.close();
+        }
+    });
+
+    test('with --cloud builds the web build in preview mode, which takes no key, uploads it as a snapshot in one archive, prints the QR code of its link, and ends', async () => {
+        projectWith('export default {};\n');
+        fs.writeFileSync(upath.join(dir, 'node_modules', 'vite', 'bin', 'vite.js'), BUILDING_VITE);
+        const cloud = await standInCloud();
+        signIn(cloud);
+        try {
+            const { status, stdout } = await previewWith(cloud, '--cloud', '--mode', 'staging');
+            const link = `https://crossbind.dev/open/?s=${SNAPSHOT}`;
+            const [, handed, preview] = stdout.match(/^VITE (.*) (\{.*\})$/m);
+            const put = cloud.calls[2];
+            fs.writeFileSync(upath.join(dir, 'snapshot.tar'), put.body);
+            fs.mkdirSync(upath.join(dir, 'unpacked'));
+            const tar = spawnSync('tar', ['-xf', 'snapshot.tar', '-C', 'unpacked'], { cwd: dir, encoding: 'utf8' });
+
+            expect(status).toBe(0);
+            // Under the project's own .crossbind, whose drive letter Windows may write in another case.
+            expect(handed).toMatch(/^build --outDir .+\/\.crossbind\/build\/snapshot --emptyOutDir --mode staging$/);
+            expect(JSON.parse(preview)).toEqual({ build: true });
+            expect(stdout).toContain(`crossbind app preview: demo, protocol 1, Vite 8.3.8\n  signed in to crossbind cloud as made-up-dev\n  uploaded as a snapshot, version 3, kept until 21 December 2026\n  scan this with a phone's camera, or open ${link}\n${qrLines(link, {}).map((line) => `  ${line}`).join('\n')}\n  Projects lists it in the crossbind app on every device signed in as made-up-dev\n`);
+            expect(stdout).not.toContain('open: http');
+            expect(cloud.calls.map(({ call }) => call)).toEqual(['GET /v1/account', 'POST /v1/snapshots', `PUT /v1/snapshots/${SNAPSHOT}`]);
+            expect(cloud.calls.map(({ authorization }) => authorization)).toEqual(Array(3).fill(`Bearer ${TOKEN}`));
+            expect(cloud.calls[1].body).toEqual({ project: { id: projectIdOf('demo', dir), name: 'demo' }, protocol: 1 });
+            expect([put.length, tar.status]).toEqual([String(put.body.length), 0]);
+            expect(['index.html', 'assets/app.js'].map((name) => fs.readFileSync(upath.join(dir, 'unpacked', name), 'utf8'))).toEqual(['<!doctype html><title>demo</title>', 'console.log(1);']);
+        } finally {
+            cloud.close();
+        }
+    });
+
+    test("with --cloud stops with crossbind cloud's words where it refuses the upload, and prints no QR code", async () => {
+        projectWith('export default {};\n');
+        fs.writeFileSync(upath.join(dir, 'node_modules', 'vite', 'bin', 'vite.js'), BUILDING_VITE);
+        const cloud = await standInCloud({ refuseUpload: [413, { error: 'A snapshot holds 50 MB at most.' }] });
+        signIn(cloud);
+        try {
+            const { status, stdout, stderr } = await previewWith(cloud, '--cloud');
+            expect(status).toBe(1);
+            expect(stderr).toContain('crossbind: A snapshot holds 50 MB at most.');
+            expect(stdout).not.toContain('scan this');
+        } finally {
+            cloud.close();
+        }
+    });
+
+    test('with --cloud ends with what the build ended with where Vite fails, and asks the cloud nothing past the account', async () => {
+        projectWith('export default {};\n');
+        fs.writeFileSync(upath.join(dir, 'node_modules', 'vite', 'bin', 'vite.js'), "console.error('VITE failed');\nprocess.exit(3);\n");
+        const cloud = await standInCloud();
+        signIn(cloud);
+        try {
+            const { status, stdout } = await previewWith(cloud, '--cloud');
+            expect(status).toBe(3);
+            expect(stdout).not.toContain('uploaded');
+            expect(cloud.calls.map(({ call }) => call)).toEqual(['GET /v1/account']);
         } finally {
             cloud.close();
         }
