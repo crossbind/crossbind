@@ -11,7 +11,7 @@ import { minAccountDays } from '../../tooling/cloud/worker/oauth.js';
 import { PENDING_TTL_SECONDS, SESSION_TTL_MS } from '../../tooling/cloud/worker/session.js';
 import { RUNNER_IDLE_SECONDS } from '../../tooling/cloud/worker/runner-api.js';
 import { settingsOf } from '../../tooling/cloud/worker/settings.js';
-import { SNAPSHOT_DAYS } from '../../tooling/cloud/worker/snapshots.js';
+import { SNAPSHOT_DAYS, removeSnapshotRoute } from '../../tooling/cloud/worker/snapshots.js';
 
 const DAY_MS = 24 * 3600 * 1000;
 const text = JSON.stringify(PRIVACY_PAGE);
@@ -38,6 +38,9 @@ test('names what an account with no GitHub account linked has, and how long a fi
     assert.equal(settingsOf({}).newAccountDaily, 20);
     assert.ok(production.includes('"MIN_GITHUB_ACCOUNT_DAYS": "30"') && production.includes('"NEW_ACCOUNT_DAILY": "20"'));
     assert.ok(text.includes('compiles 20 a day of its own') && text.includes('for its first 30 days'));
+    assert.ok(text.includes('It records your GitHub id and name, and when GitHub made a GitHub account younger than 30 days'));
+    assert.ok(text.includes('["Your GitHub id, name and sign-in times, and when GitHub made a GitHub account younger than 30 days","Until you delete your account"]'));
+    assert.ok(text.includes('has the same until that GitHub account is 30 days old'));
     assert.equal(PENDING_TTL_SECONDS, 600);
     assert.ok(text.includes('for ten minutes') && text.includes('Ten minutes, in your browser alone'));
 });
@@ -63,12 +66,14 @@ test('names how long a preview\'s session stays listed once it ends without stop
     assert.ok(text.includes('within ten minutes if it ends without stopping, and deleted within a day'));
 });
 
-test('names how long a snapshot is kept after its last upload, and that the daily prune deletes its files', () => {
+test('names how long a snapshot is kept after its last upload, that the daily prune deletes its files, and that removing it deletes it at once', () => {
     const scheduled = readFileSync(new URL('../../tooling/cloud/worker/index.js', import.meta.url), 'utf8');
     assert.equal(SNAPSHOT_DAYS, 30);
     assert.ok(scheduled.includes('createSnapshots(env.DB, env.SNAPSHOTS).prune()'));
+    assert.equal(typeof removeSnapshotRoute, 'function');
     assert.ok(text.includes('A snapshot is kept for 30 days after its last upload'));
-    assert.ok(text.includes('30 days after its last upload, or until a new upload replaces it'));
+    assert.ok(text.includes('30 days after its last upload, or until a new upload replaces it or you remove it'));
+    assert.ok(text.includes('removing it, in the crossbind app or with `crossbind app preview --cloud --remove`, or deleting your account, deletes it at once'));
 });
 
 test("names the one permission the CLI's Google Play sign-in asks for, and the keychain entry it keeps", () => {
