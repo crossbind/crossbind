@@ -3,6 +3,7 @@ import path from 'node:path';
 import {
     assertImage, imageOf, isFolder, languageFolders, readSetting, readText, sizeOf, takenNames,
 } from '../index.js';
+import { creativeAssetProblems, readCreativeAssets } from './appStoreCreativeAssets.js';
 
 // The app's settings beside the locales' folders, by fastlane deliver's names, which a release and --send send: the
 // version's copyright, the app's categories, its age rating's answers and App Review's contact.
@@ -72,18 +73,20 @@ function readScreenshots(project, folder) {
 }
 
 function readLocale(project, { language: locale, folder }) {
-    const names = takenNames(STORE, project, folder, (name, isDir) => (isDir ? name === 'screenshots' : Object.hasOwn(TEXTS, name)));
+    const names = takenNames(STORE, project, folder, (name, isDir) => (isDir ? ['screenshots', 'creative-assets'].includes(name) : Object.hasOwn(TEXTS, name)));
     const texts = names.filter((name) => Object.hasOwn(TEXTS, name)).map((name) => ({ ...TEXTS[name], text: readText(STORE, project, path.join(folder, name), TEXTS[name]) }));
     const partOf = (which) => Object.fromEntries(texts.filter(({ part }) => part === which).map(({ field, text }) => [field, text]));
+    const creativeAssets = readCreativeAssets(STORE, project, path.join(folder, 'creative-assets'));
     return {
         locale, info: partOf('info'), version: partOf('version'), screenshots: readScreenshots(project, path.join(folder, 'screenshots')),
+        ...(Object.keys(creativeAssets).length ? { creativeAssets } : {}),
     };
 }
 
 // The project's App Store listing, a locale's texts of the app's information and of its version, and the version's
 // screenshots, each as its files hold them; none without the folder, and no locale whose folder holds none.
 export const readAppStoreListing = (project) => languageFolders(STORE, project).map((folder) => readLocale(project, folder))
-    .filter(({ info, version, screenshots }) => [info, version, screenshots].some((part) => Object.keys(part).length > 0));
+    .filter(({ info, version, screenshots, creativeAssets }) => creativeAssets || [info, version, screenshots].some((part) => Object.keys(part).length > 0));
 
 // The answers App Store Connect's age rating takes, by its API's names: how often a kind of content shows, whether the
 // app does a thing, and the overrides of the rating it works out.
@@ -182,10 +185,12 @@ const LANDSCAPES = { APP_IPHONE_40: [[1136, 600]], APP_IPHONE_35: [[960, 600]], 
 const DESKTOPS = [[1280, 800], [1440, 900], [2560, 1600], [2880, 1800]];
 
 // The listing as one platform's version takes it: the Mac's screenshots for MAC_OS, the other types' for IOS.
-export const listingOf = (listings, platform) => listings.map((listing) => ({
-    ...listing,
-    screenshots: Object.fromEntries(Object.entries(listing.screenshots).filter(([type]) => (type === DESKTOP) === (platform === 'MAC_OS'))),
-}));
+export const listingOf = (listings, platform) => listings.flatMap(({ creativeAssets, ...listing }) => {
+    const screenshots = Object.fromEntries(Object.entries(listing.screenshots).filter(([type]) => (type === DESKTOP) === (platform === 'MAC_OS')));
+    if (platform === 'IOS' && creativeAssets) return [{ ...listing, screenshots, creativeAssets }];
+    if (creativeAssets && [listing.info, listing.version, screenshots].every((part) => Object.keys(part).length === 0)) return [];
+    return [{ ...listing, screenshots }];
+});
 
 // The sizes App Store Connect takes of a display type's screenshots, and how it says so.
 function sizesOf(type) {
@@ -199,8 +204,8 @@ function sizesOf(type) {
 
 // What App Store Connect would refuse of the listing's screenshots, every one at once: a size its display type takes
 // none of, and transparency, which it takes in no image.
-export function appStoreListingProblems(project, listings) {
-    return listings.flatMap(({ screenshots }) => Object.entries(screenshots).flatMap(([type, files]) => files.flatMap((file) => {
+function screenshotProblems(project, screenshots) {
+    return Object.entries(screenshots).flatMap(([type, files]) => files.flatMap((file) => {
         const shown = path.relative(project, file);
         const image = imageOf(file);
         if (!image) return [`crossbind: ${shown} holds no PNG or JPEG image whose size it gives, as a cut-off file does: put the whole image there, or remove the file.`];
@@ -211,5 +216,11 @@ export function appStoreListingProblems(project, listings) {
         }
         if (image.hasAlpha) problems.push(`crossbind: ${shown} holds transparency, which App Store Connect takes in no screenshot: save it as a JPEG, or as a PNG without an alpha channel.`);
         return problems;
-    })));
+    }));
+}
+
+export function appStoreListingProblems(project, listings) {
+    return listings.flatMap(({ screenshots, creativeAssets }) => [
+        ...screenshotProblems(project, screenshots), ...creativeAssetProblems(project, creativeAssets),
+    ]);
 }

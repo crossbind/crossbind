@@ -465,6 +465,106 @@ describe("a version's screenshots on App Store Connect", () => {
     });
 });
 
+describe("the iOS version's creative assets", () => {
+    const header = 'PRODUCT_PAGE_HEADER_ASSET';
+    const search = 'APP_STORE_SEARCH_RESULTS_ASSET';
+    const slots = `GET /appStoreVersionLocalizations/L1/placements?filter[placementGroup]=DEFAULT_PROFILE&filter[placementType]=${header},${search}&include=image,video`;
+    const lookup = 'GET /appAssetLibraries/LIB/images?filter[category]=CREATIVE_ASSETS&filter';
+    const existing = '6e4f57c4-447c-464f-9525-ca3856ea8afc';
+    const approved = (id, attributes = {}) => ({ id, attributes: {
+        state: 'APPROVED', specId: 'universal', imageAsset: { width: 5244, height: 2950 }, fileName: 'map.png', ...attributes,
+    } });
+    const placed = (placementType, id) => ({
+        id: placementType, attributes: { placementType, placementGroup: 'DEFAULT_PROFILE' }, relationships: { image: { data: { type: 'appAssetLibraryImages', id } } },
+    });
+    let current;
+    let dir;
+    const listings = (creativeAssets) => [{ locale: 'en-US', info: {}, version: {}, screenshots: {}, creativeAssets }];
+    const send = (creativeAssets) => settled(sendListing(call, { appId: 'A1', versionString: '1.2.3', listings: listings(creativeAssets) }));
+
+    beforeEach(() => {
+        dir = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-creative-'));
+        current = [];
+        answers['GET /apps/A1/appStoreVersions?filter[platform]=IOS&filter[versionString]=1.2.3'] = { data: [{ id: 'V1', attributes: { appVersionState: 'PREPARE_FOR_SUBMISSION', versionString: '1.2.3' } }] };
+        answers['GET /apps/A1/assetLibrary'] = { data: { id: 'LIB' } };
+        answers[`${lookup}[id]=${existing}`] = { data: [approved(existing)] };
+        answers[slots] = () => ({ data: [...current] });
+        answers['POST /appAssetLibraryPlacements'] = ({ data }) => {
+            expect(data.relationships.appStoreVersionLocalization.data.id).toBe('L1');
+            const slot = placed(data.attributes.placementType, data.relationships.image.data.id);
+            current.push(slot);
+            return { data: slot };
+        };
+        for (const type of [header, search]) {
+            answers[`DELETE /appAssetLibraryPlacements/${type}`] = () => {
+                current = current.filter((slot) => slot.id !== type);
+                return {};
+            };
+        }
+    });
+
+    afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+    test('uploads shared bytes once, resumes processing, and leaves an identical draft alone on the next send', async () => {
+        const file = path.join(dir, 'universal.png');
+        fs.writeFileSync(file, 'shared image bytes');
+        const referenceName = `crossbind-${createHash('sha256').update('shared image bytes').digest('hex').slice(0, 40)}`;
+        answers[`${lookup}[referenceName]=${referenceName}`] = { data: [] };
+        answers['POST /appAssetLibraryImages'] = ({ data }) => {
+            expect(data.attributes).toEqual({ fileName: 'universal.png', fileSize: 18, category: 'CREATIVE_ASSETS', referenceName });
+            expect(data.relationships.assetLibrary.data.id).toBe('LIB');
+            return { data: { id: 'NEW', attributes: { state: 'AWAITING_UPLOAD', uploadOperations: ['part'] } } };
+        };
+        const ready = approved('NEW', { referenceName });
+        let reads = 0;
+        answers['GET /appAssetLibraryImages/NEW'] = () => ({ data: reads++ ? ready : { id: 'NEW', attributes: { state: 'UPLOAD_COMPLETE' } } });
+        expect((await send({ universal: { file } })).listed).toEqual(['en-US']);
+        expect(parts).toEqual([{ operations: ['part'], bytes: 'shared image bytes', file }]);
+        expect(bodyOf('PATCH /appAssetLibraryImages/NEW').data.attributes).toEqual({ uploaded: true });
+        expect(current).toEqual([placed(header, 'NEW'), placed(search, 'NEW')]);
+
+        answers[`${lookup}[referenceName]=${referenceName}`] = { data: [ready] };
+        calls = [];
+        expect((await send({ universal: { file } })).listed).toEqual([]);
+        expect(keys().every((key) => key.startsWith('GET'))).toBe(true);
+    });
+
+    test('reuses library IDs, overrides only search, and includes the placements in the normal release', async () => {
+        current = [placed(header, existing), placed(search, existing)];
+        const id = '81542bc4-29de-4319-89f6-4859b954b5b3';
+        answers[`${lookup}[id]=${id}`] = { data: [approved(id, { imageAsset: { width: 1920, height: 1280 }, fileName: 'search.jpg' })] };
+        const assets = { universal: { file: 'universal.id', id: existing }, 'search-results': { file: 'search-results.id', id } };
+        expect((await release({ listings: listings(assets) })).listed).toEqual(['en-US']);
+        expect(current).toEqual([placed(header, existing), placed(search, id)]);
+        expect(parts).toEqual([]);
+        expect(keys()).not.toContain(`DELETE /appAssetLibraryPlacements/${header}`);
+        expect(keys().indexOf('POST /appAssetLibraryPlacements')).toBeLessThan(keys().indexOf('POST /reviewSubmissions'));
+    });
+
+    test('rejects missing, failed, or incompatible library artwork before removing any placement', async () => {
+        current = [placed(header, 'original')];
+        for (const [data, message] of [
+            [[], 'missing'], [[approved(existing, { state: 'FAILED', stateDetails: 'Invalid payload' })], 'Invalid payload'],
+            [[approved(existing, { imageAsset: { width: 1920, height: 1280 } })], 'does not fit header'],
+        ]) {
+            answers[`${lookup}[id]=${existing}`] = { data };
+            await expect(send({ header: { file: 'header.id', id: existing } })).rejects.toThrow(message);
+        }
+        expect(keys().every((key) => key.startsWith('GET'))).toBe(true);
+    });
+
+    test('restores the previous image if Apple refuses to create its replacement', async () => {
+        current = [placed(search, 'other'), placed(header, 'original')];
+        const create = answers['POST /appAssetLibraryPlacements'];
+        answers['POST /appAssetLibraryPlacements'] = (body) => {
+            if (body.data.relationships.image.data.id === existing) throw new Error('placement refused');
+            return create(body);
+        };
+        await expect(send({ header: { file: 'header.id', id: existing } })).rejects.toThrow('placement refused');
+        expect(current).toEqual([placed(search, 'other'), placed(header, 'original')]);
+    });
+});
+
 describe("a version's settings on App Store Connect", () => {
     const SETTINGS = {
         copyright: '2026 Example Ltd.',

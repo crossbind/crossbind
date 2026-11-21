@@ -76,6 +76,7 @@ Do not run the full native matrix when a narrow test proves the changed surface.
 ## Repository safety
 
 - Never run publish scripts without explicit instruction.
+- Use crossbind’s store, upload and release commands for authorized app store changes. Implement and test missing operations in crossbind before sending.
 - Never bypass hooks or validation with `--no-verify` or equivalent flags.
 - Never use destructive cleanup as a first-line debugging step.
 - Do not hand-edit `.crossbind/`, `dist/`, generated skill references, generated templates or native build outputs.
