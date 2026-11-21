@@ -40,6 +40,12 @@ export const REPO_URL = 'https://github.com/crossbind/crossbind';
 export const DISCUSSIONS_URL = `${REPO_URL}/discussions`;
 export const AUTHOR_URL = 'https://github.com/bugra9';
 export const PRIVACY_EMAIL = 'privacy@crossbind.dev';
+export const SUPPORT_EMAIL = 'support@crossbind.dev';
+export const SECURITY_EMAIL = 'security@crossbind.dev';
+export const ISSUES_URL = `${REPO_URL}/issues`;
+// GitHub's private vulnerability report, which the repository keeps on, and the policy SECURITY.md is shown as.
+export const REPORT_VULNERABILITY_URL = `${REPO_URL}/security/advisories/new`;
+export const SECURITY_POLICY_URL = `${REPO_URL}/security/policy`;
 export const AGENT_URL = '/agent/';
 export const LIBRARIES_URL = '/ports/';
 export const INTEGRATIONS_URL = '/integrations/';
