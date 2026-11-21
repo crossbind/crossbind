@@ -22,7 +22,7 @@ import { cloudUrl } from '../utils/cloudAccount.js';
 import loadSystemConfig from '../utils/systemConfig.js';
 import { halfBlocks, qrMatrix } from '../utils/qrMatrix.js';
 import {
-    dayWords, listSession, previewAccount, uploadSnapshot,
+    dayWords, listSession, previewAccount, removeSnapshot, uploadSnapshot,
 } from './cloudCommands.js';
 
 const { version: CROSSBIND_VERSION } = JSON.parse(fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
@@ -142,12 +142,32 @@ async function uploadedPreview({
     return 0;
 }
 
+// --cloud --remove: the project's snapshot removed from crossbind cloud, found as an upload finds it. It needs the
+// project's name, which crossbind cloud lists projects by, and this machine's sign-in, and nothing of a web build.
+async function removedPreview() {
+    const { name } = state.config.general;
+    const named = listedNameProblem(name);
+    if (named) throw new Error(named);
+    const url = cloudUrl(loadSystemConfig());
+    const account = await previewAccount({ url });
+    await removeSnapshot({
+        url, token: account.token, project: { id: projectIdOf(name, state.config.paths.project), name }, protocol: PREVIEW_PROTOCOL,
+    });
+    console.log(`crossbind app preview: ${name}`);
+    console.log(`  signed in to crossbind cloud as ${account.name}`);
+    console.log(`  removed its snapshot from crossbind cloud: no device signed in as ${account.name} lists it now`);
+    return 0;
+}
+
 // crossbind app preview: what it checks before it prints anything, in order, the account it opens on, then the
 // project's Vite in preview mode, whose exit code it gives back, with its session on the account's list meanwhile; with
-// --cloud (`asSnapshot`), its web build uploaded as a snapshot instead.
+// --cloud (`asSnapshot`), its web build uploaded as a snapshot instead, or with --remove too (`isRemoval`), the
+// snapshot removed.
 export default async function appPreview({
-    host, port, asSnapshot, args, viteName, viteVersion, runVite,
+    host, port, asSnapshot, isRemoval, args, viteName, viteVersion, runVite,
 }) {
+    if (isRemoval && !asSnapshot) throw new Error('crossbind: --remove removes this project\'s snapshot from crossbind cloud, with --cloud: crossbind app preview --cloud --remove.');
+    if (isRemoval) return removedPreview();
     // The web build's native code compiles without CROSSBIND_APP here, and its dev server is no app's.
     for (const variable of APP_BUILD_ENV) delete process.env[variable];
     const vite = viteProblem(viteName, viteVersion);

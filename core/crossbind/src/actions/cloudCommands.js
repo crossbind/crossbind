@@ -211,23 +211,45 @@ export async function listSession({
     };
 }
 
-// crossbind app preview --cloud's upload (tooling/cloud/worker/snapshots.js): the account's snapshot of the project, made
-// or found again, and the web build in `dir` sent to it as one archive, each file read as it goes. A file at a path the
-// cloud keeps none at stops it before anything is sent. { id, version, expiresOn } as the cloud answers.
-export async function uploadSnapshot({
-    url, token, project, protocol, dir, fetcher = fetch,
+// The id of the account's snapshot of the project (tooling/cloud/worker/snapshots.js), made or found again.
+async function snapshotOf({
+    url, token, project, protocol, fetcher,
 }) {
-    const files = webBuildFiles(dir);
     const started = await call(fetcher, url, '/v1/snapshots', { method: 'POST', token, body: { project, protocol } });
     if (!started.ok) throw refused(started);
     const { id } = started.body;
     if (!SNAPSHOT_ID.test(id ?? '')) throw new Error(NO_SNAPSHOT);
+    return id;
+}
+
+// crossbind app preview --cloud's upload: the account's snapshot of the project, and the web build in `dir` sent to it
+// as one archive, each file read as it goes. A file at a path the cloud keeps none at stops it before anything is sent.
+// { id, version, expiresOn } as the cloud answers.
+export async function uploadSnapshot({
+    url, token, project, protocol, dir, fetcher = fetch,
+}) {
+    const files = webBuildFiles(dir);
+    const id = await snapshotOf({
+        url, token, project, protocol, fetcher,
+    });
     const uploaded = await call(fetcher, url, `/v1/snapshots/${id}`, { method: 'PUT', token, archive: { stream: archiveStream(files), length: archiveLength(files) } });
     if (!uploaded.ok) throw refused(uploaded);
     const { version, expiresAt } = uploaded.body;
     const expiresOn = String(expiresAt).slice(0, 10);
     if (!Number.isInteger(version) || !DAY.test(expiresOn)) throw new Error(NO_SNAPSHOT);
     return { id, version, expiresOn };
+}
+
+// crossbind app preview --cloud --remove: the account's snapshot of the project, found as an upload finds it, removed,
+// so that crossbind cloud answers for it as for one that never was.
+export async function removeSnapshot({
+    url, token, project, protocol, fetcher = fetch,
+}) {
+    const id = await snapshotOf({
+        url, token, project, protocol, fetcher,
+    });
+    const removed = await call(fetcher, url, `/v1/snapshots/${id}`, { method: 'DELETE', token });
+    if (!removed.ok) throw refused(removed);
 }
 
 function formatSeconds(seconds) {
