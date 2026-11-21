@@ -1,7 +1,8 @@
 // The Worker for test/local/run.mjs, under `wrangler dev` with no container (wrangler.jsonc beside it): worker/api.js
-// on the run's local D1, with the quota in memory, no compiler, and stand-ins for GitHub and Apple that reach nothing
-// outside. Three paths of its own, for the run alone: what Apple's stand-in saw, build seconds for an account, and how many
-// objects the snapshots' local bucket holds under a prefix.
+// on the run's local D1, with the quota in memory, workerd's own cache, a compiler that stands in for one by answering
+// every compile with the same small module, and stand-ins for GitHub and Apple that reach nothing outside. Three paths
+// of its own, for the run alone: what Apple's stand-in saw, build seconds for an account, and how many objects the
+// snapshots' local bucket holds under a prefix.
 import { createAccounts } from '../../worker/accounts.js';
 import { handleRequest } from '../../worker/api.js';
 import { createDeviceCodes } from '../../worker/devices.js';
@@ -12,6 +13,10 @@ import { memoryStorage } from '../../scripts/memory-storage.mjs';
 
 const DAY_MS = 24 * 3600 * 1000;
 const quota = createQuota(memoryStorage());
+// A compile's answer as the compiler gives one: a loader and the eight bytes that begin every WebAssembly module.
+const STANDIN_MODULE = Object.freeze({
+    ok: true, js: 'var Module;', wasm: 'AGFzbQEAAAA=', log: '', ms: 1,
+});
 const fromBase64Url = (text) => atob(text.replace(/-/g, '+').replace(/_/g, '/'));
 const bytesOf = (text) => Uint8Array.from(fromBase64Url(text), (char) => char.charCodeAt(0));
 const jsonOf = (part) => JSON.parse(fromBase64Url(part));
@@ -101,7 +106,8 @@ export default {
             sessions: createProjectSessions(env.DB),
             snapshots: createSnapshots(env.DB, env.SNAPSHOTS),
             quota,
-            compiler: { fetch: async () => Response.json({ error: 'This run has no compiler.' }, { status: 503 }) },
+            compiler: { fetch: async () => Response.json(STANDIN_MODULE) },
+            cache: caches.default,
             fetcher: (url, init) => (url.startsWith('https://appleid.apple.com/') ? apple(url, init, env) : github(url, init, env)),
             waitUntil: (promise) => ctx.waitUntil(promise),
         });

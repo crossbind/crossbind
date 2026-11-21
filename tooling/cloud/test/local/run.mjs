@@ -2,7 +2,8 @@
 // the run, and Chromium signing in on /login through stand-ins for GitHub's page and Apple's, signing devices out,
 // signing out everywhere and deleting the account, while the site, an origin of the same site as the API's, is refused;
 // a device's sign-in on /device, by scripts/device-check.mjs playing the app and by crossbind login's own code, each
-// typing the number read off the page; then a first sign-in's question; a session crossbind app preview lists, which
+// typing the number read off the page, and the app's compile by scripts/compile-check.mjs, against a compiler that stands
+// in for one, found again in workerd's cache; then a first sign-in's question; a session crossbind app preview lists, which
 // scripts/session-check.mjs, playing the app of two accounts, finds for its own and not for the other; a snapshot crossbind
 // app preview --cloud uploads into a local bucket, which scripts/snapshot-check.mjs opens through the snapshot host, reads
 // a byte range of and finds its caps held, which --cloud --remove removes and --cloud makes anew, and which the account's
@@ -240,6 +241,25 @@ async function deviceCheck(page) {
     }
 }
 
+// scripts/compile-check.mjs playing the app: its code approved on the page and the number typed into it; it compiles with
+// its token through the Worker, whose stand-in compiler answers a module, and finds the same compile again in the cache.
+async function compileCheck(page) {
+    const checker = spawn(process.execPath, [path.join(PACKAGE_DIR, 'scripts/compile-check.mjs'), '--url', API], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const said = outputOf(checker);
+    const exited = new Promise((resolve) => { checker.on('close', resolve); });
+    try {
+        const code = await until(() => /enter the code ([A-Z]{4}-[A-Z]{4})/.exec(said.text)?.[1], STEP_MS);
+        const decided = await decideOnPage(page, code);
+        await until(() => said.text.includes('type it here'), STEP_MS);
+        checker.stdin.end(`${decided.number}\n`);
+        const status = await exited;
+        const passes = said.text.match(/(?:PASS|FAIL) [^\n]*/g) ?? [];
+        return { ok: status === 0 && passes.length === 4 && passes.every((line) => line.startsWith('PASS')), detail: passes.join('; ') };
+    } finally {
+        checker.kill();
+    }
+}
+
 // crossbind login's own code, its question answered with the number read off the page, its credentials where a machine
 // of the home given keeps them. Answers its token too.
 async function cliSignInOnPage(page, given) {
@@ -441,6 +461,9 @@ const snapshotObjects = async (prefix = 'snapshots/') => (await (await fetch(`${
 async function runDevice(browser, page) {
     await step('scripts/device-check.mjs, playing the app, signs in through the device page: its code typed in lower case with spaces, what asked named with its country, and the number read off the page typed into it',
         () => deviceCheck(page));
+
+    await step('scripts/compile-check.mjs, playing the app, compiles with its token through the Worker, against a compiler that stands in for one, and finds the same compile again in the cache',
+        () => compileCheck(page));
 
     let cliToken;
     await step('crossbind login\'s own code signs in through the same page, which names the CLI', async () => {
