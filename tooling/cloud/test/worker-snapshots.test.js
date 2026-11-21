@@ -10,7 +10,7 @@ import { createProjectSessions, MAX_SESSIONS_PER_ACCOUNT } from '../worker/proje
 import { createQuota } from '../worker/quota.js';
 import { signSession, SESSION_COOKIE } from '../worker/session.js';
 import {
-    createSnapshots, INDEXES_KEPT, MAX_SNAPSHOT_BYTES, MAX_SNAPSHOT_FILES, MAX_SNAPSHOTS_PER_ACCOUNT, SNAPSHOT_DAYS,
+    createSnapshots, INDEXES_KEPT, MAX_SNAPSHOT_BYTES, MAX_SNAPSHOT_FILES, MAX_SNAPSHOTS_PER_ACCOUNT, SNAPSHOT_DAYS, rangeOf,
 } from '../worker/snapshots.js';
 import { memoryStorage } from '../scripts/memory-storage.mjs';
 import { sqliteD1 } from '../scripts/sqlite-d1.mjs';
@@ -38,6 +38,10 @@ const PAGE = '<!doctype html><title>made-up</title><script type="module" src="/a
 const SCRIPT = 'console.log("made up");';
 const BUILD = [['index.html', PAGE], ['assets/app.js', SCRIPT], ['crossbind.wasm', new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0])]];
 const BUILD_BYTES = PAGE.length + SCRIPT.length + 8;
+// A file a media element reads in ranges, after the page: its bytes stand in the archive at 1536, past the page's header,
+// the page's one block and its own header.
+const CLIP = '0123456789'.repeat(200);
+const CLIP_AT = 1536;
 const NO_SNAPSHOT = 'No snapshot of this account has this id.';
 const ONLY_ITS_DEVICES = 'This snapshot answers the devices of its account alone.';
 const FULL = `This account keeps ${MAX_SNAPSHOTS_PER_ACCOUNT} snapshots, as many as it may: each ends ${SNAPSHOT_DAYS} days after its last upload.`;
@@ -229,6 +233,95 @@ test('serves a snapshot\'s files from its host to the device that holds its key 
     assert.deepEqual([script.status, script.body, script.headers.get('content-type')], [200, SCRIPT, 'text/javascript; charset=utf-8']);
     assert.deepEqual([wasm.status, wasm.body, wasm.headers.get('content-type'), wasm.headers.get('content-length')], [200, '', 'application/wasm', '8']);
     assert.equal(missing.status, 404);
+});
+
+test('reads the one byte range a GET asks: its first and last bytes, from a byte on, or its last bytes; one past the end, and none, several or one out of its form, apart', () => {
+    const cases = {
+        'bytes=100-199': { start: 100, end: 199 },
+        'bytes=0-0': { start: 0, end: 0 },
+        'bytes=0-': { start: 0, end: 1999 },
+        'bytes=1990-': { start: 1990, end: 1999 },
+        'bytes=1990-5000': { start: 1990, end: 1999 },
+        'bytes=-10': { start: 1990, end: 1999 },
+        'bytes=-5000': { start: 0, end: 1999 },
+        'Bytes=0-1': { start: 0, end: 1 },
+        ' bytes=0-1 ': { start: 0, end: 1 },
+        'bytes=2000-': 'past',
+        'bytes=2000-2100': 'past',
+        'bytes=99999999999999999999-': 'past',
+        'bytes=-0': 'past',
+        'bytes=0-1,5-6': null,
+        'bytes=5-2': null,
+        'bytes=-': null,
+        'bytes=': null,
+        'bytes=a-b': null,
+        'bytes 0-1': null,
+        'items=0-1': null,
+        '': null,
+    };
+
+    const read = Object.fromEntries(Object.keys(cases).map((header) => [header, rangeOf(header, 2000)]));
+
+    assert.deepEqual(read, cases);
+    assert.deepEqual([rangeOf(null, 2000), rangeOf('bytes=0-', 0), rangeOf('bytes=-1', 0)], [null, null, null]);
+});
+
+test('answers a GET of one byte range as 206 with its Content-Range, by one ranged read of the archive at the file\'s offset, and one past the file\'s end as 416 with no read', async (t) => {
+    const {
+        host, signedIn, uploaded, bucket,
+    } = setup();
+    const owner = await signedIn(dev);
+    const { id, key } = await uploaded(owner, [['index.html', PAGE], ['clip.mp4', CLIP]]);
+    const reads = [];
+    const { get } = bucket;
+    t.mock.method(bucket, 'get', (name, options) => {
+        if (name.endsWith('/archive.tar')) reads.push(options.range);
+        return get(name, options);
+    });
+    const ask = (range) => host(`/${id}/clip.mp4`, { key, headers: range === undefined ? {} : { range } });
+
+    const whole = await ask();
+    const ranged = await ask('bytes=100-199');
+    const onwards = await ask('bytes=1990-');
+    const last = await ask('bytes=-10');
+    const past = await ask(`bytes=${CLIP.length}-`);
+    const ungated = await host(`/${id}/clip.mp4`, { headers: { range: 'bytes=100-199' } });
+
+    const of = (answer) => [answer.status, answer.body, answer.headers.get('content-range'), answer.headers.get('accept-ranges')];
+    assert.deepEqual([ungated.status, ungated.body.error], [403, ONLY_ITS_DEVICES]);
+    assert.deepEqual(of(whole), [200, CLIP, null, 'bytes']);
+    assert.deepEqual(of(ranged), [206, CLIP.slice(100, 200), 'bytes 100-199/2000', 'bytes']);
+    assert.deepEqual([of(onwards), of(last)], [[206, CLIP.slice(1990), 'bytes 1990-1999/2000', 'bytes'], [206, CLIP.slice(1990), 'bytes 1990-1999/2000', 'bytes']]);
+    assert.deepEqual([past.status, past.body.error, past.headers.get('content-range')], [416, 'This range begins past the end of the file.', 'bytes */2000']);
+    assert.deepEqual(['content-type', 'content-security-policy', 'x-content-type-options', 'cache-control', 'referrer-policy'].map((name) => ranged.headers.get(name)),
+        ['video/mp4', "sandbox; default-src 'none'", 'nosniff', 'no-store', 'no-referrer']);
+    assert.deepEqual(reads, [
+        { offset: CLIP_AT, length: 2000 }, { offset: CLIP_AT + 100, length: 100 }, { offset: CLIP_AT + 1990, length: 10 }, { offset: CLIP_AT + 1990, length: 10 },
+    ]);
+});
+
+test('answers a GET of several ranges, or of one out of its form, with the file whole; a HEAD, whatever it asks, with the file\'s length and no read; and an empty file whole', async (t) => {
+    const {
+        host, signedIn, uploaded, bucket,
+    } = setup();
+    const owner = await signedIn(dev);
+    const { id, key } = await uploaded(owner, [['index.html', PAGE], ['clip.mp4', CLIP], ['empty.txt', '']]);
+    const reads = [];
+    const { get } = bucket;
+    t.mock.method(bucket, 'get', (name, options) => {
+        if (name.endsWith('/archive.tar')) reads.push(options.range);
+        return get(name, options);
+    });
+
+    const wholes = [];
+    for (const range of ['bytes=0-1,5-6', 'bytes=5-2', 'items=0-1']) wholes.push(await host(`/${id}/clip.mp4`, { key, headers: { range } }));
+    const head = await host(`/${id}/clip.mp4`, { key, method: 'HEAD', headers: { range: 'bytes=100-199' } });
+    const empty = await host(`/${id}/empty.txt`, { key, headers: { range: 'bytes=0-' } });
+
+    assert.deepEqual(wholes.map((answer) => [answer.status, answer.body, answer.headers.get('content-range')]), wholes.map(() => [200, CLIP, null]));
+    assert.deepEqual([head.status, head.body, head.headers.get('content-length'), head.headers.get('accept-ranges'), head.headers.get('content-range')], [200, '', '2000', 'bytes', null]);
+    assert.deepEqual([empty.status, empty.body, empty.headers.get('content-range')], [200, '', null]);
+    assert.deepEqual(reads, wholes.map(() => ({ offset: CLIP_AT, length: 2000 })));
 });
 
 test('types a file by the table\'s own entries alone: an extension that names what Object.prototype holds is served as bytes', async () => {
