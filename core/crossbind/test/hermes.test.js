@@ -32,15 +32,26 @@ afterEach(() => {
 });
 
 describe("Hermes' dSYM", () => {
-    test("comes from the release's pinned archive, of which the device's dSYM alone stays, downloaded once", async () => {
+    test("comes from the release's pinned archive, of which an iOS device's and macOS's dSYMs alone stay, downloaded once", async () => {
         const dir = upath.join(home, '.crossbind', 'cache', 'hermes', `${HERMES.version}-dsym`);
         expect(upath.toUnix(await resolveHermesDsym())).toBe(`${dir}/source/iphoneos/hermesvm.framework.dSYM`);
         expect(download.mock.calls.map(([url, output, sha256]) => [url, upath.toUnix(output), sha256])).toEqual([[HERMES_DSYM.url, dir, HERMES_DSYM.sha256]]);
         expect(fs.readdirSync(dir)).toEqual(['source']);
-        expect(fs.readdirSync(`${dir}/source`)).toEqual(['iphoneos']);
+        expect(fs.readdirSync(`${dir}/source`).sort()).toEqual(['iphoneos', 'macosx']);
         expect(said).toEqual([expect.stringContaining(`downloading the dSYM of Hermes ${HERMES.version} once`)]);
 
-        await resolveHermesDsym();
+        expect(upath.toUnix(await resolveHermesDsym('macos'))).toBe(`${dir}/source/macosx/hermesvm.framework.dSYM`);
+        await resolveHermesDsym('ios');
         expect(said).toHaveLength(1);
+        expect(await Promise.all(download.mock.results.map(({ value }) => value))).toEqual([true, false, false]);
+    });
+
+    test("downloads the archive again for a macOS app where the cache kept an iOS device's alone", async () => {
+        const dir = upath.join(home, '.crossbind', 'cache', 'hermes', `${HERMES.version}-dsym`);
+        fs.mkdirSync(`${dir}/source/iphoneos/hermesvm.framework.dSYM`, { recursive: true });
+
+        expect(upath.toUnix(await resolveHermesDsym('macos'))).toBe(`${dir}/source/macosx/hermesvm.framework.dSYM`);
+        expect(await Promise.all(download.mock.results.map(({ value }) => value))).toEqual([true]);
+        expect(fs.readdirSync(`${dir}/source`).sort()).toEqual(['iphoneos', 'macosx']);
     });
 });

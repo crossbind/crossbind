@@ -32,6 +32,8 @@ const { publisher } = appStore();
 
 const TEAM = 'ABCDE12345';
 const KEY = { key: '/keys/AuthKey_ABC123.p8', keyId: 'ABC123', issuer: 'issuer-uuid' };
+// Hermes' macOS dSYM, which api.apple.dsyms gives a macOS app.
+const hermesDsym = () => `${project}/hermes/macosx/hermesvm.framework.dSYM`;
 
 let project;
 const hostPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
@@ -71,6 +73,7 @@ function apiOf({
             },
             apple: {
                 key: () => key,
+                dsyms: async () => [hermesDsym()],
                 xcodebuild: (what, args, xcodebuildOptions) => {
                     builds.push({ what, args, options: xcodebuildOptions });
                     return xcodebuild(what, args, xcodebuildOptions);
@@ -101,6 +104,7 @@ beforeEach(() => {
     sentPages.length = 0;
     appStoreConnect();
     write('dist/Demo.app/Contents/Info.plist', '<plist/>');
+    write('hermes/macosx/hermesvm.framework.dSYM/Contents/Resources/DWARF/hermesvm', 'dwarf');
 });
 
 afterEach(() => {
@@ -127,7 +131,7 @@ describe("App Store Connect's publisher of a macOS app", () => {
         ]);
 
         const { api, logs } = apiOf({ key: null, encryption: null });
-        expect(await publisher.check(api)).toEqual({ session: { key: null, facts: { id: 'com.example.demo', team: TEAM } } });
+        expect(await publisher.check(api)).toEqual({ session: { key: null, dsyms: [hermesDsym()], facts: { id: 'com.example.demo', team: TEAM } } });
         expect(logs[0]).toContain('app.encryption is not set, so App Store Connect asks whether this build uses encryption');
         expect(connect.calls).toEqual([]);
     });
@@ -158,6 +162,9 @@ describe("App Store Connect's publisher of a macOS app", () => {
         for (const value of ['Applications/Demo.app', 'arm64', 'com.example.demo', '1.2.3', TEAM, '-', 'Demo']) expect(info).toContain(`<string>${value}</string>`);
         expect(info).toContain('<integer>2</integer>');
         expect(info).toMatch(/<date>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z<\/date>/);
+        const dsymutil = spawnSync.mock.calls.find(([command]) => command === 'dsymutil');
+        expect(dsymutil[1].map((arg) => upath.toUnix(arg))).toEqual([`${archive}/Products/Applications/Demo.app/Contents/MacOS/Demo`, '-o', `${archive}/dSYMs/Demo.app.dSYM`]);
+        expect(fs.readFileSync(`${archive}/dSYMs/hermesvm.framework.dSYM/Contents/Resources/DWARF/hermesvm`, 'utf8')).toBe('dwarf');
 
         expect(builds.map(({ what }) => what)).toEqual(['the upload']);
         const args = builds[0].args.map((arg) => upath.toUnix(arg));
@@ -173,6 +180,19 @@ describe("App Store Connect's publisher of a macOS app", () => {
         await publisher.upload(api, session, { apps: [{ app: `${project}/dist/Demo.app`, arch: 'x64', installers: [] }] });
         expect(fs.readFileSync(`${archive}/Info.plist`, 'utf8')).toContain('<string>x86_64</string>');
         await expect(publisher.upload(api, session, { apps: [] })).rejects.toThrow('the build made no macOS app');
+    });
+
+    test('stops before the upload where dsymutil makes no dSYM of the app', async () => {
+        spawnSync.mockImplementation((command, [from, to]) => {
+            if (command === 'ditto') fs.cpSync(from, to, { recursive: true });
+            return command === 'dsymutil' ? { status: 1, stdout: '', stderr: 'error: no such file' } : { status: 0, stdout: '', stderr: '' };
+        });
+        const { api, builds } = apiOf();
+        const { session } = await publisher.check(api);
+
+        await expect(publisher.upload(api, session, { apps: [{ app: `${project}/dist/Demo.app`, arch: 'arm64', installers: [] }] }))
+            .rejects.toThrow('dsymutil could not write the dSYM of');
+        expect(builds).toEqual([]);
     });
 
     test('registers the bundle id where App Store Connect has no app on macOS, and names the platform to add', async () => {

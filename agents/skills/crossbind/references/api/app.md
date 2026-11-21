@@ -1742,8 +1742,9 @@ Apple first, through an export that uploads nothing, so App Store Connect's form
 The archived app shows what of Apple's required reason API it calls, and a category its privacy manifest gives no reason
 for stops the upload before the upload, which App Store Connect would refuse (see [iOS](#ios)). The upload carries the
 app's dSYM, with the files and lines of the host and the project's own code, and Hermes' dSYM, which crossbind
-downloads before the first build from Maven Central and checks against the sha256 it pins, keeping the device's 80 MB
-of the release's 360 MB. Crash reports in App Store Connect and Xcode's Organizer then show functions and lines. What
+downloads before the first build from Maven Central and checks against the sha256 it pins, keeping an iOS device's 80
+MB and macOS's 178 MB of the release's 360 MB. Crash reports in App Store Connect and Xcode's Organizer then show
+functions and lines. What
 App Store Connect warns of without refusing the upload, the upload repeats. The archive, the upload's options and
 both logs stay in `.crossbind/build/app-store/`.
 
@@ -1943,7 +1944,9 @@ no certificate goes into the keychain. Xcode numbers the build after the builds 
 `CROSSBIND_APP_BUILD_NUMBER` gives one, and TestFlight hands it to Mac testers once Apple has processed it. `crossbind
 app release app-store -p macos` hands the macOS version to App Review, through the App Store Connect API key, with the
 listing `store/app-store` holds, its `APP_DESKTOP` screenshots for macOS, and `--rollout` releases it in phases over 7
-days. It takes `app.team`, `app.category`, and `app.encryption`, which App Store Connect asks of every Mac build.
+days. It takes `app.team`, `app.category`, and `app.encryption`, which App Store Connect asks of every Mac build. The
+archive carries Hermes' macOS dSYM and the app's, which `dsymutil` makes of the symbols the app's binary keeps: crossbind
+builds a macOS app without debug information, so its crash reports show functions without files and lines.
 
 ### Microsoft Store
 

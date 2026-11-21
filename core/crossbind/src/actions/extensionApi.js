@@ -291,7 +291,7 @@ export default function extensionApi(name, {
             xcodebuild: (what, args, xcodebuildOptions) => xcodebuild(what, args, xcodebuildOptions),
             unreasonedApis: (binary, privacy) => unreasonedImports(binary, privacy),
             privacyCategories: deepFrozen(structuredClone(PRIVACY_CATEGORIES)),
-            dsyms: async () => [await resolveHermesDsym()],
+            dsyms: async () => [await resolveHermesDsym(platform)],
         }),
         windows: Object.freeze({
             icon() {

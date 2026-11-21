@@ -59,7 +59,7 @@ vi.mock('../src/actions/uploadKey.js', () => ({
     },
 }));
 vi.mock('../src/actions/xcodebuild.js', () => ({ xcodebuild: () => 'built', xcodeTeams: () => [{ id: 'ABCDE12345', name: 'Ada Ltd' }] }));
-vi.mock('../src/utils/hermes.js', async (importOriginal) => ({ ...await importOriginal(), resolveHermesDsym: async () => '/hermes/hermesvm.framework.dSYM' }));
+vi.mock('../src/utils/hermes.js', async (importOriginal) => ({ ...await importOriginal(), resolveHermesDsym: async (platform) => `/hermes/${platform}/hermesvm.framework.dSYM` }));
 // The tools that package an app: here and in the linux image, and in the windows image.
 const tools = { run: vi.fn(), inWindowsImage: vi.fn() };
 vi.mock('../src/actions/run.js', () => ({ default: (...args) => tools.run(...args) }));
@@ -249,7 +249,8 @@ describe("an extension's api", () => {
         expect([signing.made, api.settings.get('ANDROID_KEYSTORE')]).toEqual([1, '/keys/upload.p12']);
         expect(api.apple.key()).toBeNull();
         expect(api.apple.teams()).toEqual([{ id: 'ABCDE12345', name: 'Ada Ltd' }]);
-        expect(await api.apple.dsyms()).toEqual(['/hermes/hermesvm.framework.dSYM']);
+        expect(await api.apple.dsyms()).toEqual(['/hermes/ios/hermesvm.framework.dSYM']);
+        expect(await extensionApi('demo-store', { platform: 'macos' }).apple.dsyms()).toEqual(['/hermes/macos/hermesvm.framework.dSYM']);
         expect(api.apple.privacyCategories.fileTimestamp.reasons).toContain('C617.1');
         expect(Object.isFrozen(api.apple.privacyCategories.fileTimestamp.reasons)).toBe(true);
     });
