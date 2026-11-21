@@ -432,6 +432,8 @@ export async function handleSnapshotHost({
     if (path === SESSION_PATH) return sessionAnswer(snapshot, url.searchParams.get('challenge'));
     const object = isPlainPath(path) ? await deps.snapshots.file(snapshot, path, { head }) : null;
     if (!object) return jsonResponse(404, { error: 'Not found.' });
-    const type = TYPES[path.split('.').pop().toLowerCase()] ?? 'application/octet-stream';
+    // The table's own entries alone: an extension such as `constructor` names nothing of Object.prototype's here.
+    const extension = path.split('.').pop().toLowerCase();
+    const type = Object.hasOwn(TYPES, extension) ? TYPES[extension] : 'application/octet-stream';
     return new Response(head ? null : object.body, { headers: { ...FILE_HEADERS, 'content-type': type, ...(head ? { 'content-length': String(object.size) } : {}) } });
 }
