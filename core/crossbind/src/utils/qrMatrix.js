@@ -1,6 +1,6 @@
 // A QR code of a short text, as a matrix of modules (ISO/IEC 18004): byte mode, error correction level M, versions 1 to
 // 6. It imports nothing and uses no Node API, so a terminal and a web page draw the same matrix. Its matrices for every
-// version and mask are the ones macOS's own QR reader reads back (test/qr/readBack.mjs).
+// version and mask are the ones macOS's own QR reader reads back (test/qrReadBack.mjs).
 
 // Per version, level M: [data codewords, error correction codewords per block, blocks]. Every block of a version is
 // the same length up to version 6.
