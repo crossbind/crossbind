@@ -33,11 +33,11 @@ export default {
         },
         {
             type: 'p',
-            text: '**Limits.** Each network gets a few compiles a day; signing in with GitHub raises your own limit. An unedited sample needs no compile at all, and code that compiled before comes back from the cache without counting. A compile stops after 45 seconds and 2 GB of memory.',
+            text: '**Limits.** Each network gets a few compiles a day; signing in, with GitHub or Apple, raises your own limit. An unedited sample needs no compile at all, and code that compiled before comes back from the cache without counting. A compile stops after 45 seconds and 2 GB of memory.',
         },
         {
             type: 'p',
-            text: '**What happens to your code.** Your sources are compiled in a sandbox without network access and deleted afterwards. The result, with the build log, is cached for up to a week under a hash of the sources, so the same code compiles once. Signing in stores your GitHub user id and name, and how much you compile; no email. [Privacy](/privacy/) has the details and how to delete your account.',
+            text: "**What happens to your code.** Your sources are compiled in a sandbox without network access and deleted afterwards. The result, with the build log, is cached for up to a week under a hash of the sources, so the same code compiles once. Signing in stores your GitHub user id and name, or Apple's id for you, and how much you compile; no email. [Privacy](/privacy/) has the details and how to delete your account.",
         },
     ],
 };

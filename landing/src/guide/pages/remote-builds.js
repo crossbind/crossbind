@@ -27,7 +27,7 @@ export default {
         { type: 'h2', id: 'cloud', text: 'crossbind cloud' },
         {
             type: 'p',
-            text: 'Sign in with GitHub, and every toolchain image (web, android, linux and windows) builds on crossbind cloud:',
+            text: 'Sign in with GitHub or Apple, and every toolchain image (web, android, linux and windows) builds on crossbind cloud:',
         },
         {
             type: 'code',
@@ -39,12 +39,12 @@ crossbind usage`,
         },
         {
             type: 'p',
-            text: '`crossbind login` shows a code to enter on github.com and asks GitHub for no permissions; GitHub accounts younger than 30 days are refused. The token is kept in `~/.crossbind/credentials.json`, readable only by you, and stops working after 90 days unused. The cloud is used only while no runner address is set: setting one, for any image, keeps every image off the cloud.',
+            text: "`crossbind login` shows a code to enter on crossbind cloud's device page, [crossbind.dev/device](https://crossbind.dev/device/), where you sign in with GitHub or Apple. Once you approve the code, the page shows a number to type at the terminal, which gets one try, so `crossbind login` needs a terminal. Neither GitHub nor Apple is asked for a permission, and GitHub accounts younger than 30 days are refused. The token is kept in `~/.crossbind/credentials.json`, readable only by you, and stops working after 90 days unused. The cloud is used only while no runner address is set: setting one, for any image, keeps every image off the cloud.",
         },
         {
             type: 'ul',
             items: [
-                "**Time.** 60 build minutes a month per GitHub account, counted from a build's first step until a minute after its last. They reset on the 1st (UTC); `crossbind usage` shows them by image.",
+                "**Time.** 60 build minutes a month per account, counted from a build's first step until a minute after its last. They reset on the 1st (UTC); `crossbind usage` shows them by image. An account made by signing in with Apple gets them 30 days after it was made, or as soon as it links a GitHub account on its page.",
                 "**Shared caps.** Everyone's build time together is capped per day and per month. When your minutes or a cap run out, steps stop with a message; `CROSSBIND_RUNNER=DOCKER_RUN` builds in the local Docker instead.",
                 '**Isolation.** Each account gets a microVM of its own per image, stopped and wiped a minute after its last step.',
                 '**Network.** A cloud runner downloads from crates.io, ConanCenter and GitHub and reaches nothing else, so a Conan recipe whose sources live on another host, or a step that uploads, fails there.',
@@ -53,7 +53,7 @@ crossbind usage`,
         },
         {
             type: 'p',
-            text: "The cloud keeps your GitHub id and name, when you signed in, your tokens' hashes and how long your runners were up: no email, and none of your sources once a runner stops. `crossbind logout` revokes this machine's token (`--all` every machine's), and `crossbind account delete --yes` deletes the account; see [Privacy](/privacy/).",
+            text: "The cloud keeps your GitHub id and name or Apple's id for you, when you signed in, your tokens' hashes and how long your runners were up: no email, and none of your sources once a runner stops. `crossbind logout` revokes this machine's token (`--all` every machine's), and `crossbind account delete --yes` deletes the account; see [Privacy](/privacy/).",
         },
 
         { type: 'h2', id: 'own-runner', text: 'A runner of your own' },

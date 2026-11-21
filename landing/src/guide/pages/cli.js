@@ -226,7 +226,7 @@ crossbind build -p wasm`,
         {
             type: 'entries',
             items: [
-                { name: '`login`', text: 'Signs in to crossbind cloud with GitHub: enter the printed code on github.com. The token is kept in `~/.crossbind/credentials.json`.' },
+                { name: '`login`', text: 'Signs in to crossbind cloud: enter the printed code on crossbind.dev/device, signed in there with GitHub or Apple, then type the number the page shows, so it needs a terminal. The token is kept in `~/.crossbind/credentials.json`.' },
                 { name: '`logout [--all]`', text: "Forgets and revokes this machine's token. `--all` revokes the tokens of every machine signed in to the account." },
                 { name: '`usage`', text: "This month's cloud build time by image and what is left, and today's playground compiles left." },
                 { name: '`account delete --yes`', text: 'Deletes the account and signs out every machine. Without `--yes` it deletes nothing.' },
