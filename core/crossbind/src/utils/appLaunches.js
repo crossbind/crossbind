@@ -75,14 +75,16 @@ export function fileTypeOwners(config) {
 }
 
 const ROLE_NAMES = { editor: 'Editor', viewer: 'Viewer' };
+// The rank Launch Services gives an app that opens a type, which App Store Connect asks each document type of a macOS
+// or an iOS app for.
+const HANDLER_RANK = 'Default';
 
-// A macOS app's document types: each by its extensions, unless its content types name it, with the rank Launch Services
-// gives an app that opens it, which App Store Connect asks for.
+// A macOS app's document types: each by its extensions, unless its content types name it.
 export function macDocumentTypes(fileTypes) {
     return fileTypes.map(({ name, extensions, mimeTypes, role, contentTypes }) => ({
         CFBundleTypeName: name,
         CFBundleTypeRole: ROLE_NAMES[role],
-        LSHandlerRank: 'Default',
+        LSHandlerRank: HANDLER_RANK,
         ...(contentTypes.length > 0 ? { LSItemContentTypes: contentTypes } : { CFBundleTypeExtensions: extensions }),
         ...(mimeTypes.length > 0 ? { CFBundleTypeMIMETypes: mimeTypes } : {}),
     }));
@@ -99,6 +101,7 @@ export function iosDocumentTypes(fileTypes, bundleId) {
         CFBundleDocumentTypes: fileTypes.map((type) => ({
             CFBundleTypeName: type.name,
             CFBundleTypeRole: ROLE_NAMES[type.role],
+            LSHandlerRank: HANDLER_RANK,
             LSItemContentTypes: type.contentTypes.length > 0 ? type.contentTypes : [ownIdentifier(type)],
         })),
         UTImportedTypeDeclarations: fileTypes.filter((type) => type.contentTypes.length === 0).map((type) => ({
