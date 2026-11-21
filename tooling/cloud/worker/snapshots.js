@@ -44,6 +44,8 @@ const SESSION_PATH = '__crossbind/session';
 // What the crossbind app's proxy adds to every request: an HMAC of the pairing key, as the dev server's gate takes it.
 const GATE_HEADER = 'x-crossbind-preview';
 const BASE64URL_32 = /^[A-Za-z0-9_-]{43}$/;
+// One byte range, as a media element asks it: its first and last bytes, or its last bytes alone.
+const ONE_RANGE = /^bytes=(\d*)-(\d*)$/i;
 const TYPES = Object.freeze({
     html: 'text/html; charset=utf-8',
     js: 'text/javascript; charset=utf-8',
@@ -98,6 +100,18 @@ class Refused extends Error {
 
 export const isPlainPath = (path) => typeof path === 'string' && PLAIN_PATH.test(path) && !path.startsWith(OWN_PATHS)
     && path.split('/').every((name) => name !== '.' && name !== '..');
+
+// The one byte range a GET asks of a file of `size` bytes (RFC 9110 14.1.2): { start, end }, both of them in it; 'past'
+// for one that begins past the file's end; null for none, for several, which the file whole answers, for one out of its
+// form, and for an empty file.
+export function rangeOf(header, size) {
+    const asked = ONE_RANGE.exec(header?.trim() ?? '');
+    if (!asked || size === 0 || (asked[1] === '' && asked[2] === '')) return null;
+    const [first, last] = asked.slice(1).map((digits) => (digits === '' ? null : Number(digits)));
+    if (first === null) return last === 0 ? 'past' : { start: Math.max(0, size - last), end: size - 1 };
+    if (last !== null && last < first) return null;
+    return first >= size ? 'past' : { start: first, end: Math.min(last ?? size - 1, size - 1) };
+}
 
 // The archive's bytes as they come, never held whole: a block taken to be read, or bytes handed on to a writer.
 function byteReader(stream) {
@@ -326,15 +340,19 @@ export function createSnapshots(db, bucket, now = () => Date.now(), indexes = IS
                 .bind(id, timestamp(now())).first();
         },
 
-        // A file of a snapshot's upload, by the upload's index: { size, body }, the body a ranged read of the archive, none
-        // for a HEAD or an empty file; null where the index has no such file, or the upload no index.
-        async file({ id, upload }, path, { head }) {
+        // A file of a snapshot's upload, by the upload's index: { size, body, part }, the body one ranged read of the
+        // archive at the file's offset, of the byte range a GET asks (rangeOf) as `part`, else of the file whole; none for a
+        // HEAD, an empty file, or a range past its end, whose `part` is 'past'; null where the index has no such file, or
+        // the upload no index.
+        async file({ id, upload }, path, { head, range }) {
             const prefix = `${PREFIX}${id}/${upload}/`;
             const entry = (await indexOf(bucket, indexes, prefix))?.get(path);
             if (!entry) return null;
-            if (head || entry.size === 0) return { size: entry.size, body: null };
-            const object = await bucket.get(`${prefix}${ARCHIVE}`, { range: { offset: entry.offset, length: entry.size } });
-            return object && { size: entry.size, body: object.body };
+            const part = head ? null : rangeOf(range, entry.size);
+            if (head || entry.size === 0 || part === 'past') return { size: entry.size, body: null, part };
+            const [start, end] = part ? [part.start, part.end] : [0, entry.size - 1];
+            const object = await bucket.get(`${prefix}${ARCHIVE}`, { range: { offset: entry.offset + start, length: end - start + 1 } });
+            return object && { size: entry.size, body: object.body, part };
         },
 
         // A new key, drawn at random, for each snapshot of the account once a device that may have read the keys is
@@ -472,7 +490,8 @@ async function sessionAnswer(snapshot, challenge) {
 
 // The snapshot host, https://<SNAPSHOTS_HOST>/<session>/<path>: GET and HEAD of a snapshot's files, and nothing of the
 // API's, no page and no cookie. Behind a limiter of its own, as a snapshot loads many files at once; nothing answers
-// without the gate's token, the session included, and an unknown snapshot gets the same 403, which tells nothing.
+// without the gate's token, the session included, and an unknown snapshot gets the same 403, which tells nothing. A GET
+// of one byte range gets that range, as a media element seeks; a HEAD the file's length.
 export async function handleSnapshotHost({
     request, deps, settings, network,
 }) {
@@ -486,10 +505,20 @@ export async function handleSnapshotHost({
     if (!snapshot || !(await passesGate(request, snapshot.key))) return jsonResponse(403, { error: 'This snapshot answers the devices of its account alone.' });
     const path = rest.join('/') || 'index.html';
     if (path === SESSION_PATH) return sessionAnswer(snapshot, url.searchParams.get('challenge'));
-    const object = isPlainPath(path) ? await deps.snapshots.file(snapshot, path, { head }) : null;
+    const object = isPlainPath(path) ? await deps.snapshots.file(snapshot, path, { head, range: request.headers.get('range') }) : null;
     if (!object) return jsonResponse(404, { error: 'Not found.' });
+    if (object.part === 'past') return jsonResponse(416, { error: 'This range begins past the end of the file.' }, { 'content-range': `bytes */${object.size}` });
     // The table's own entries alone: an extension such as `constructor` names nothing of Object.prototype's here.
     const extension = path.split('.').pop().toLowerCase();
     const type = Object.hasOwn(TYPES, extension) ? TYPES[extension] : 'application/octet-stream';
-    return new Response(head ? null : object.body, { headers: { ...FILE_HEADERS, 'content-type': type, ...(head ? { 'content-length': String(object.size) } : {}) } });
+    return new Response(head ? null : object.body, {
+        status: object.part ? 206 : 200,
+        headers: {
+            ...FILE_HEADERS,
+            'content-type': type,
+            'accept-ranges': 'bytes',
+            ...(head ? { 'content-length': String(object.size) } : {}),
+            ...(object.part ? { 'content-range': `bytes ${object.part.start}-${object.part.end}/${object.size}` } : {}),
+        },
+    });
 }
