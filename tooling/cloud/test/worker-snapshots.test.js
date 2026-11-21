@@ -676,6 +676,23 @@ test('answers 404 for each file of an upload of the layout before, a file an obj
     assert.deepEqual([before.status, next.status, after.status, after.body], [404, 200, 200, PAGE]);
 });
 
+test('keeps in the row what R2 holds of an upload, its archive\'s length with what follows its end, which the total reads; the caps and the answer count its files\' bytes', async () => {
+    const sent = Buffer.concat([archiveOf([['index.html', PAGE]]), Buffer.alloc(2048, 1)]);
+    const next = archiveOf([['index.html', PAGE]]);
+    // Room for the first archive and one byte short of the next.
+    const { call, signedIn, db } = setup({ environment: { ...env, SNAPSHOTS_TOTAL_GB: String((sent.length + next.length - 1) / 1024 ** 3) } });
+    const owner = await signedIn(dev);
+    const first = await start(call, owner, project('first'));
+    const second = await start(call, owner, project('second'));
+
+    const put = await call('PUT', `/v1/snapshots/${first.body.id}`, { token: owner.cli, archive: sent });
+    const row = await db.prepare('SELECT bytes FROM sessions WHERE id = ?').bind(first.body.id).first('bytes');
+    const past = await call('PUT', `/v1/snapshots/${second.body.id}`, { token: owner.cli, archive: next });
+
+    assert.deepEqual([put.status, put.body.bytes, row], [200, PAGE.length, sent.length]);
+    assert.deepEqual([past.status, past.body.error], [503, 'crossbind cloud holds as many snapshots as it can; try again tomorrow.']);
+});
+
 test(`keeps ${MAX_SNAPSHOTS_PER_ACCOUNT} snapshots an account and refuses a fourth project's, which one that ended, or waited an hour for its upload in vain, makes room for`, async () => {
     const {
         call, signedIn, uploaded, advance,
