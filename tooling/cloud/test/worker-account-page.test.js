@@ -6,6 +6,8 @@ import { handleRequest } from '../worker/api.js';
 import { STATE_COOKIE } from '../worker/oauth.js';
 import { signSession, SESSION_COOKIE } from '../worker/session.js';
 import { sqliteD1 } from '../scripts/sqlite-d1.mjs';
+import { createSnapshots } from '../worker/snapshots.js';
+import { memoryBucket } from './support/bucket.mjs';
 
 const API = 'https://api.crossbind.dev';
 const SITE = 'https://crossbind.dev';
@@ -33,6 +35,7 @@ function setup({ environment = env } = {}) {
     const deps = {
         limits: { api: { limit: async () => ({ success: true }) } },
         accounts,
+        snapshots: createSnapshots(db, memoryBucket(), () => now),
         quota: { remaining: async ({ limit }) => limit },
         fetcher: async (url) => { throw new Error(`nothing outside is reached: ${url}`); },
         now: () => now,

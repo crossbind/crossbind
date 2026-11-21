@@ -4,6 +4,8 @@ import { createHash } from 'node:crypto';
 import { handleRequest } from '../worker/api.js';
 import { createAccounts, OWN_IDS_FROM } from '../worker/accounts.js';
 import { sqliteD1 } from '../scripts/sqlite-d1.mjs';
+import { createSnapshots } from '../worker/snapshots.js';
+import { memoryBucket } from './support/bucket.mjs';
 
 const API = 'https://api.crossbind.dev/v1';
 const NOW = Date.parse('2026-10-08T12:00:00Z');
@@ -39,6 +41,7 @@ function setup({ fetcher = github(), environment = env, loginOverLimit = false }
             login: { limit: async () => ({ success: !loginOverLimit }) },
         },
         accounts,
+        snapshots: createSnapshots(db, memoryBucket(), () => NOW),
         quota: { remaining: async ({ key, limit }) => (key === 'user:583231' ? limit - 3 : limit) },
         fetcher,
         now: () => NOW,

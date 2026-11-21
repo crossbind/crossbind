@@ -11,6 +11,8 @@ import { memoryStorage } from '../scripts/memory-storage.mjs';
 import { sqliteD1 } from '../scripts/sqlite-d1.mjs';
 import { isLocalSource } from '../../../core/crossbind/src/utils/previewAddress.js';
 import { listedNameProblem } from '../../../core/crossbind/src/utils/previewSession.js';
+import { createSnapshots } from '../worker/snapshots.js';
+import { memoryBucket } from './support/bucket.mjs';
 
 // The sessions crossbind app preview registers for an account's devices: the CLI's token registers, renews and removes
 // one, the crossbind app's lists them with their keys, and nothing of one reaches another account.
@@ -39,6 +41,7 @@ function setup() {
         limits: { api: unlimited },
         accounts,
         sessions: createProjectSessions(db, () => now),
+        snapshots: createSnapshots(db, memoryBucket(), () => now),
         quota: createQuota(memoryStorage(), () => now),
         now: () => now,
     };

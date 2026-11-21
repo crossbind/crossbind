@@ -11,6 +11,7 @@ import {
 import {
     clearCookie, noticeCookie, readNotice, readPending, readSignedIn, sessionCookie, signSession, NOTICE_COOKIE, PENDING_COOKIE, SESSION_COOKIE, SESSION_TTL_MS,
 } from './session.js';
+import { deleteAccountWithSnapshots } from './snapshots.js';
 
 // The account's own pages on this API's origin, /login and the device page /device, and the routes under /account/ that
 // their forms and script post to. Those take a request from this origin alone, so no other site, crossbind.dev
@@ -433,7 +434,7 @@ async function deleteRoute({ request, deps }, user) {
     const { form, error } = await readForm(request);
     if (error) return error;
     if (form.get('confirm') !== 'yes') return jsonResponse(400, { error: 'Tick the box to delete the account.' });
-    await deps.accounts.deleteAccount(user.id);
+    await deleteAccountWithSnapshots(deps, user.id);
     log({ event: 'account-deleted', who: userKey(user.id) });
     return seeOther(request, '/login#deleted', [clearCookie(SESSION_COOKIE)]);
 }

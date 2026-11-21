@@ -4,6 +4,7 @@ import { handleRequest } from './api.js';
 import { createDeviceCodes } from './devices.js';
 import { createProjectSessions } from './project-sessions.js';
 import { createQuota } from './quota.js';
+import { createSnapshots } from './snapshots.js';
 
 // The runners' outbound traffic goes through ContainerProxy, which holds it to their allowed hosts.
 export { ContainerProxy } from '@cloudflare/containers';
@@ -114,11 +115,19 @@ export default {
     fetch(request, env, ctx) {
         return handleRequest(request, env, {
             limits: {
-                api: env.API_LIMITER, login: env.LOGIN_LIMITER, runner: env.RUNNER_LIMITER, starts: env.STARTS_LIMITER, poll: env.POLL_LIMITER, code: env.CODE_LIMITER,
+                api: env.API_LIMITER,
+                login: env.LOGIN_LIMITER,
+                runner: env.RUNNER_LIMITER,
+                starts: env.STARTS_LIMITER,
+                poll: env.POLL_LIMITER,
+                code: env.CODE_LIMITER,
+                snapshot: env.SNAPSHOT_LIMITER,
+                upload: env.UPLOAD_LIMITER,
             },
             accounts: createAccounts(env.DB),
             devices: createDeviceCodes(env.DB),
             sessions: createProjectSessions(env.DB),
+            snapshots: createSnapshots(env.DB, env.SNAPSHOTS),
             runner: (image, userId) => env[`RUNNER_${image.toUpperCase()}`].getByName(userId),
             recentTokens,
             quota: env.QUOTA.getByName('quota'),
@@ -130,9 +139,14 @@ export default {
     },
 
     // Daily (`triggers` in wrangler.jsonc): what accounts keep only for a while goes (worker/accounts.js), the devices'
-    // sign-in codes past their ten minutes (worker/devices.js), and the sessions past their life
-    // (worker/project-sessions.js).
+    // sign-in codes past their ten minutes (worker/devices.js), the sessions past their life (worker/project-sessions.js),
+    // and the snapshots' files no live snapshot names (worker/snapshots.js).
     scheduled(controller, env, ctx) {
-        ctx.waitUntil(Promise.all([createAccounts(env.DB).prune(), createDeviceCodes(env.DB).prune(), createProjectSessions(env.DB).prune()]));
+        ctx.waitUntil(Promise.all([
+            createAccounts(env.DB).prune(),
+            createDeviceCodes(env.DB).prune(),
+            createProjectSessions(env.DB).prune(),
+            createSnapshots(env.DB, env.SNAPSHOTS).prune(),
+        ]));
     },
 };
