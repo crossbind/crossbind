@@ -56,7 +56,7 @@ test('makes an account of crossbind\'s own at a GitHub account\'s first sign-in,
         id: OWN[0], login: 'octocat-renamed', created_at: '2026-10-08T12:00:00.000Z', last_login_at: '2026-10-08T12:01:00.000Z', blocked: 0, signed_out_at: null,
     }]);
     assert.deepEqual(await rows(db, 'SELECT * FROM identities'), [{
-        provider: 'github', subject: '583231', user_id: OWN[0], created_at: '2026-10-08T12:00:00.000Z', unlinked_at: null,
+        provider: 'github', subject: '583231', user_id: OWN[0], created_at: '2026-10-08T12:00:00.000Z', unlinked_at: null, github_created_at: null,
     }]);
 });
 
@@ -93,10 +93,10 @@ test('reports a blocked account at sign-in and when asked', async () => {
 
     assert.deepEqual(await accounts.signIn(github), signedInAs(octocat.id, 'octocat', true));
     assert.deepEqual(await accounts.standing('583231'), {
-        exists: true, blocked: true, login: 'octocat', name: 'octocat', signedOutAt: null, createdAt: AT, github: true,
+        exists: true, blocked: true, login: 'octocat', name: 'octocat', signedOutAt: null, createdAt: AT, github: true, githubCreatedAt: null,
     });
     assert.deepEqual(await accounts.standing('1'), {
-        exists: false, blocked: false, login: '', name: '', signedOutAt: null, createdAt: null, github: false,
+        exists: false, blocked: false, login: '', name: '', signedOutAt: null, createdAt: null, github: false, githubCreatedAt: null,
     });
 });
 
@@ -356,6 +356,51 @@ test('keeps cloud builds from an account with no GitHub account linked for its f
     ], ['2026-12-20', '2026-12-20', null, null, '2027-01-19']);
 });
 
+test('keeps an account that a GitHub account younger than 30 days made, or was linked to, new until that GitHub account or the account itself is 30 days old, whichever is first', () => {
+    const at = (time) => Date.parse(time);
+    // Made by a GitHub account five days old.
+    const madeByYoung = { createdAt: '2026-11-20T10:00:00.000Z', github: true, githubCreatedAt: '2026-11-15T10:00:00.000Z' };
+    // An Apple ID's account twenty days old, with that GitHub account linked.
+    const youngLinked = { createdAt: '2026-10-31T10:00:00.000Z', github: true, githubCreatedAt: '2026-11-15T10:00:00.000Z' };
+
+    assert.deepEqual([
+        buildsOpenOn(madeByYoung, 30, at('2026-11-20T10:00:00Z')),
+        buildsOpenOn(madeByYoung, 30, at('2026-12-15T09:59:59.999Z')),
+        buildsOpenOn(madeByYoung, 30, at('2026-12-15T10:00:00Z')),
+        buildsOpenOn(youngLinked, 30, at('2026-11-20T10:00:00Z')),
+        buildsOpenOn(youngLinked, 30, at('2026-11-30T10:00:00Z')),
+        buildsOpenOn({ createdAt: madeByYoung.createdAt, github: false, githubCreatedAt: null }, 30, at('2026-11-20T10:00:00Z')),
+    ], ['2026-12-15', '2026-12-15', null, '2026-11-30', null, '2026-12-20']);
+});
+
+test('keeps the moment GitHub made a young GitHub account with its identity, at its first sign-in and at a link, and reads it with the account while it is linked', async () => {
+    const { db, accounts } = setup();
+    const young = { ...madeUp, githubCreatedAt: '2026-10-03T12:00:00.000Z' };
+    const linkedYoung = {
+        provider: 'github', subject: '8000000003', login: 'made_up_three', githubCreatedAt: '2026-10-05T12:00:00.000Z',
+    };
+
+    const { user } = await accounts.signIn(young);
+    const token = await accounts.issueToken(user.id);
+    await accounts.signIn(madeUp);
+    const { user: apple } = await accounts.signIn(appleOf(APPLE[0]));
+    const linked = await accounts.link(apple.id, linkedYoung);
+    const kept = await rows(db, 'SELECT provider, subject, github_created_at FROM identities ORDER BY subject');
+    const read = [(await accounts.standing(user.id)).githubCreatedAt, (await accounts.userOfToken(token)).githubCreatedAt, (await accounts.standing(apple.id)).githubCreatedAt];
+    // Unlinked with build seconds this month, it is held under the account, and counts for it no more.
+    await accounts.addBuildSeconds(apple.id, NOW, 'web', 60);
+    await accounts.unlink(apple.id, 'github');
+
+    assert.equal(linked.outcome, 'linked');
+    assert.deepEqual(kept, [
+        { provider: 'apple', subject: APPLE[0], github_created_at: null },
+        { provider: 'github', subject: '8000000002', github_created_at: '2026-10-03T12:00:00.000Z' },
+        { provider: 'github', subject: '8000000003', github_created_at: '2026-10-05T12:00:00.000Z' },
+    ]);
+    assert.deepEqual(read, ['2026-10-03T12:00:00.000Z', '2026-10-03T12:00:00.000Z', '2026-10-05T12:00:00.000Z']);
+    assert.deepEqual([(await accounts.standing(apple.id)).github, (await accounts.standing(apple.id)).githubCreatedAt], [false, null]);
+});
+
 test('reads a GitHub account as linked to an account while it is, and not once it is unlinked and held', async () => {
     const { db, accounts } = setup();
     await withBoth(db, OWN[0], github, APPLE[0]);
@@ -387,7 +432,7 @@ test('issues a token it keeps only as a hash, and finds the account by it', asyn
     const [stored] = await rows(db, 'SELECT hash FROM tokens');
     assert.match(stored.hash, /^[0-9a-f]{64}$/);
     assert.deepEqual(await accounts.userOfToken(token), {
-        ...octocat, blocked: false, kind: 'cli', createdAt: AT, github: true,
+        ...octocat, blocked: false, kind: 'cli', createdAt: AT, github: true, githubCreatedAt: null,
     });
 });
 
@@ -399,10 +444,10 @@ test('reads a token\'s kind, the CLI\'s for every token it issues', async () => 
     const cli = await accounts.issueToken(octocat.id);
 
     assert.deepEqual(await accounts.userOfToken(cli), {
-        ...octocat, blocked: false, kind: 'cli', createdAt: AT, github: true,
+        ...octocat, blocked: false, kind: 'cli', createdAt: AT, github: true, githubCreatedAt: null,
     });
     assert.deepEqual(await accounts.userOfToken(app), {
-        ...octocat, blocked: false, kind: 'app', createdAt: AT, github: true,
+        ...octocat, blocked: false, kind: 'app', createdAt: AT, github: true, githubCreatedAt: null,
     });
 });
 

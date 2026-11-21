@@ -50,12 +50,15 @@ async function unseal(name, sealed, secret) {
     }
 }
 
-// A first sign-in with an identity crossbind does not know: the identity its provider confirmed, waiting ten minutes
-// for its person's answer on the account's page, and where that sign-in was to return. Sealed: anyone can set a
-// cookie in their own browser, and an identity written there by hand would make or sign in to its account.
-export async function pendingCookie({ provider, subject, login }, next, secret, now = Date.now()) {
+// A first sign-in with an identity crossbind does not know: the identity its provider confirmed, with the moment GitHub
+// made a young GitHub account, waiting ten minutes for its person's answer on the account's page, and where that sign-in
+// was to return. Sealed: anyone can set a cookie in their own browser, and an identity written there by hand would make
+// or sign in to its account.
+export async function pendingCookie({
+    provider, subject, login, githubCreatedAt,
+}, next, secret, now = Date.now()) {
     const value = await seal(PENDING_COOKIE, {
-        provider, subject, login, next, exp: now + PENDING_TTL_SECONDS * 1000,
+        provider, subject, login, githubCreatedAt, next, exp: now + PENDING_TTL_SECONDS * 1000,
     }, secret);
     return sessionCookie(PENDING_COOKIE, value, PENDING_TTL_SECONDS);
 }
@@ -64,7 +67,11 @@ export async function readPending(request, secret, now = Date.now()) {
     const pending = await unseal(PENDING_COOKIE, readCookie(request, PENDING_COOKIE), secret);
     if (!pending || !(pending.exp > now) || ![pending.provider, pending.subject, pending.login].every((field) => typeof field === 'string')) return null;
     return {
-        provider: pending.provider, subject: pending.subject, login: pending.login, next: pending.next === 'playground' || pending.next === 'device' ? pending.next : 'account',
+        provider: pending.provider,
+        subject: pending.subject,
+        login: pending.login,
+        ...(typeof pending.githubCreatedAt === 'string' ? { githubCreatedAt: pending.githubCreatedAt } : {}),
+        next: pending.next === 'playground' || pending.next === 'device' ? pending.next : 'account',
     };
 }
 

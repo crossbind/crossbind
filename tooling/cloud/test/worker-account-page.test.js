@@ -117,7 +117,6 @@ test('renders a notice for each result a sign-in or a form sends the page back w
         ['login=ok', 'Signed in.'],
         ['login=failed', 'Signing in did not work; try again.'],
         ['login=cancelled', 'Signing in was cancelled.'],
-        ['login=too-new', 'This GitHub account is too new; accounts can sign in 30 days after they were created.'],
         ['login=blocked', 'This account may not use crossbind cloud.'],
         ['signed-out-everywhere', 'Every device and every browser is signed out of the account, this one included.'],
         ['waited', 'That sign-in waited over ten minutes for an answer; sign in again.'],
@@ -156,7 +155,7 @@ test('takes a form from the account\'s own page alone: crossbind.dev, another si
     assert.equal(answers.length, 45);
     assert.deepEqual(answers.filter((answer) => answer.status !== 403 || answer.cookie !== null || answer.error !== 'This is accepted from the account\'s page only.'), []);
     assert.deepEqual(await accounts.standing(user.id), {
-        exists: true, blocked: false, login: 'made_up_dev', name: 'made_up_dev', signedOutAt: null, createdAt: new Date(NOW).toISOString(), github: true,
+        exists: true, blocked: false, login: 'made_up_dev', name: 'made_up_dev', signedOutAt: null, createdAt: new Date(NOW).toISOString(), github: true, githubCreatedAt: null,
     });
     assert.equal((await accounts.userOfToken(token)).login, 'made_up_dev');
     assert.equal(await signsIn(send, cookie), true);
@@ -231,7 +230,7 @@ test('sends a form posted without a cookie that counts back to the page, and cha
     assert.deepEqual(answers, Array(6).fill([303, `${API}/login`]));
     assert.equal((await accounts.userOfToken(token)).login, 'made_up_dev');
     assert.deepEqual(await accounts.standing(user.id), {
-        exists: true, blocked: false, login: 'made_up_dev', name: 'made_up_dev', signedOutAt: null, createdAt: new Date(NOW).toISOString(), github: true,
+        exists: true, blocked: false, login: 'made_up_dev', name: 'made_up_dev', signedOutAt: null, createdAt: new Date(NOW).toISOString(), github: true, githubCreatedAt: null,
     });
 });
 

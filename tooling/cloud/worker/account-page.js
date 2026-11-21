@@ -6,7 +6,7 @@ import {
     BodyTooLarge, SECURITY_HEADERS, jsonResponse, log, readLimited,
 } from './http.js';
 import {
-    minAccountDays, returnPage, signedInPage, signInProviders, startLogin,
+    returnPage, signedInPage, signInProviders, startLogin,
 } from './oauth.js';
 import {
     clearCookie, noticeCookie, readNotice, readPending, readSignedIn, sessionCookie, signSession, NOTICE_COOKIE, PENDING_COOKIE, SESSION_COOKIE, SESSION_TTL_MS,
@@ -35,11 +35,10 @@ const pageHeaders = (env) => ({
 });
 
 // What the page was sent back with: a sign-in's `#login=<result>`, or what one of its forms did.
-const notices = (env) => ({
+const NOTICES = Object.freeze({
     'login=ok': 'Signed in.',
     'login=failed': 'Signing in did not work; try again.',
     'login=cancelled': 'Signing in was cancelled.',
-    'login=too-new': `This GitHub account is too new; accounts can sign in ${minAccountDays(env)} days after they were created.`,
     'login=blocked': ACCOUNT_BLOCKED,
     'signed-out-everywhere': 'Every device and every browser is signed out of the account, this one included.',
     waited: 'That sign-in waited over ten minutes for an answer; sign in again.',
@@ -60,7 +59,6 @@ const SAID = Object.freeze({
     'link-has-one': ({ provider, name }) => (provider === 'github' ? `This account already has a GitHub account linked (${name}): unlink it first.` : 'This account already has an Apple ID linked: unlink it first.'),
     'link-taken': ({ provider, name }) => `This ${IDENTITY_WORDS[provider]} already signs in to another crossbind account (${name}). To link it here, sign in with it and delete that account, then link it again.`,
     'link-held': ({ provider, day }) => `This ${IDENTITY_WORDS[provider]} belonged to another crossbind account this month: it can be linked here from ${dayWords(day)}.`,
-    'link-too-new': (notice, env) => `This GitHub account is too new: it can be linked ${minAccountDays(env)} days after it was created.`,
     'link-blocked': ({ provider }) => `This ${IDENTITY_WORDS[provider]} may not use crossbind cloud.`,
     'link-failed': () => 'Linking did not work; try again.',
     unlinked: ({ provider }) => `The ${IDENTITY_WORDS[provider]} is unlinked: it no longer signs in to this account.`,
@@ -70,7 +68,7 @@ const NEEDS = Object.freeze({
     held: ['day'], 'link-held': ['day'], 'unlinked-held': ['day'], 'link-taken': ['name'],
 });
 
-function wordsOf(notice, env) {
+function wordsOf(notice) {
     const word = Object.hasOwn(SAID, notice?.said ?? '') ? SAID[notice.said] : null;
     if (!word || !Object.hasOwn(IDENTITY_WORDS, notice.provider ?? '')) return null;
     const fits = {
@@ -78,7 +76,7 @@ function wordsOf(notice, env) {
         name: typeof notice.name === 'string' && notice.name.length <= MAX_NOTICE_NAME,
     };
     if ((NEEDS[notice.said] ?? []).some((field) => !fits[field]) || (notice.name !== undefined && !fits.name)) return null;
-    return word(notice, env);
+    return word(notice);
 }
 
 // The pages' one script: the notice the address names, and the device page's steps, whose words it writes as text.
@@ -257,8 +255,8 @@ function deviceSignedInPart(user) {
 <p id="device-said" class="notice" role="status" hidden></p>`;
 }
 
-function frame(env, { title, main, said }) {
-    const shown = Object.entries(notices(env)).map(([key, words]) => `<p class="notice" data-notice="${key}" hidden>${escape(words)}</p>`);
+function frame({ title, main, said }) {
+    const shown = Object.entries(NOTICES).map(([key, words]) => `<p class="notice" data-notice="${key}" hidden>${escape(words)}</p>`);
     if (said) shown.unshift(`<p class="notice" role="status">${escape(said)}</p>`);
     return `<!doctype html>
 <html lang="en">
@@ -283,7 +281,7 @@ ${main}
 function page(env, {
     user, devices, providers, login, said, next, pending,
 }) {
-    return frame(env, {
+    return frame({
         title: 'crossbind account',
         said,
         main: `${pending && Object.hasOwn(IDENTITY_WORDS, pending.provider) ? questionPart(env, pending, Boolean(user)) : ''}
@@ -331,7 +329,7 @@ async function loginPage({ request, env, deps }) {
     const headers = new Headers(pageHeaders(env));
     if (notice) headers.append('set-cookie', clearCookie(NOTICE_COOKIE));
     return new Response(page(env, {
-        user, devices, providers, login: standing?.login, said: wordsOf(notice, env), next: nextOf(request), pending,
+        user, devices, providers, login: standing?.login, said: wordsOf(notice), next: nextOf(request), pending,
     }), { headers });
 }
 
@@ -370,7 +368,7 @@ async function logoutRoute({ request }) {
 async function devicePage({ request, env, deps }) {
     const { user } = await readSignedIn(request, env.SESSION_SECRET, deps.accounts, (deps.now ?? Date.now)());
     const main = user ? deviceSignedInPart(user) : `<p>Sign in to approve a device.</p>\n${signInLinks(env, 'device')}`;
-    return new Response(frame(env, { title: 'Approve a device', main }), { headers: pageHeaders(env) });
+    return new Response(frame({ title: 'Approve a device', main }), { headers: pageHeaders(env) });
 }
 
 // A code entered on the device page, to look up or to approve: ten a minute for an account and for a network, which

@@ -58,8 +58,25 @@ test('gives a new account with no GitHub account linked no runner, says when it 
     advance(31 * 1000);
     const linked = await call('/web/v1/missing', { bearer: token });
 
-    assert.deepEqual([refused.status, (await refused.json()).error], [403, 'Cloud builds open to this account on 7 November 2026, or as soon as a GitHub account is linked; build with CROSSBIND_RUNNER=DOCKER_RUN meanwhile.']);
+    assert.deepEqual([refused.status, (await refused.json()).error], [403, 'Cloud builds open to this account on 7 November 2026, or as soon as a GitHub account at least 30 days old is linked; build with CROSSBIND_RUNNER=DOCKER_RUN meanwhile.']);
     assert.equal(linked.status, 200);
+    assert.deepEqual(forwarded.map(({ userId }) => userId), ['1099511627776']);
+});
+
+test('gives an account a GitHub account younger than 30 days made no runner until that GitHub account is 30 days old, and says when', async () => {
+    const { db, forwarded, call, advance } = await setup();
+    const at = new Date(NOW).toISOString();
+    const githubMade = new Date(NOW - 3 * 24 * 3600 * 1000).toISOString();
+    await db.prepare("INSERT INTO users (id, login, created_at, last_login_at) VALUES (1099511627776, 'made_up_young', ?1, ?1)").bind(at).run();
+    await db.prepare("INSERT INTO identities (provider, subject, user_id, created_at, github_created_at) VALUES ('github', '8000000001', 1099511627776, ?1, ?2)").bind(at, githubMade).run();
+    const token = await createAccounts(db, () => NOW).issueToken('1099511627776');
+
+    const refused = await call('/web/v1/missing', { bearer: token });
+    advance(27 * 24 * 3600 * 1000);
+    const ofAge = await call('/web/v1/missing', { bearer: token });
+
+    assert.deepEqual([refused.status, (await refused.json()).error], [403, 'Cloud builds open to this account on 4 November 2026, or as soon as a GitHub account at least 30 days old is linked; build with CROSSBIND_RUNNER=DOCKER_RUN meanwhile.']);
+    assert.equal(ofAge.status, 200);
     assert.deepEqual(forwarded.map(({ userId }) => userId), ['1099511627776']);
 });
 

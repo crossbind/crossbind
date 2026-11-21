@@ -50,10 +50,9 @@ function githubUnreachable(error) {
     return jsonResponse(502, { error: 'GitHub cannot be reached right now; try again in a moment.' });
 }
 
-const failures = (env) => ({
+const FAILURES = Object.freeze({
     expired: [410, 'The code expired before it was entered; run crossbind login again.'],
     cancelled: [403, 'Signing in was cancelled on GitHub.'],
-    'too-new': [403, `This GitHub account is too new; accounts can sign in ${minAccountDays(env)} days after they were created.`],
     failed: [400, 'GitHub did not confirm the sign-in; run crossbind login again.'],
 });
 
@@ -93,7 +92,7 @@ async function tokenRoute({ request, env, deps }) {
     }
     if (outcome.pending) return jsonResponse(202, outcome);
     if (outcome.failure) {
-        const [status, message] = failures(env)[outcome.failure];
+        const [status, message] = FAILURES[outcome.failure];
         return jsonResponse(status, { error: message });
     }
     // An identity crossbind does not know makes its account at once here: this flow has no page to ask on.
