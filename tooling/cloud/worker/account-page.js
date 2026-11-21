@@ -420,12 +420,16 @@ async function revokeRoute({ request, deps }, user) {
     if (error) return error;
     const ref = form.get('ref') ?? '';
     if (!DEVICE_REF.test(ref)) return jsonResponse(400, { error: 'Sign out a device from the list on the account\'s page.' });
-    if (await deps.accounts.revokeDevice(user.id, ref)) log({ event: 'token-revoked', who: userKey(user.id), all: false });
+    const kind = await deps.accounts.revokeDevice(user.id, ref);
+    if (kind) log({ event: 'token-revoked', who: userKey(user.id), all: false });
+    // A crossbind app signed out may have read the snapshots' keys: they change (worker/snapshots.js rekey).
+    if (kind === 'app') await deps.snapshots.rekey(user.id);
     return seeOther(request, '/login');
 }
 
 async function everywhereRoute({ request, deps }, user) {
     await deps.accounts.signOutEverywhere(user.id);
+    await deps.snapshots.rekey(user.id);
     log({ event: 'token-revoked', who: userKey(user.id), all: true });
     return seeOther(request, '/login#signed-out-everywhere', [clearCookie(SESSION_COOKIE)]);
 }
