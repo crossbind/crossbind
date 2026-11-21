@@ -2,8 +2,9 @@ import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import upath from 'upath';
 import {
-    deleteAccount, listSession, login, logout, fetchUsage, previewAccount, usageLines, RENEW_MS,
+    deleteAccount, listSession, login, logout, fetchUsage, previewAccount, uploadSnapshot, usageLines, RENEW_MS,
 } from '../src/actions/cloudCommands.js';
 import { DEFAULT_CLOUD_URL, cloudUrl, cloudCredentials } from '../src/utils/cloudAccount.js';
 
@@ -398,5 +399,78 @@ describe("crossbind app preview's account and session", () => {
 
         expect(whileRenewing).toEqual(['PUT', 'PUT']);
         expect(calls).toEqual(['PUT', 'PUT', 'DELETE']);
+    });
+});
+
+describe("crossbind app preview --cloud's upload", () => {
+    const ID = 'IRVUB8Fpwuh0lT_7NkiJ8Q';
+    const PROJECT = { id: 'mWW-UyZhfd1-czxo9qk5Aw', name: 'made-up-app' };
+    const UPLOADED = {
+        id: ID, version: 3, files: 2, bytes: 615, expiresAt: '2026-12-21T10:00:00.000Z',
+    };
+    const build = () => upath.join(upath.normalize(dir), 'build');
+    // A web build of two files: 15 bytes and 600.
+    const writeBuild = (more = {}) => Object.entries({ 'index.html': '<!doctype html>', 'assets/app.js': 'x'.repeat(600), ...more }).forEach(([name, text]) => {
+        fs.mkdirSync(upath.dirname(upath.join(build(), name)), { recursive: true });
+        fs.writeFileSync(upath.join(build(), name), text);
+    });
+    // Answers each request with the next of `answers`, and records it with its body: JSON, or the bytes of a stream.
+    function cloud(answers) {
+        const calls = [];
+        const fetcher = async (url, init) => {
+            const streamed = init.body instanceof ReadableStream;
+            calls.push({
+                url, method: init.method, headers: init.headers, duplex: init.duplex, body: streamed ? Buffer.from(await new Response(init.body).arrayBuffer()) : init.body && JSON.parse(init.body),
+            });
+            const [status, body] = answers.shift();
+            return Response.json(body, { status });
+        };
+        return { fetcher, calls };
+    }
+    const upload = (fetcher) => uploadSnapshot({
+        url: URL_, token: TOKEN, project: PROJECT, protocol: 1, dir: build(), fetcher,
+    });
+
+    test('makes or finds the snapshot, then sends the web build to it as one archive of the length it says, read as it goes', async () => {
+        writeBuild();
+        const { fetcher, calls } = cloud([[200, { id: ID }], [200, UPLOADED]]);
+
+        const uploaded = await upload(fetcher);
+
+        expect(uploaded).toEqual({ id: ID, version: 3, expiresOn: '2026-12-21' });
+        expect(calls.map(({ method, url }) => [method, url])).toEqual([['POST', `${URL_}/v1/snapshots`], ['PUT', `${URL_}/v1/snapshots/${ID}`]]);
+        expect(calls[0].body).toEqual({ project: PROJECT, protocol: 1 });
+        // Two headers, the files padded to 512 and 1024 bytes, and the archive's end.
+        expect(calls[1].body.length).toBe(512 + 1024 + 512 + 512 + 1024);
+        expect(calls[1].headers).toEqual({ authorization: `Bearer ${TOKEN}`, 'content-type': 'application/x-tar', 'content-length': String(calls[1].body.length) });
+        expect(calls[1].duplex).toBe('half');
+        expect(calls[1].body.subarray(0, 13).toString()).toBe('assets/app.js');
+    });
+
+    test("stops with crossbind cloud's words where it refuses the snapshot or its upload", async () => {
+        writeBuild();
+        const full = cloud([[429, { error: 'This account keeps 3 snapshots, as many as it may: each ends 30 days after its last upload.' }]]);
+        const tooBig = cloud([[200, { id: ID }], [413, { error: 'A snapshot holds 50 MB at most.' }]]);
+
+        await expect(upload(full.fetcher)).rejects.toThrow('crossbind: This account keeps 3 snapshots, as many as it may: each ends 30 days after its last upload.');
+        await expect(upload(tooBig.fetcher)).rejects.toThrow('crossbind: A snapshot holds 50 MB at most.');
+        expect([full.calls.length, tooBig.calls.length]).toEqual([1, 2]);
+    });
+
+    test('stops at a file at a path crossbind cloud keeps none at, before it asks the cloud anything', async () => {
+        writeBuild({ 'assets/my page.png': 'x' });
+        const { fetcher, calls } = cloud([]);
+
+        await expect(upload(fetcher)).rejects.toThrow('"assets/my page.png" is at a path crossbind cloud keeps no snapshot\'s file at');
+        expect(calls).toEqual([]);
+    });
+
+    test('takes no answer of another form for a snapshot', async () => {
+        writeBuild();
+        const noId = cloud([[200, { id: 'not-an-id' }]]);
+        const noDay = cloud([[200, { id: ID }], [200, { ...UPLOADED, expiresAt: 'soon' }]]);
+
+        await expect(upload(noId.fetcher)).rejects.toThrow('crossbind: crossbind cloud sent no snapshot.');
+        await expect(upload(noDay.fetcher)).rejects.toThrow('crossbind: crossbind cloud sent no snapshot.');
     });
 });

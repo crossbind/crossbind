@@ -21,7 +21,9 @@ import {
 import { cloudUrl } from '../utils/cloudAccount.js';
 import loadSystemConfig from '../utils/systemConfig.js';
 import { halfBlocks, qrMatrix } from '../utils/qrMatrix.js';
-import { listSession, previewAccount } from './cloudCommands.js';
+import {
+    dayWords, listSession, previewAccount, uploadSnapshot,
+} from './cloudCommands.js';
 
 const { version: CROSSBIND_VERSION } = JSON.parse(fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
 const UPDATES = {
@@ -106,10 +108,45 @@ async function buildNative({ params, release, debug }, files) {
     await buildWasm(debug, { force: force || Boolean(sourceBuilt) || Boolean(bridgeBuilt) });
 }
 
+// What a preview prints: its project, the account it opens on, where it runs, and the QR code of its link, which names
+// the session alone.
+function printPreview({
+    name, viteVersion, account, id, where,
+}) {
+    const link = `${OPEN_PAGE}?s=${id}`;
+    const identity = identityLine(state.config);
+    console.log(`crossbind app preview: ${name}, protocol ${PREVIEW_PROTOCOL}, Vite ${viteVersion}`);
+    console.log(`  signed in to crossbind cloud as ${account.name}`);
+    where.forEach((line) => console.log(`  ${line}`));
+    console.log(`  scan this with a phone's camera, or open ${link}`);
+    qrLines(link).forEach((line) => console.log(`  ${line}`));
+    console.log(`  Projects lists it in the crossbind app on every device signed in as ${account.name}`);
+    if (identity) console.log(`  ${identity}`);
+}
+
+// --cloud: the project's web build in preview mode, which takes no key, uploaded as a snapshot that the crossbind app on
+// the account's devices lists and opens from anywhere; it prints the same QR code, and ends.
+async function uploadedPreview({
+    url, account, args, viteVersion, runVite,
+}) {
+    const { name } = state.config.general;
+    const outDir = `${state.config.paths.build}/snapshot`;
+    const built = await runVite(['build', '--outDir', outDir, '--emptyOutDir', ...args], { ...process.env, CROSSBIND_APP_PREVIEW: JSON.stringify({ build: true }) });
+    if (built !== 0) return built;
+    const { id, version, expiresOn } = await uploadSnapshot({
+        url, token: account.token, project: { id: projectIdOf(name, state.config.paths.project), name }, protocol: PREVIEW_PROTOCOL, dir: outDir,
+    });
+    printPreview({
+        name, viteVersion, account, id, where: [`uploaded as a snapshot, version ${version}, kept until ${dayWords(expiresOn)}`],
+    });
+    return 0;
+}
+
 // crossbind app preview: what it checks before it prints anything, in order, the account it opens on, then the
-// project's Vite in preview mode, whose exit code it gives back, with its session on the account's list meanwhile.
+// project's Vite in preview mode, whose exit code it gives back, with its session on the account's list meanwhile; with
+// --cloud (`asSnapshot`), its web build uploaded as a snapshot instead.
 export default async function appPreview({
-    host, port, args, viteName, viteVersion, runVite,
+    host, port, asSnapshot, args, viteName, viteVersion, runVite,
 }) {
     // The web build's native code compiles without CROSSBIND_APP here, and its dev server is no app's.
     for (const variable of APP_BUILD_ENV) delete process.env[variable];
@@ -123,6 +160,11 @@ export default async function appPreview({
     if (named) throw new Error(named);
     const cloud = cloudUrl(loadSystemConfig());
     const account = await previewAccount({ url: cloud });
+    if (asSnapshot) {
+        return uploadedPreview({
+            url: cloud, account, args, viteVersion, runVite,
+        });
+    }
     const where = previewHost(host, host === undefined || ['0.0.0.0', '::'].includes(host) ? await defaultRouteAddress() : null);
     const chosenPort = await previewPort(where.listen, port);
     const files = nativeFiles();
@@ -145,16 +187,16 @@ export default async function appPreview({
             key,
         },
     });
-    const link = `${OPEN_PAGE}?s=${id}`;
-    const identity = identityLine(state.config);
-    console.log(`crossbind app preview: ${name}, protocol ${PREVIEW_PROTOCOL}, Vite ${viteVersion}`);
-    console.log(`  signed in to crossbind cloud as ${account.name}`);
-    console.log(`  on ${address}${where.interface ? ` (${where.interface})` : ''}${where.listen === where.address ? '' : `, listening on ${where.listen}`}`);
-    console.log(`  open: http://${address}/#k=${key}`);
-    console.log(`  scan this with a phone's camera, or open ${link}`);
-    qrLines(link).forEach((line) => console.log(`  ${line}`));
-    console.log(`  Projects lists it in the crossbind app on every device signed in as ${account.name}`);
-    if (identity) console.log(`  ${identity}`);
+    printPreview({
+        name,
+        viteVersion,
+        account,
+        id,
+        where: [
+            `on ${address}${where.interface ? ` (${where.interface})` : ''}${where.listen === where.address ? '' : `, listening on ${where.listen}`}`,
+            `open: http://${address}/#k=${key}`,
+        ],
+    });
 
     const session = {
         protocol: PREVIEW_PROTOCOL, project: { name }, crossbind: CROSSBIND_VERSION, update, account: { id: account.id, name: account.name }, session: id,

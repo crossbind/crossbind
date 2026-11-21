@@ -201,14 +201,15 @@ commandApp.command('preview', { hidden: true })
     .description("serve the project's web build to the crossbind app on a device of this network, as the address and key it prints say")
     .option('--host <address>', "the address a device reaches this machine at (default: the default route's); 0.0.0.0 listens on every one")
     .option('--port <port>', 'the port the dev server holds (default: the first free one from 5173)')
+    .option('--cloud', "upload the project's web build to crossbind cloud as a snapshot, which the crossbind app on your account's devices opens from anywhere, and end")
     // Vite's own options, as --mode, go on to Vite.
     .allowUnknownOption()
     .allowExcessArguments()
-    .action(async ({ host, port }, command) => {
+    .action(async ({ host, port, cloud }, command) => {
         assertAppCommand();
         const { name: viteName, version: viteVersion } = projectViteManifest();
         process.exit(await appPreview({
-            host, port, args: command.args, viteName, viteVersion, runVite,
+            host, port, asSnapshot: Boolean(cloud), args: command.args, viteName, viteVersion, runVite,
         }));
     });
 
