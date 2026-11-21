@@ -38,15 +38,21 @@ export const isLoginConfigured = (env) => Boolean(env.GITHUB_CLIENT_ID && env.GI
 export const isDeviceLoginConfigured = (env) => Boolean(env.GITHUB_CLIENT_ID);
 export const minAccountDays = (env) => numberOr(env.MIN_GITHUB_ACCOUNT_DAYS, DEFAULT_MIN_GITHUB_ACCOUNT_DAYS);
 
-// Neither flow asks for a scope: an id and a name are all a sign-in needs. A fresh GitHub account per day would
-// multiply the daily limits, so young accounts are turned away.
+// Neither flow asks for a scope: an id, a name and when the account was made are all a sign-in needs. A fresh GitHub
+// account per day would multiply the daily limits, so a young one signs in as a new account (accounts.js buildsOpenOn),
+// its identity keeping the moment GitHub made it.
 async function githubIdentity(accessToken, env, fetcher, now) {
     const user = await json(await fetcher(USER_URL, {
         headers: { authorization: `Bearer ${accessToken}`, accept: 'application/vnd.github+json', 'user-agent': 'crossbind-cloud' },
     }));
-    if (!Number.isSafeInteger(user.id) || typeof user.login !== 'string') throw new LoginFailed('GitHub sent no user');
-    if (!(now - Date.parse(user.created_at) >= minAccountDays(env) * DAY_MS)) return { failure: 'too-new' };
-    return { identity: { provider: 'github', subject: String(user.id), login: user.login.slice(0, MAX_NAME_LENGTH) } };
+    const createdAt = Date.parse(user.created_at);
+    if (!Number.isSafeInteger(user.id) || typeof user.login !== 'string' || !Number.isFinite(createdAt)) throw new LoginFailed('GitHub sent no user');
+    const isYoung = now - createdAt < minAccountDays(env) * DAY_MS;
+    return {
+        identity: {
+            provider: 'github', subject: String(user.id), login: user.login.slice(0, MAX_NAME_LENGTH), ...(isYoung ? { githubCreatedAt: new Date(createdAt).toISOString() } : {}),
+        },
+    };
 }
 
 function redirect(location, cookies) {
@@ -118,7 +124,6 @@ async function linkBack(request, env, {
     const said = (outcome, more = {}) => done(page, [noticeCookie({ said: `link-${outcome}`, provider, ...more })]);
     const { user } = await readSignedIn(request, env.SESSION_SECRET, accounts, now);
     if (!user || user.id !== accountId) return said('failed');
-    if (found.failure) return said(found.failure);
     const { outcome, name, freeFrom } = await accounts.link(user.id, found.identity);
     if (outcome === 'linked') log({ event: 'identity-linked', who: userKey(user.id), provider });
     return said(outcome, { name, day: freeFrom });
@@ -150,8 +155,7 @@ export async function finishLogin(request, env, {
                 accounts, now, provider, accountId: purpose.slice('link:'.length), found, done,
             });
         }
-        const { identity, failure } = found;
-        if (failure) return back(failure);
+        const { identity } = found;
         const { user, freeFrom, unknown } = await accounts.signIn(identity, { create: false });
         if (unknown) return done(page, [await pendingCookie(identity, next, env.SESSION_SECRET, now)]);
         if (freeFrom) return done(page, [noticeCookie({ said: 'held', provider, day: freeFrom })]);

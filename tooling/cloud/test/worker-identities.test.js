@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createAccounts, OWN_IDS_FROM } from '../worker/accounts.js';
+import { buildsOpenOn, createAccounts, OWN_IDS_FROM } from '../worker/accounts.js';
 import { handleRequest } from '../worker/api.js';
 import { STATE_COOKIE } from '../worker/oauth.js';
 import { PENDING_COOKIE, SESSION_COOKIE, signSession } from '../worker/session.js';
@@ -258,7 +258,6 @@ test('refuses each link the account\'s rules refuse, with words that say why and
             'This GitHub account belonged to another crossbind account this month: it can be linked here from 1 December 2026.'],
         'its account blocked': [[mine([['apple', OTHER_SUB]]), [OWN[1], 'made_up_dev', [['github', '8000000001']], { blocked: 1 }]], 'github', 'This GitHub account may not use crossbind cloud.'],
         'already this account\'s': [[mine([['github', '8000000001'], ['apple', OTHER_SUB]], 'made_up_dev')], 'github', 'This GitHub account already signs in to this account.'],
-        'too new': [[mine([['apple', OTHER_SUB]])], 'github', 'This GitHub account is too new: it can be linked 30 days after it was created.', { ageDays: 3 }],
     };
 
     const said = {};
@@ -277,6 +276,25 @@ test('refuses each link the account\'s rules refuse, with words that say why and
     }
 
     assert.deepEqual(said, Object.fromEntries(Object.entries(cases).map(([name, [, , words]]) => [name, words])));
+});
+
+test('makes a GitHub account younger than 30 days a new account at its first sign-in, asked on the page, and links one to an Apple ID\'s account, each new until the earlier of its own 30 days and that GitHub account\'s', async () => {
+    const madeOnPage = setup({ ageDays: 3 });
+    const first = browser(madeOnPage.send);
+    await first.signIn('github');
+    const made = await first.post('/account/new');
+    const linkedOnPage = setup({ ageDays: 3 });
+    await account(linkedOnPage.db, OWN[0], '', [['apple', OTHER_SUB]]);
+    const person = await signedInTo(linkedOnPage.send, OWN[0], `Apple account …${String(OWN[0]).slice(-4)}`);
+    await person.link('github');
+    const madeThreeDaysAgo = new Date(NOW - 3 * 24 * 3600 * 1000).toISOString();
+
+    assert.equal(made.headers.get('location'), `${API}/login#login=ok`);
+    assert.equal(await noticeOf(person), 'The GitHub account is linked: it signs in to this account too.');
+    for (const { db, accounts } of [madeOnPage, linkedOnPage]) {
+        assert.deepEqual(await rows(db, "SELECT user_id, github_created_at FROM identities WHERE provider = 'github'"), [{ user_id: OWN[0], github_created_at: madeThreeDaysAgo }]);
+        assert.equal(buildsOpenOn(await accounts.standing(String(OWN[0])), 30, NOW), '2026-12-17');
+    }
 });
 
 test('unlinks from the page, never the last: free at once, or held until the 1st with build seconds this month, and linked back', async () => {

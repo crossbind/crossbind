@@ -26,8 +26,10 @@ const accountOfToday = (db, { id, login }) => db.batch([
     rowAlone(db, { id, login }),
     db.prepare("INSERT INTO identities (provider, subject, user_id, created_at) VALUES ('github', ?1, ?2, ?3)").bind(String(id), Number(id), AT),
 ]);
-// A database as 0002 left it, for the tests of what 0002 did.
+// A database as 0002 left it, for the tests of what 0002 did, and as 0003 left it, for 0003's and 0004's.
 const SECOND_MIGRATION_ONLY = { before: '0003' };
+const BEFORE_YOUNG_GITHUB = { before: '0004' };
+const YOUNG_GITHUB = '0004_identities_github_created_at.sql';
 
 // A database as 0001 leaves it, as every deployed one was before 0002.
 function databaseBefore() {
@@ -93,10 +95,10 @@ test('signs an account made before it in as itself through that identity, a dele
     const token = await accounts.issueToken(dev.id);
 
     assert.deepEqual(await accounts.userOfToken(token), {
-        ...dev, blocked: false, kind: 'cli', createdAt: new Date(NOW).toISOString(), github: true,
+        ...dev, blocked: false, kind: 'cli', createdAt: new Date(NOW).toISOString(), github: true, githubCreatedAt: null,
     });
     assert.deepEqual(await rows(db, 'SELECT kind, label FROM tokens'), [{ kind: 'cli', label: 'crossbind CLI' }]);
-    assert.deepEqual(await rows(db, 'SELECT * FROM identities'), [github(8000000001, AT)]);
+    assert.deepEqual(await rows(db, 'SELECT * FROM identities'), [{ ...github(8000000001, AT), github_created_at: null }]);
     assert.equal((await accounts.buildBudget(dev.id, NOW)).mine, 600);
 });
 
@@ -206,11 +208,37 @@ test('only adds: dropping what it added leaves the schema before it, with its ac
 });
 
 test('leaves no trigger that gives an account made under a GitHub id an identity, and the rest as 0002 left it', async () => {
-    const db = sqliteD1();
+    const db = sqliteD1(':memory:', BEFORE_YOUNG_GITHUB);
     const before = sqliteD1(':memory:', SECOND_MIGRATION_ONLY);
 
     await rowAlone(db, dev).run();
 
     assert.deepEqual(await rows(db, 'SELECT * FROM identities'), []);
     assert.deepEqual(await rows(db, SCHEMA), (await rows(before, SCHEMA)).filter((row) => row.name !== 'users_github_identity'));
+});
+
+test('keeps with an identity the moment GitHub made a young GitHub account, none with any before it, and only adds: the code before it writes identities on it as before', async () => {
+    const db = sqliteD1(':memory:', BEFORE_YOUNG_GITHUB);
+    const before = sqliteD1(':memory:', BEFORE_YOUNG_GITHUB);
+    // An identity as the code before 0004 writes one, before it and after it.
+    const identity = (subject, userId) => db.prepare("INSERT INTO identities (provider, subject, user_id, created_at) VALUES ('apple', ?, ?, ?)").bind(subject, userId, AT).run();
+    await identity('000123.made0up0apple0id.0001', 1);
+
+    await db.prepare(migration(YOUNG_GITHUB)).run();
+    await identity('000123.made0up0apple0id.0002', 2);
+    const accounts = createAccounts(db, () => NOW);
+    const { user } = await accounts.signIn({
+        provider: 'github', subject: dev.id, login: dev.login, githubCreatedAt: '2026-11-18T09:30:00.000Z',
+    });
+    const kept = await rows(db, 'SELECT subject, github_created_at FROM identities ORDER BY subject');
+    const standing = await accounts.standing(user.id);
+    await db.prepare('ALTER TABLE identities DROP COLUMN github_created_at').run();
+
+    assert.deepEqual(kept, [
+        { subject: '000123.made0up0apple0id.0001', github_created_at: null },
+        { subject: '000123.made0up0apple0id.0002', github_created_at: null },
+        { subject: dev.id, github_created_at: '2026-11-18T09:30:00.000Z' },
+    ]);
+    assert.equal(standing.githubCreatedAt, '2026-11-18T09:30:00.000Z');
+    assert.deepEqual(await rows(db, SCHEMA), await rows(before, SCHEMA));
 });

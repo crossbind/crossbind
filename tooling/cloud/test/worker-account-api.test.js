@@ -150,21 +150,33 @@ test('refuses the CLI sign-in of a GitHub account unlinked this month from an ac
     assert.deepEqual((await db.prepare('SELECT (SELECT count(1) FROM users) AS users, (SELECT count(1) FROM tokens) AS tokens').all()).results, [{ users: 1, tokens: 0 }]);
 });
 
-test('refuses the CLI sign-in of an account that is too new or blocked, and tells why', async () => {
-    const tooNew = setup({ fetcher: github({ ageDays: 3 }) });
+test('refuses the CLI sign-in of a blocked account, and tells why', async () => {
     const blocked = setup();
     await accountOfToday(blocked.db);
     await blocked.db.prepare('UPDATE users SET blocked = 1').run();
 
-    const responses = [
-        await tooNew.call('POST', '/login/token', { body: { deviceCode: 'the-device-code' } }),
-        await blocked.call('POST', '/login/token', { body: { deviceCode: 'the-device-code' } }),
-    ];
+    const response = await blocked.call('POST', '/login/token', { body: { deviceCode: 'the-device-code' } });
 
-    assert.deepEqual(responses.map((response) => response.status), [403, 403]);
-    assert.match((await responses[0].json()).error, /30 days/);
-    assert.match((await responses[1].json()).error, /may not use/);
+    assert.equal(response.status, 403);
+    assert.match((await response.json()).error, /may not use/);
     assert.equal((await blocked.db.prepare('SELECT hash FROM tokens').all()).results.length, 0);
+});
+
+test('signs a GitHub account younger than 30 days in on the CLI\'s route of before as a new account, with no cloud build minutes until it is 30 days old', async () => {
+    const young = setup({ fetcher: github({ ageDays: 3 }) });
+
+    const signedInYoung = await young.call('POST', '/login/token', { body: { deviceCode: 'the-device-code' } });
+    const { token } = await signedInYoung.json();
+    const usage = await young.call('GET', '/usage', { token });
+
+    assert.equal(signedInYoung.status, 200);
+    assert.deepEqual(await usage.json(), {
+        login: 'octocat',
+        builds: {
+            month: '2026-10', limitSeconds: 0, usedSeconds: 0, byImage: {}, opensOn: '2026-11-04',
+        },
+        playground: { limit: 20, remaining: 20 },
+    });
 });
 
 test('reports an expired or cancelled code, and a request without one', async () => {

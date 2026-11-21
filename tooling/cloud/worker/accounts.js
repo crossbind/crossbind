@@ -56,16 +56,19 @@ export const nameOf = ({ id, login }) => login || `Apple account …${String(id)
 
 export const isTokenShaped = (token) => typeof token === 'string' && TOKEN_PATTERN.test(token);
 
-// An account with no GitHub account linked is new for its first `days` days, as a GitHub account must be that old to
-// sign in: it has no cloud build minutes, and the playground's compiles of a new account. The day they open to it, or
-// null for an account that is not new.
-export function buildsOpenOn({ createdAt, github }, days, at) {
-    const opens = Date.parse(createdAt) + days * DAY_MS;
-    return !github && opens > at ? new Date(opens).toISOString().slice(0, 10) : null;
+// A new account has no cloud build minutes, and the playground's compiles of a new account, until `days` days after it
+// was made, or after its linked GitHub account was made where that is earlier: a GitHub account younger than `days` when
+// it came keeps the moment GitHub made it (`githubCreatedAt`), and an older one ends the account's new days at once. The
+// day they open to it, or null for an account that is not new.
+export function buildsOpenOn({ createdAt, github, githubCreatedAt }, days, at) {
+    const githubMade = githubCreatedAt ? Date.parse(githubCreatedAt) : -Infinity;
+    const opens = (github ? Math.min(Date.parse(createdAt), githubMade) : Date.parse(createdAt)) + days * DAY_MS;
+    return opens > at ? new Date(opens).toISOString().slice(0, 10) : null;
 }
 
-// Whether a GitHub account is linked to the row's account.
+// Whether a GitHub account is linked to the row's account, and the moment GitHub made it where its identity keeps one.
 const LINKED_GITHUB = "EXISTS (SELECT 1 FROM identities WHERE identities.user_id = users.id AND identities.provider = 'github' AND identities.unlinked_at IS NULL)";
+const GITHUB_CREATED = "(SELECT identities.github_created_at FROM identities WHERE identities.user_id = users.id AND identities.provider = 'github' AND identities.unlinked_at IS NULL)";
 
 // An id of crossbind's own, drawn evenly: 53 random bits, drawn again below OWN_IDS_FROM.
 export function randomAccountId() {
@@ -90,7 +93,9 @@ export function createAccounts(db, now = () => Date.now(), drawId = randomAccoun
     // A plain INSERT, never an upsert, which on an id taken would sign the person in to someone else's account. An id
     // that a deleted account's identities or seconds still name is taken too. Null when the id drawn was taken, or
     // when the identity's account was made meanwhile.
-    async function createAccount({ provider, subject, login }) {
+    async function createAccount({
+        provider, subject, login, githubCreatedAt,
+    }) {
         const id = drawId();
         const named = await db.prepare(`SELECT EXISTS (SELECT 1 FROM identities WHERE user_id = ?1)
             OR EXISTS (SELECT 1 FROM build_usage WHERE user_id = ?1) AS named`).bind(id).first('named');
@@ -99,7 +104,7 @@ export function createAccounts(db, now = () => Date.now(), drawId = randomAccoun
         try {
             const [made] = await db.batch([
                 db.prepare('INSERT INTO users (id, login, created_at, last_login_at) VALUES (?1, ?2, ?3, ?3) RETURNING id, login, blocked').bind(id, login, at),
-                db.prepare('INSERT INTO identities (provider, subject, user_id, created_at) VALUES (?, ?, ?, ?)').bind(provider, subject, id, at),
+                db.prepare('INSERT INTO identities (provider, subject, user_id, created_at, github_created_at) VALUES (?, ?, ?, ?, ?)').bind(provider, subject, id, at, githubCreatedAt ?? null),
             ]);
             return userOf(made.results[0]);
         } catch (error) {
@@ -115,7 +120,9 @@ export function createAccounts(db, now = () => Date.now(), drawId = randomAccoun
         // for the page to ask its person first. An account deleted this month comes back under its id, its month
         // spent: while its seconds stay, so do its identities (migrations/0002's triggers). Never looked up by a
         // GitHub id.
-        async signIn({ provider, subject, login }, { create = true } = {}) {
+        async signIn({
+            provider, subject, login, githubCreatedAt,
+        }, { create = true } = {}) {
             for (let attempt = 0; attempt < MAX_SIGN_IN_ATTEMPTS; attempt += 1) {
                 const identity = await db.prepare('SELECT user_id, unlinked_at FROM identities WHERE provider = ? AND subject = ?').bind(provider, subject).first();
                 if (identity?.unlinked_at === null) {
@@ -133,7 +140,9 @@ export function createAccounts(db, now = () => Date.now(), drawId = randomAccoun
                     await db.prepare('DELETE FROM identities WHERE provider = ? AND subject = ? AND unlinked_at IS NOT NULL').bind(provider, subject).run();
                 }
                 if (!create) return { unknown: true };
-                const user = await createAccount({ provider, subject, login });
+                const user = await createAccount({
+                    provider, subject, login, githubCreatedAt,
+                });
                 if (user) return { user };
             }
             throw new Error(`no account could be made for this ${provider} sign-in`);
@@ -141,9 +150,9 @@ export function createAccounts(db, now = () => Date.now(), drawId = randomAccoun
 
         // Whether an account still exists, as a session of another browser may outlive it, whether it is blocked, its
         // GitHub name and the name it goes by, when it last signed out everywhere (no cookie made before then counts),
-        // and when it was made and whether a GitHub account is linked (buildsOpenOn).
+        // and when it was made and whether a GitHub account is linked, with when GitHub made a young one (buildsOpenOn).
         async standing(id) {
-            const row = await db.prepare(`SELECT login, blocked, signed_out_at, created_at, ${LINKED_GITHUB} AS github FROM users WHERE id = ?`).bind(id).first();
+            const row = await db.prepare(`SELECT login, blocked, signed_out_at, created_at, ${LINKED_GITHUB} AS github, ${GITHUB_CREATED} AS github_created_at FROM users WHERE id = ?`).bind(id).first();
             return {
                 exists: row !== null,
                 blocked: row?.blocked === 1,
@@ -152,6 +161,7 @@ export function createAccounts(db, now = () => Date.now(), drawId = randomAccoun
                 signedOutAt: row?.signed_out_at ?? null,
                 createdAt: row?.created_at ?? null,
                 github: row?.github === 1,
+                githubCreatedAt: row?.github_created_at ?? null,
             };
         },
 
@@ -172,8 +182,11 @@ export function createAccounts(db, now = () => Date.now(), drawId = randomAccoun
         // name, 'taken' with the name of the account the identity signs in to, 'blocked', 'held' with { freeFrom }, or
         // 'failed' when another request linked or signed in meanwhile. No identity moves from another account: one
         // that account holds, live, deleted with build seconds this month, or unlinked from it this month (signIn),
-        // stays. Linking GitHub writes the account's GitHub name, and ends its first 30 days without one.
-        async link(userId, { provider, subject, login }) {
+        // stays. Linking GitHub writes the account's GitHub name, and ends its first 30 days without one, unless that
+        // GitHub account is younger than that itself (buildsOpenOn).
+        async link(userId, {
+            provider, subject, login, githubCreatedAt,
+        }) {
             const row = await db.prepare(`SELECT identities.user_id, identities.unlinked_at, users.id IS NOT NULL AS live, users.login, users.blocked
                 FROM identities LEFT JOIN users ON users.id = identities.user_id WHERE provider = ? AND subject = ?`).bind(provider, subject).first();
             const mine = row !== null && String(row.user_id) === userId;
@@ -196,7 +209,7 @@ export function createAccounts(db, now = () => Date.now(), drawId = randomAccoun
                     db.prepare(`DELETE FROM identities WHERE provider = ?1 AND subject = ?2 AND (user_id = ?3
                         OR (user_id NOT IN (SELECT id FROM users) AND NOT EXISTS (SELECT 1 FROM build_usage WHERE build_usage.user_id = identities.user_id AND month = ?4))
                         OR unlinked_at < ?4)`).bind(provider, subject, userId, periodsOf(now()).month),
-                    db.prepare('INSERT INTO identities (provider, subject, user_id, created_at) VALUES (?, ?, ?, ?)').bind(provider, subject, userId, timestamp()),
+                    db.prepare('INSERT INTO identities (provider, subject, user_id, created_at, github_created_at) VALUES (?, ?, ?, ?, ?)').bind(provider, subject, userId, timestamp(), githubCreatedAt ?? null),
                     ...(provider === 'github' ? [db.prepare('UPDATE users SET login = ? WHERE id = ?').bind(login, userId)] : []),
                 ]);
             } catch (error) {
@@ -258,8 +271,8 @@ export function createAccounts(db, now = () => Date.now(), drawId = randomAccoun
         async userOfToken(token) {
             if (!isTokenShaped(token)) return null;
             const hash = await hashOf(token);
-            const row = await db.prepare(`SELECT users.id, users.login, users.blocked, users.created_at, ${LINKED_GITHUB} AS github, tokens.last_used_at, tokens.kind
-                FROM tokens JOIN users ON users.id = tokens.user_id WHERE tokens.hash = ?`).bind(hash).first();
+            const row = await db.prepare(`SELECT users.id, users.login, users.blocked, users.created_at, ${LINKED_GITHUB} AS github, ${GITHUB_CREATED} AS github_created_at,
+                tokens.last_used_at, tokens.kind FROM tokens JOIN users ON users.id = tokens.user_id WHERE tokens.hash = ?`).bind(hash).first();
             if (!row) return null;
             const idle = now() - Date.parse(row.last_used_at);
             if (idle >= TOKEN_IDLE_DAYS * DAY_MS) {
@@ -270,7 +283,7 @@ export function createAccounts(db, now = () => Date.now(), drawId = randomAccoun
                 await db.prepare('UPDATE tokens SET last_used_at = ? WHERE hash = ?').bind(timestamp(), hash).run();
             }
             return {
-                ...userOf(row), kind: row.kind, createdAt: row.created_at, github: row.github === 1,
+                ...userOf(row), kind: row.kind, createdAt: row.created_at, github: row.github === 1, githubCreatedAt: row.github_created_at,
             };
         },
 

@@ -150,13 +150,29 @@ test('binds GitHub\'s code to the browser that asked for it: with another verifi
     assert.equal(accounts.signedIn.length, 1);
 });
 
-test('turns away a GitHub account younger than the minimum age before recording it', async () => {
+test('signs a GitHub account younger than the minimum age in, its identity keeping the moment GitHub made it, and one of that age or older with none', async () => {
     const accounts = accountsWith();
 
-    const response = await finish(callback({ state: 's1' }), { fetcher: github(3), accounts });
+    const young = await finish(callback({ state: 's1' }), { fetcher: github(3), accounts });
+    const ofAge = await finish(callback({ state: 's1' }), { fetcher: github(30), accounts });
 
-    assert.equal(response.headers.get('location'), `${API}/login?next=playground#login=too-new`);
-    assert.ok(!setCookies(response).some((c) => c.startsWith(`${SESSION_COOKIE}=`)));
+    assert.deepEqual([young, ofAge].map((response) => response.headers.get('location')), ['https://crossbind.dev/playground/#login=ok', 'https://crossbind.dev/playground/#login=ok']);
+    assert.ok(setCookies(young).some((c) => c.startsWith(`${SESSION_COOKIE}=`)));
+    assert.deepEqual(accounts.signedIn, [
+        {
+            provider: 'github', subject: '583231', login: 'octocat', githubCreatedAt: new Date(NOW - 3 * DAY).toISOString(),
+        },
+        { provider: 'github', subject: '583231', login: 'octocat' },
+    ]);
+});
+
+test('signs nothing in where GitHub sends no moment its account was made', async () => {
+    const accounts = accountsWith();
+    const undated = async (url, init) => (url === 'https://api.github.com/user' ? Response.json({ id: 583231, login: 'octocat' }) : github(400)(url, init));
+
+    const response = await finish(callback({ state: 's1' }), { fetcher: undated, accounts });
+
+    assert.equal(response.headers.get('location'), `${API}/login?next=playground#login=failed`);
     assert.equal(accounts.signedIn.length, 0);
 });
 
@@ -230,20 +246,28 @@ test('keeps a device login pending until the user approves it, at the pace GitHu
     assert.deepEqual(await poll({ error: 'slow_down', interval: 10 }), { pending: true, interval: 10 });
 });
 
-test('turns an approved device code into the GitHub account\'s identity, after the age check', async () => {
+test('turns an approved device code into the GitHub account\'s identity, a young one\'s with the moment GitHub made it', async () => {
     const approved = { access_token: 'gho_token', token_type: 'bearer', scope: '' };
 
     const identity = await pollDeviceCode('the-device-code', env, { fetcher: deviceGitHub(approved), now: NOW });
-    const tooNew = await pollDeviceCode('the-device-code', env, { fetcher: deviceGitHub(approved, 3), now: NOW });
+    const young = await pollDeviceCode('the-device-code', env, { fetcher: deviceGitHub(approved, 3), now: NOW });
 
     assert.deepEqual(identity, { identity: { provider: 'github', subject: '583231', login: 'octocat' } });
-    assert.deepEqual(tooNew, { failure: 'too-new' });
+    assert.deepEqual(young, {
+        identity: {
+            provider: 'github', subject: '583231', login: 'octocat', githubCreatedAt: new Date(NOW - 3 * DAY).toISOString(),
+        },
+    });
 });
 
 test('keeps the default minimum account age when the setting is left blank', async () => {
-    const response = await finish(callback({ state: 's1' }), { fetcher: github(3), environment: { ...env, MIN_GITHUB_ACCOUNT_DAYS: '' } });
+    const accounts = accountsWith();
+    const environment = { ...env, MIN_GITHUB_ACCOUNT_DAYS: '' };
 
-    assert.equal(response.headers.get('location'), `${API}/login?next=playground#login=too-new`);
+    await finish(callback({ state: 's1' }), { fetcher: github(29), environment, accounts });
+    await finish(callback({ state: 's1' }), { fetcher: github(30), environment, accounts });
+
+    assert.deepEqual(accounts.signedIn.map((identity) => identity.githubCreatedAt), [new Date(NOW - 29 * DAY).toISOString(), undefined]);
 });
 
 test('logs only device-flow failures that point at a setup problem, not codes anyone can make up', async (t) => {
