@@ -1,6 +1,7 @@
 // The Worker of test/local/run.mjs under `wrangler dev`: no container, a local D1 the run makes and the migrations of
-// this package, and stand-ins for GitHub and Apple (worker.js). Made-up values alone; never deployed. Apple's key and the
-// public key its stand-in checks the client secret with are made for each run (`--var`).
+// this package, a local bucket for snapshots, served on 127.0.0.1 as the API is on localhost, and stand-ins for GitHub and
+// Apple (worker.js). Made-up values alone; never deployed. Apple's key and the public key its stand-in checks the client
+// secret with are made for each run (`--var`).
 {
     "name": "crossbind-cloud-local",
     "main": "worker.js",
@@ -13,16 +14,20 @@
             "migrations_dir": "../../migrations"
         }
     ],
-    // Every route's limit, and the codes entered on the device page, are ten times the Worker's: the run's browsers load
-    // the pages, their style and their script many times a minute from one network, enter codes from it, and the limits
-    // are no part of what it checks. A device's polls are held to the Worker's own pace.
+    "r2_buckets": [{ "binding": "SNAPSHOTS", "bucket_name": "crossbind-snapshots-local" }],
+    // Every route's limit, the sign-ins started and the codes entered on the device page are ten times the Worker's: the
+    // run's browsers load the pages, their style and their script many times a minute from one network, its checks start
+    // a dozen sign-ins and enter their codes from it, and the limits are no part of what it checks. A device's polls are
+    // held to the Worker's own pace.
     "ratelimits": [
         { "name": "API_LIMITER", "namespace_id": "1901", "simple": { "limit": 1200, "period": 60 } },
-        { "name": "LOGIN_LIMITER", "namespace_id": "1902", "simple": { "limit": 10, "period": 60 } },
+        { "name": "LOGIN_LIMITER", "namespace_id": "1902", "simple": { "limit": 100, "period": 60 } },
         { "name": "RUNNER_LIMITER", "namespace_id": "1903", "simple": { "limit": 1200, "period": 60 } },
         { "name": "POLL_LIMITER", "namespace_id": "1904", "simple": { "limit": 13, "period": 60 } },
         { "name": "CODE_LIMITER", "namespace_id": "1905", "simple": { "limit": 100, "period": 60 } },
-        { "name": "STARTS_LIMITER", "namespace_id": "1906", "simple": { "limit": 300, "period": 60 } }
+        { "name": "STARTS_LIMITER", "namespace_id": "1906", "simple": { "limit": 300, "period": 60 } },
+        { "name": "SNAPSHOT_LIMITER", "namespace_id": "1907", "simple": { "limit": 3000, "period": 60 } },
+        { "name": "UPLOAD_LIMITER", "namespace_id": "1908", "simple": { "limit": 10, "period": 60 } }
     ],
     "vars": {
         "PLAYGROUND_ENABLED": "true",
@@ -38,6 +43,9 @@
         "APPLE_SERVICES_ID": "dev.made-up.local",
         "APPLE_TEAM_ID": "MADEUPTEAM",
         "APPLE_KEY_ID": "MADEUPKEY1",
-        "STANDIN_APPLE_SUB": "000123.made0up0apple0id0local0000.0101"
+        "STANDIN_APPLE_SUB": "000123.made0up0apple0id0local0000.0101",
+        "SNAPSHOTS_ENABLED": "true",
+        "SNAPSHOTS_HOST": "127.0.0.1",
+        "SNAPSHOTS_TOTAL_GB": "1"
     }
 }
