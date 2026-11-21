@@ -205,8 +205,11 @@ export function createSnapshots(db, bucket, now = () => Date.now()) {
         // An upload of a live snapshot of the account, read entry by entry from `body` into R2 as it comes, and live once
         // every file is in, when the upload before it goes: { id, version, files, bytes, expiresAt }. A refusal throws
         // with its status and words, each cap checked before an entry's bytes are written; what a refused or broken upload
-        // wrote is deleted before the answer, and waitUntil keeps that going for a client that left.
-        async receive(userId, id, body, { declared, totalBytes, waitUntil }) {
+        // wrote is deleted before the answer, and waitUntil keeps that going for a client that left. `count` counts the
+        // upload for the day, or refuses it, once the checks that read nothing have passed.
+        async receive(userId, id, body, {
+            declared, totalBytes, count, waitUntil,
+        }) {
             const at = now();
             const row = await db.prepare("SELECT upload FROM sessions WHERE id = ? AND user_id = ? AND source = 'snapshot' AND expires_at > ?")
                 .bind(id, userId, timestamp(at)).first();
@@ -214,6 +217,8 @@ export function createSnapshots(db, bucket, now = () => Date.now()) {
             const held = await db.prepare("SELECT coalesce(sum(bytes), 0) AS held FROM sessions WHERE source = 'snapshot'").first('held');
             if (held + declared > totalBytes) throw new Refused(503, 'crossbind cloud holds as many snapshots as it can; try again tomorrow.');
             if (!body) throw new Refused(400, UNREADABLE);
+            // Before a byte of the archive is read: a refusal past here stays counted.
+            await count();
             const upload = randomId(12);
             const prefix = `${PREFIX}${id}/${upload}/`;
             const written = [];
@@ -336,7 +341,19 @@ export async function startSnapshotRoute({ request, deps, settings }, user) {
     return jsonResponse(200, { id: started.id });
 }
 
-// PUT /v1/snapshots/<id>: the web build as one ustar archive with its length, ten a minute for an account.
+// Today's uploads of an account and of everyone, counted exactly in the quota's Durable Object as compiles are, under
+// keys of their own: R2 bills each file an upload writes, and the minute's limiter is counted at each Cloudflare location.
+async function countUpload({ deps, settings }, user) {
+    const counted = await deps.quota.reserve({
+        key: `upload:${userKey(user.id)}`, everyoneKey: 'upload:*', limit: settings.snapshotUploadsDaily, globalLimit: settings.globalSnapshotUploadsDaily,
+    });
+    if (counted.ok) return;
+    if (counted.reason === 'quota') throw new Refused(429, `This account has made ${settings.snapshotUploadsDaily} uploads today, as many as it may: try again tomorrow.`);
+    throw new Refused(503, 'crossbind cloud has taken as many uploads today as it can; try again tomorrow.');
+}
+
+// PUT /v1/snapshots/<id>: the web build as one ustar archive with its length; ten a minute for an account, and
+// SNAPSHOT_UPLOADS_DAILY a day for it and GLOBAL_SNAPSHOT_UPLOADS_DAILY for everyone.
 export async function uploadSnapshotRoute({
     request, deps, settings, sessionId,
 }, user) {
@@ -347,7 +364,9 @@ export async function uploadSnapshotRoute({
     if (!/^\d{1,12}$/.test(declared)) return jsonResponse(411, { error: 'Send the archive with its Content-Length.' });
     if (Number(declared) > MAX_SNAPSHOT_BYTES + ARCHIVE_ROOM) return jsonResponse(413, { error: TOO_BIG });
     try {
-        const uploaded = await deps.snapshots.receive(user.id, sessionId, request.body, { declared: Number(declared), totalBytes: settings.snapshotsTotalBytes, waitUntil: deps.waitUntil });
+        const uploaded = await deps.snapshots.receive(user.id, sessionId, request.body, {
+            declared: Number(declared), totalBytes: settings.snapshotsTotalBytes, count: () => countUpload({ deps, settings }, user), waitUntil: deps.waitUntil,
+        });
         log({
             event: 'snapshot-uploaded', who: userKey(user.id), files: uploaded.files, bytes: uploaded.bytes, version: uploaded.version,
         });

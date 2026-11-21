@@ -4,23 +4,26 @@ const DELETE_BATCH = 128;
 // daily prune leaves it.
 const STARTS_KEY = 'starts';
 
-// Daily compile counts per caller and for everyone, kept by one Durable Object: it handles one call at a time
-// and its storage reads hold other calls back, so a check and its increment cannot interleave.
+// Daily counts per caller and for everyone, kept by one Durable Object: compiles', whose everyone is `*`, and snapshot
+// uploads', which name one of their own (worker/snapshots.js). It handles one call at a time and its storage reads hold
+// other calls back, so a check and its increment cannot interleave.
 export function createQuota(storage, now = () => Date.now()) {
     const today = () => new Date(now()).toISOString().slice(0, 10);
-    const keysFor = (key) => {
+    const keysFor = (key, everyoneKey) => {
         const day = today();
-        return { mine: `${day}|${key}`, everyone: `${day}|*` };
+        return { mine: `${day}|${key}`, everyone: `${day}|${everyoneKey}` };
     };
-    const counts = async (key) => {
-        const { mine, everyone } = keysFor(key);
+    const counts = async (key, everyoneKey = '*') => {
+        const { mine, everyone } = keysFor(key, everyoneKey);
         const found = await storage.get([mine, everyone]);
         return { mine, everyone, used: found.get(mine) ?? 0, total: found.get(everyone) ?? 0 };
     };
 
     return {
-        async reserve({ key, limit, globalLimit }) {
-            const { mine, everyone, used, total } = await counts(key);
+        async reserve({
+            key, limit, globalLimit, everyoneKey,
+        }) {
+            const { mine, everyone, used, total } = await counts(key, everyoneKey);
             if (used >= limit) return { ok: false, reason: 'quota', remaining: 0 };
             if (total >= globalLimit) return { ok: false, reason: 'global', remaining: limit - used };
             await storage.put({ [mine]: used + 1, [everyone]: total + 1 });

@@ -86,7 +86,9 @@
         "BLOCKED_NETWORKS": "",
         "SNAPSHOTS_ENABLED": "true",
         "SNAPSHOTS_HOST": "snapshots.crossbind.dev",
-        "SNAPSHOTS_TOTAL_GB": "20"
+        "SNAPSHOTS_TOTAL_GB": "20",
+        "SNAPSHOT_UPLOADS_DAILY": "50",
+        "GLOBAL_SNAPSHOT_UPLOADS_DAILY": "1000"
     },
     "env": {
         // On api-staging.crossbind.dev (some networks refuse workers.dev names), for the landing's dev server and
@@ -159,7 +161,9 @@
                 "BLOCKED_NETWORKS": "",
                 "SNAPSHOTS_ENABLED": "true",
                 "SNAPSHOTS_HOST": "snapshots-staging.crossbind.dev",
-                "SNAPSHOTS_TOTAL_GB": "1"
+                "SNAPSHOTS_TOTAL_GB": "1",
+                "SNAPSHOT_UPLOADS_DAILY": "50",
+                "GLOBAL_SNAPSHOT_UPLOADS_DAILY": "1000"
             }
         }
     }

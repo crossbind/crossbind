@@ -7,10 +7,12 @@ import path from 'node:path';
 import { createAccounts } from '../worker/accounts.js';
 import { handleRequest } from '../worker/api.js';
 import { createProjectSessions, MAX_SESSIONS_PER_ACCOUNT } from '../worker/project-sessions.js';
+import { createQuota } from '../worker/quota.js';
 import { signSession, SESSION_COOKIE } from '../worker/session.js';
 import {
     createSnapshots, MAX_SNAPSHOT_BYTES, MAX_SNAPSHOT_FILES, MAX_SNAPSHOTS_PER_ACCOUNT, SNAPSHOT_DAYS,
 } from '../worker/snapshots.js';
+import { memoryStorage } from '../scripts/memory-storage.mjs';
 import { sqliteD1 } from '../scripts/sqlite-d1.mjs';
 import { archiveOf, memoryBucket } from './support/bucket.mjs';
 import { gateToken, provenText } from '../../../core/crossbind/src/utils/previewSession.js';
@@ -85,12 +87,14 @@ function setup({
     let now = NOW;
     const db = sqliteD1();
     const bucket = memoryBucket(() => now);
+    const storage = memoryStorage();
     const accounts = createAccounts(db, () => now);
     const pending = [];
     const limits = { api: unlimited, upload: counted(uploads), snapshot: counted(hostRequests) };
     const deps = {
         limits,
         accounts,
+        quota: createQuota(storage, () => now),
         sessions: createProjectSessions(db, () => now),
         snapshots: createSnapshots(race ? racing(db, race) : db, bucket, () => now),
         waitUntil: (promise) => { pending.push(promise); },
@@ -144,7 +148,7 @@ function setup({
     };
     const objects = (prefix = 'snapshots/') => [...bucket.objects.keys()].filter((key) => key.startsWith(prefix)).sort();
     return {
-        db, bucket, accounts, deps, limits, call, host, signedIn, uploaded, objects, settle: () => Promise.all(pending.splice(0)), advance: (ms) => { now += ms; },
+        db, bucket, storage, accounts, deps, limits, call, host, signedIn, uploaded, objects, settle: () => Promise.all(pending.splice(0)), advance: (ms) => { now += ms; },
     };
 }
 
@@ -493,6 +497,63 @@ test('takes ten uploads a minute for an account, and refuses the eleventh with 4
 
     assert.deepEqual(answers.map(({ status }) => status), [...Array(10).fill(200), 429]);
     assert.equal(answers[10].body.error, 'Too many uploads for this account; try again in a minute.');
+});
+
+test('counts the uploads of an account and of everyone by the day, exactly, before a byte of the archive is read: after the checks that read nothing, and a refusal past them stays counted', async () => {
+    const {
+        call, signedIn, objects, storage, advance, settle,
+    } = setup({
+        environment: {
+            ...env, SNAPSHOT_UPLOADS_DAILY: '3', GLOBAL_SNAPSHOT_UPLOADS_DAILY: '4', SNAPSHOTS_TOTAL_GB: String(1 / 1024),
+        },
+    });
+    const owner = await signedIn(dev);
+    const another = await signedIn(other);
+    const { body: { id } } = await start(call, owner);
+    const { body: { id: theirs } } = await start(call, another);
+    const put = (who, to, archive = archiveOf(BUILD), length = undefined) => call('PUT', `/v1/snapshots/${to}`, { token: who.cli, archive, length });
+    // Archives that count how often they are read: an upload refused for its count reads none of them.
+    const archive = archiveOf(BUILD);
+    let pulled = 0;
+    const counting = () => new ReadableStream({
+        pull(controller) {
+            pulled += 1;
+            controller.enqueue(archive);
+            controller.close();
+        },
+    }, { highWaterMark: 0 });
+
+    const uncounted = [
+        await put(owner, newId()),
+        await put(owner, id, archiveOf(BUILD), null),
+        await put(owner, id, counting(), MAX_SNAPSHOT_BYTES * 2),
+        await put(owner, id, counting(), 2 * 1024 * 1024),
+    ];
+    const counted = [await put(owner, id, archiveOf(BUILD, { end: false })), await put(owner, id), await put(owner, id)];
+    await settle();
+    const kept = objects(`snapshots/${id}/`);
+    const past = await put(owner, id, counting(), archive.length);
+    const afterPast = objects(`snapshots/${id}/`);
+    const theirsTaken = await put(another, theirs);
+    const everyonesPast = await put(another, theirs, counting(), archive.length);
+    advance(DAY);
+    const nextDay = await put(owner, id);
+
+    assert.deepEqual(uncounted.map(({ status }) => status), [404, 411, 413, 503]);
+    assert.deepEqual(counted.map(({ status }) => status), [400, 200, 200]);
+    assert.deepEqual([past.status, past.body.error], [429, 'This account has made 3 uploads today, as many as it may: try again tomorrow.']);
+    assert.deepEqual([theirsTaken.status, everyonesPast.status, everyonesPast.body.error], [200, 503, 'crossbind cloud has taken as many uploads today as it can; try again tomorrow.']);
+    assert.equal(pulled, 0);
+    assert.deepEqual([kept.length, afterPast], [3, kept]);
+    assert.equal(nextDay.status, 200);
+    // Counts of their own, apart from the compiles' (`user:<id>` and `*`), which an upload leaves as they were.
+    assert.deepEqual(Object.fromEntries(storage.data), {
+        [`2026-11-21|upload:user:${owner.user.id}`]: 3,
+        [`2026-11-21|upload:user:${another.user.id}`]: 1,
+        '2026-11-21|upload:*': 4,
+        [`2026-11-22|upload:user:${owner.user.id}`]: 1,
+        '2026-11-22|upload:*': 1,
+    });
 });
 
 test('answers 503 for snapshots paused, uploads and the host alike, and lists none meanwhile', async () => {
