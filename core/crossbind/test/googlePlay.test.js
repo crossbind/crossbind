@@ -105,7 +105,7 @@ describe("Google Play's credentials", () => {
         expect(playCredentials({ [PLAY.token]: 'ci-token' }, settings({}))).toEqual({ token: 'ci-token' });
         expect(playCredentials({}, settings({ GOOGLE_PLAY_TOKEN: 'ci-token' }))).toBeNull();
         expect(() => playCredentials({ [PLAY.token]: 'ci-token' }, settings({ GOOGLE_PLAY_SERVICE_ACCOUNT: ACCOUNT })))
-            .toThrow(`${PLAY.token} is set, and so is ${PLAY.serviceAccount} or its key in ~/.crossbind.json: set one.`);
+            .toThrow(`${PLAY.token} is set, and so is ${PLAY.serviceAccount} or its key in ~/.crossbind/config.json: set one.`);
         expect(() => playCredentials({ [PLAY.token]: 'ci-token', [PLAY.key]: keyFile }, settings({}))).toThrow(`and so is ${PLAY.key}`);
     });
 

@@ -13,7 +13,7 @@ Order of preference, from least to most invasive:
 1. Don't override — restate the constraint as a target filter.
 2. `targetSpecs[].specs.*` for declarative per-target tweaks, runtime env vars included.
 3. `crossbind.build.js` hooks (package authors only) for source-acquisition / build-step logic.
-4. `~/.crossbind.json` for system-wide environment defaults.
+4. `~/.crossbind/config.json` for system-wide environment defaults.
 
 ## The 16 override points
 
@@ -171,7 +171,7 @@ copyToDist: { 'assets/cacert.pem': ['ssl/certs/cacert.pem'] }
 
 ### Layer 5 — System (machine-wide)
 
-#### `~/.crossbind.json` — host-wide keys
+#### `~/.crossbind/config.json` — host-wide keys
 
 - **`XCODE_DEVELOPMENT_TEAM`**, default `''`: required for iOS device builds (not the simulator).
 - **`ANDROID_KEYSTORE`**, default `''`: this machine's upload key, which signs an Android app's release and its bundle; `crossbind app key upload` sets it ([app.md](./app.md#the-upload-key)). Env: `CROSSBIND_ANDROID_KEYSTORE`.
@@ -193,6 +193,8 @@ copyToDist: { 'assets/cacert.pem': ['ssl/certs/cacert.pem'] }
 - **`DOCKER_IMAGE_ANDROID_APP`**, default `''`: the same, for Android apps, which build and package in the android-app image. Env: `CROSSBIND_IMAGE_ANDROID_APP`.
 
 These apply to every crossbind project on the machine. Use sparingly — they don't travel with the project.
+
+`~/.crossbind/` keeps the rest of what crossbind has on the machine: the crossbind cloud sign-in (`credentials.json`), the Android upload key (`keys/`), Android's debug key (`android/`) and, on Windows, extensions' secrets (`secrets/`). What crossbind downloads or builds again (crates, Conan packages, Hermes, Gradle's caches) is in `~/.crossbind/cache/`, which can be deleted whenever no build runs. Earlier releases kept the settings in `~/.crossbind.json` and their caches in `~/.crossbind/` itself; the first run after upgrading from one moves the settings to `~/.crossbind/config.json` and deletes those caches, which builds then download again into `cache/`. A `RUNNER=DOCKER_EXEC` container mounts parts of `cache/`: make it again after the upgrade, and after deleting `cache/`.
 
 `CROSSBIND_SCCACHE=1`, set in the environment only, sends every C and C++ compile through [sccache](https://github.com/mozilla/sccache), which its own `SCCACHE_*` variables point at a cache: a folder by default, or S3 and R2 with `SCCACHE_BUCKET`, `SCCACHE_ENDPOINT`, `SCCACHE_REGION` and the `AWS_*` keys.
 
@@ -217,13 +219,13 @@ Are you wrapping an upstream library that needs source patching?
 └── crossbind.build.js replaceList or sourceReplaceList (Layer 4 #14).
 
 Need to set XCODE team or pick a non-Docker runner?
-└── ~/.crossbind.json (Layer 5).
+└── ~/.crossbind/config.json (Layer 5).
 ```
 
 ## Anti-patterns
 
 1. **Reaching for `build: async (state)` when `getBuildParams` would do.** Replacing the build runner means you re-implement what crossbind already does. Override flags first.
-2. **Using `~/.crossbind.json` for project-specific things.** It's machine-wide; CI won't have your overrides. Project-specific config goes in `crossbind.config.js`.
+2. **Using `~/.crossbind/config.json` for project-specific things.** It's machine-wide; CI won't have your overrides. Project-specific config goes in `crossbind.config.js`.
 3. **Stacking emccFlags in `targetSpecs` AND in `getBuildParams`.** Confusing. Pick one location.
 4. **Editing the extracted upstream source by hand instead of through `replaceList`.** `replaceList` patches are reproducible across version bumps; manual edits aren't.
 

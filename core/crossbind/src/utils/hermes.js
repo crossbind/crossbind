@@ -1,6 +1,6 @@
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
+import cacheDir from './cacheDir.js';
 import withDirLock from './dirLock.js';
 import downloadAndExtractFile from './downloadAndExtractFile.js';
 import logger from './logger.js';
@@ -16,7 +16,7 @@ export const HERMES = {
 
 export const hermesUrl = (version) => `https://repo1.maven.org/maven2/com/facebook/hermes/hermes-ios/${version}/hermes-ios-${version}-hermes-ios-release.tar.gz`;
 
-export const hermesDir = () => path.join(os.homedir(), '.crossbind', 'hermes', HERMES.version);
+export const hermesDir = () => path.join(cacheDir('hermes'), HERMES.version);
 
 // The release's destroot, downloaded once and checked against the pinned sha256.
 export default async function resolveHermes() {

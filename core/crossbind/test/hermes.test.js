@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import upath from 'upath';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 // The downloader leaves the release's tree, every Apple platform's dSYM, with the archive beside it, and keeps it after.
@@ -32,9 +33,9 @@ afterEach(() => {
 
 describe("Hermes' dSYM", () => {
     test("comes from the release's pinned archive, of which the device's dSYM alone stays, downloaded once", async () => {
-        const dir = path.join(home, '.crossbind', 'hermes', `${HERMES.version}-dsym`);
-        expect(await resolveHermesDsym()).toBe(`${dir}/source/iphoneos/hermesvm.framework.dSYM`);
-        expect(download).toHaveBeenCalledWith(HERMES_DSYM.url, dir, HERMES_DSYM.sha256);
+        const dir = upath.join(home, '.crossbind', 'cache', 'hermes', `${HERMES.version}-dsym`);
+        expect(upath.toUnix(await resolveHermesDsym())).toBe(`${dir}/source/iphoneos/hermesvm.framework.dSYM`);
+        expect(download.mock.calls.map(([url, output, sha256]) => [url, upath.toUnix(output), sha256])).toEqual([[HERMES_DSYM.url, dir, HERMES_DSYM.sha256]]);
         expect(fs.readdirSync(dir)).toEqual(['source']);
         expect(fs.readdirSync(`${dir}/source`)).toEqual(['iphoneos']);
         expect(said).toEqual([expect.stringContaining(`downloading the dSYM of Hermes ${HERMES.version} once`)]);

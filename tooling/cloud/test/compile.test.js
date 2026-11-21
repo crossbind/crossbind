@@ -106,8 +106,8 @@ test('lays the package store over the build\'s caches, writable for this compile
 
     const tmp = argv.indexOf('/tmp');
     const at = (from, to) => argv.findIndex((item, i) => item === '--overlay-src' && argv[i + 1] === from && argv[i + 2] === '--tmp-overlay' && argv[i + 3] === to);
-    const cargo = at(`${paths.store}/cargo`, '/tmp/home/.crossbind/cargo');
-    const conan = at(`${paths.store}/conan`, '/tmp/home/.crossbind/conan-local');
+    const cargo = at(`${paths.store}/cargo`, '/tmp/home/.crossbind/cache/cargo');
+    const conan = at(`${paths.store}/conan`, '/tmp/home/.crossbind/cache/conan-local');
     // After /tmp's own mount, or that mount would cover them.
     assert.ok(cargo > tmp && conan > tmp, JSON.stringify({ tmp, cargo, conan }));
 });

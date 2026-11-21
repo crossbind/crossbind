@@ -859,7 +859,7 @@ describe("an extension's package source", () => {
 
     test("takes its extension's name, one word that starts its imports, and none crossbind keeps", () => {
         // A runtime's own import scheme would stop resolving, and Windows has no folder named as a device.
-        for (const name of ['acme-vcpkg', 'cargo', 'node', 'https', 'build', 'keys', 'bun', 'jsr', 'cloudflare', 'aux']) {
+        for (const name of ['acme-vcpkg', 'cargo', 'node', 'https', 'build', 'cache', 'keys', 'bun', 'jsr', 'cloudflare', 'aux']) {
             expect(() => checked({}, name)).toThrow(`crossbind: extensions[0].packageSource makes ${name} the name of a package source, which starts its imports, as ${name}:<package>/<header>: one word of lowercase letters and digits, and none of cargo, node,`);
         }
         expect(checked({}, 'conan').storeUnits).toEqual([]);

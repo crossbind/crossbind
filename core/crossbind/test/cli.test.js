@@ -40,8 +40,8 @@ describe('crossbind outside a project', () => {
         expect(logout).toMatchObject({ status: 0, stdout: `crossbind: not signed in to ${CLOUD}.\n` });
     });
 
-    test('sets, reads and deletes a key of ~/.crossbind.json', () => {
-        const file = path.join(home, '.crossbind.json');
+    test('sets, reads and deletes a key of ~/.crossbind/config.json, on a machine with no ~/.crossbind yet', () => {
+        const file = upath.join(home, '.crossbind', 'config.json');
 
         expect(crossbind('config', 'set', 'RUNNER', 'LOCAL').status).toBe(0);
         expect(JSON.parse(fs.readFileSync(file, 'utf8')).RUNNER).toBe('LOCAL');
@@ -51,7 +51,7 @@ describe('crossbind outside a project', () => {
     });
 
     test("keeps the full path of an App Store Connect API key's file, and neither a key's own text nor a file that is not there", () => {
-        const file = upath.join(home, '.crossbind.json');
+        const file = upath.join(home, '.crossbind', 'config.json');
         const key = upath.join(home, 'AuthKey_7K2M9P4Q1Z.p8');
         fs.writeFileSync(key, 'key');
         const kept = () => JSON.parse(fs.readFileSync(file, 'utf8')).APPLE_API_KEY;
@@ -70,7 +70,8 @@ describe('crossbind outside a project', () => {
     });
 
     test("lists, reads and deletes an extension's own settings by its name and theirs", () => {
-        const file = path.join(home, '.crossbind.json');
+        const file = upath.join(home, '.crossbind', 'config.json');
+        fs.mkdirSync(upath.dirname(file));
         fs.writeFileSync(file, JSON.stringify({ RUNNER: 'LOCAL', extensions: { 'demo-store': { ACCOUNT: 'ada', REGION: 'eu' } } }));
 
         expect(crossbind('config', 'list')).toMatchObject({ status: 0, stdout: expect.stringContaining('demo-store.REGION') });

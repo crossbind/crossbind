@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { secretFile } from '../utils/secretFile.js';
 
 // The Developer ID that signs a macOS app and the App Store Connect API key Apple notarizes it with, as the environment
-// names them; ~/.crossbind.json may name the key too, by its file, as it keeps no secret.
+// names them; ~/.crossbind/config.json may name the key too, by its file, as it keeps no secret.
 export const APPLE_SIGNING = {
     identity: 'CROSSBIND_APPLE_SIGNING_IDENTITY',
     key: 'CROSSBIND_APPLE_API_KEY',
@@ -35,18 +35,18 @@ function signingIdentities() {
         .map(([, hash, name]) => ({ hash, name }));
 }
 
-// A part of the App Store Connect API key, from the environment, else from ~/.crossbind.json under its name without
-// CROSSBIND_, as crossbind config set keeps it: where it is set, and its value.
+// A part of the App Store Connect API key, from the environment, else from ~/.crossbind/config.json under its name
+// without CROSSBIND_, as crossbind config set keeps it: where it is set, and its value.
 function keyPart(name, env, system) {
     const kept = name.replace(/^CROSSBIND_/, '');
     if (env[name]) return { from: name, value: env[name] };
-    return system[kept] ? { from: `${kept} in ~/.crossbind.json`, value: system[kept] } : null;
+    return system[kept] ? { from: `${kept} in ~/.crossbind/config.json`, value: system[kept] } : null;
 }
 
-// The App Store Connect API key the environment or ~/.crossbind.json names, with which Apple notarizes a macOS app and
-// xcodebuild uploads an iOS one in place of Xcode's account, or null: all of it or none, but for its ID where its file's
-// name tells it. The key is its file, or its text from the environment alone, which goes to a file as the tools take
-// files.
+// The App Store Connect API key the environment or ~/.crossbind/config.json names, with which Apple notarizes a macOS
+// app and xcodebuild uploads an iOS one in place of Xcode's account, or null: all of it or none, but for its ID where
+// its file's name tells it. The key is its file, or its text from the environment alone, which goes to a file as the
+// tools take files.
 export function appStoreKey(env = process.env, system = {}) {
     const parts = Object.fromEntries(NOTARY.map((name) => [name, keyPart(name, env, system)]));
     const set = NOTARY.filter((name) => parts[name]);
@@ -60,7 +60,7 @@ export function appStoreKey(env = process.env, system = {}) {
     const missing = NOTARY.filter((name) => !parts[name] && !(name === APPLE_SIGNING.keyId && keyId));
     if (missing.length) {
         const byName = missing.includes(APPLE_SIGNING.keyId) && !isText ? ', the ID unless its file keeps the name App Store Connect gives it, AuthKey_<key id>.p8' : '';
-        const configHint = 'crossbind config set keeps each in ~/.crossbind.json, under its name without CROSSBIND_';
+        const configHint = 'crossbind config set keeps each in ~/.crossbind/config.json, under its name without CROSSBIND_';
         throw new Error(`crossbind: ${listed(set.map((name) => parts[name].from))} set, but ${listed(missing)} not: an App Store Connect API key takes all three${byName}. ${configHint}.`);
     }
     const key = isText ? secretFile('AuthKey.p8', `${given.trim()}\n`) : path.resolve(given);

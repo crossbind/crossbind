@@ -7,9 +7,8 @@ import {
 } from './actions/cloudCommands.js';
 import { cloudUrl } from './utils/cloudAccount.js';
 import flattenConfigForTable from './utils/flattenConfigForTable.js';
-import loadSystemConfig, { extensionSettingsOf, systemConfigPath } from './utils/systemConfig.js';
+import loadSystemConfig, { extensionSettingsOf, writeSystemConfig } from './utils/systemConfig.js';
 import systemKeys from './utils/systemKeys.js';
-import writeJson from './utils/writeJson.js';
 
 const packageJSON = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url)));
 
@@ -162,11 +161,11 @@ function setSystemConfig(key, value) {
         throw new Error(`Value ${value} is not available. Please choose from the following available values: ${systemKeys[key].options.join(', ')}`);
     }
 
-    writeJson(systemConfigPath(), { ...loadSystemConfig(), [key]: systemKeys[key].isFile ? keptFile(key, value) : value });
+    writeSystemConfig({ ...loadSystemConfig(), [key]: systemKeys[key].isFile ? keptFile(key, value) : value });
 }
 
 // A setting that names a file keeps its full path, which names it from any folder, and never a key's own text, which
-// reaches crossbind from the environment alone, so that ~/.crossbind.json keeps no secret.
+// reaches crossbind from the environment alone, so that ~/.crossbind/config.json keeps no secret.
 function keptFile(key, value) {
     if (/-----BEGIN /.test(value)) {
         throw new Error(`crossbind: ${key} takes the path of a file, not a key's own text, which crossbind keeps in no file: set the path, or give the text as CROSSBIND_${key}.`);
@@ -183,14 +182,14 @@ function deleteSystemConfig(key) {
         const { [own.key]: deleted, ...kept } = extensionSettingsOf(system, own.extension);
         if (deleted === undefined) throw new Error(`Configuration ${own.extension}.${own.key} is not set.`);
         const { [own.extension]: emptied, ...others } = system.extensions;
-        writeJson(systemConfigPath(), { ...system, extensions: Object.keys(kept).length > 0 ? { ...others, [own.extension]: kept } : others });
+        writeSystemConfig({ ...system, extensions: Object.keys(kept).length > 0 ? { ...others, [own.extension]: kept } : others });
         return;
     }
     if (!systemKeys[key]) {
         throw new Error(`Configuration ${key} is not available. Please choose from the following available configurations: ${Object.keys(systemKeys).join(', ')}`);
     }
     const { [key]: deleted, ...system } = loadSystemConfig();
-    writeJson(systemConfigPath(), system);
+    writeSystemConfig(system);
 }
 
 async function listSystemConfig(type) {

@@ -242,7 +242,7 @@ export default {
       // The bundle id of a macOS or iOS app, and the application id of an Android app, which takes no hyphens.
       // Default: dev.crossbind.<general.name>, on Android with an underscore for each hyphen.
     team: 'ABCDE12345',
-      // The Apple team that signs an iOS app. Default: XCODE_DEVELOPMENT_TEAM of ~/.crossbind.json.
+      // The Apple team that signs an iOS app. Default: XCODE_DEVELOPMENT_TEAM of ~/.crossbind/config.json.
     name: 'My App',
       // The name the app shows: its window's title, its macOS menus, its Windows file description and the label
       // under its icon on iOS and Android. Text without a quotation mark, a backslash or a control character.

@@ -169,7 +169,7 @@ function noTeam() {
     const which = teams.length > 0
         ? `one of the teams Xcode is signed in to: ${teams.join(', ')}`
         : 'the team of an account you sign in to in Xcode, under Settings › Accounts; a free Apple Account has a Personal Team';
-    return `crossbind: an app on an iPhone or iPad is signed for an Apple team: set app.team in crossbind.config.js, or XCODE_DEVELOPMENT_TEAM in ~/.crossbind.json, to ${which}.`;
+    return `crossbind: an app on an iPhone or iPad is signed for an Apple team: set app.team in crossbind.config.js, or XCODE_DEVELOPMENT_TEAM in ~/.crossbind/config.json, to ${which}.`;
 }
 
 // Builds an iOS app's Xcode project for the device, signed for the app's team by Xcode, which registers the device and

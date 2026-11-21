@@ -190,7 +190,7 @@ jobs:
               id: hermes
               uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
-                  path: ~/.crossbind/hermes
+                  path: ~/.crossbind/cache/hermes
                   key: hermes-${{ runner.os }}-${{ hashFiles('core/crossbind/src/utils/hermes.js') }}
             - name: Fetch Hermes
               if: steps.hermes.outputs.cache-hit != 'true'
@@ -200,7 +200,7 @@ jobs:
               if: steps.hermes.outputs.cache-hit != 'true'
               uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
-                  path: ~/.crossbind/hermes
+                  path: ~/.crossbind/cache/hermes
                   key: ${{ steps.hermes.outputs.cache-primary-key }}
             - name: Restore the bridge tools
               uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
@@ -287,7 +287,7 @@ jobs:
               id: hermes
               uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
-                  path: ~/.crossbind/hermes
+                  path: ~/.crossbind/cache/hermes
                   key: hermes-${{ runner.os }}-${{ hashFiles('core/crossbind/src/utils/hermes.js') }}
             - name: Fetch Hermes
               if: steps.hermes.outputs.cache-hit != 'true'
@@ -297,7 +297,7 @@ jobs:
               if: steps.hermes.outputs.cache-hit != 'true'
               uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
-                  path: ~/.crossbind/hermes
+                  path: ~/.crossbind/cache/hermes
                   key: ${{ steps.hermes.outputs.cache-primary-key }}
             - name: Add Rust's iOS targets
               run: rustup target add aarch64-apple-ios aarch64-apple-ios-sim
@@ -373,7 +373,7 @@ jobs:
               id: hermes
               uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
-                  path: ~/.crossbind/hermes
+                  path: ~/.crossbind/cache/hermes
                   key: hermes-${{ runner.os }}-${{ hashFiles('core/crossbind/src/utils/hermes.js') }}
             - name: Fetch Hermes
               if: steps.hermes.outputs.cache-hit != 'true'
@@ -383,7 +383,7 @@ jobs:
               if: steps.hermes.outputs.cache-hit != 'true'
               uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
-                  path: ~/.crossbind/hermes
+                  path: ~/.crossbind/cache/hermes
                   key: ${{ steps.hermes.outputs.cache-primary-key }}
             - name: Restore the bridge tools
               uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8

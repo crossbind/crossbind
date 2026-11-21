@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import state from '../state/index.js';
+import cacheDir from '../utils/cacheDir.js';
 import getOsUserAndGroupId from '../utils/getOsUserAndGroupId.js';
 import pullDockerImage, { getDockerImage } from '../utils/pullDockerImage.js';
 import { DOCKER_BASE, isUnderBase } from '../utils/replaceBasePathForDocker.js';
@@ -50,8 +51,8 @@ export function releaseSigning(env = process.env) {
     return { file, names: [SIGNING.alias, SIGNING.password, SIGNING.keyPassword].filter((name) => env[name]) };
 }
 
-// This machine's upload key, which ~/.crossbind.json names, for a build whose environment names none: its file and alias,
-// and its password from the environment, else the keychain, else none yet.
+// This machine's upload key, which ~/.crossbind/config.json names, for a build whose environment names none: its file
+// and alias, and its password from the environment, else the keychain, else none yet.
 export function machineUploadKey(env = process.env, system = state.config.system ?? {}) {
     if (env[SIGNING.keystore] || !system.ANDROID_KEYSTORE) return null;
     return {
@@ -69,11 +70,13 @@ export function uploadKeyEnv({ keystore, alias, password }) {
     return { [SIGNING.keystore]: keystore, [SIGNING.alias]: alias, [SIGNING.password]: password };
 }
 
-// Gradle's caches and the Android tools' home outlive a container; the second keeps the debug key, which a new one would
-// replace, so that a later build still installs over the last.
+// Gradle's caches and the Android tools' home outlive a container. The home keeps the debug key, which a new one would
+// replace, so that a later build still installs over the last: it stays out of the cache.
 function homes() {
-    const root = path.join(os.homedir(), '.crossbind', 'android');
-    return [[path.join(root, 'gradle'), '/var/cache/crossbind/gradle'], [path.join(root, 'home'), '/var/cache/crossbind/android']];
+    return [
+        [cacheDir('android/gradle'), '/var/cache/crossbind/gradle'],
+        [path.join(os.homedir(), '.crossbind', 'android', 'home'), '/var/cache/crossbind/android'],
+    ];
 }
 
 // A project whose extensions ask Maven for libraries carries the verification metadata of every file it resolves, and

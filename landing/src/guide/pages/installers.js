@@ -76,7 +76,7 @@ export default {
         },
         {
             type: 'p',
-            text: "On your own Mac, `crossbind config set APPLE_API_KEY <its .p8 file>` and `crossbind config set APPLE_API_ISSUER <its issuer ID>` keep the key in `~/.crossbind.json`, which takes the file's path and never the key's own text; a variable the environment sets wins over each.",
+            text: "On your own Mac, `crossbind config set APPLE_API_KEY <its .p8 file>` and `crossbind config set APPLE_API_ISSUER <its issuer ID>` keep the key in `~/.crossbind/config.json`, which takes the file's path and never the key's own text; a variable the environment sets wins over each.",
         },
         {
             type: 'p',

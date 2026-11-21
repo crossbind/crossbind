@@ -118,7 +118,7 @@ describe("App Store Connect's API", () => {
         answer = () => json(401, { errors: [{ title: 'Authentication credentials are missing or invalid.' }] });
         await expect(appStoreCaller(key)('GET', '/apps')).rejects.toThrow([
             'crossbind: App Store Connect refused the API key ABC123DEFG (Authentication credentials are missing or invalid.):',
-            "the .p8 file that CROSSBIND_APPLE_API_KEY or ~/.crossbind.json's APPLE_API_KEY names is not that key's, the key ID or the issuer ID is not its own, it was revoked, or this machine's clock is off.",
+            "the .p8 file that CROSSBIND_APPLE_API_KEY or ~/.crossbind/config.json's APPLE_API_KEY names is not that key's, the key ID or the issuer ID is not its own, it was revoked, or this machine's clock is off.",
         ].join(' '));
         answer = () => json(403, { errors: [{ title: 'The API key in use does not allow this request' }] });
         await expect(appStoreCaller(key)('POST', '/reviewSubmissions', {})).rejects.toThrow([

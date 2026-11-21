@@ -2,6 +2,7 @@ import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import upath from 'upath';
 
 // Cargo reads flags from the process environment, $CARGO_HOME/config.toml and any .cargo/config
 // found by walking up from the working directory. These tests pin what the caller's environment
@@ -10,7 +11,7 @@ vi.mock('node:child_process', () => ({ spawnSync: vi.fn(), execFileSync: vi.fn()
 vi.mock('../src/utils/logger.js', () => ({ default: { info: vi.fn() } }));
 
 // Where cargo runs follows the runner, so the runner belongs in the fixture rather than being read
-// from whatever ~/.crossbind.json happens to say on the machine running the suite.
+// from whatever ~/.crossbind/config.json happens to say on the machine running the suite.
 const holder = { config: { paths: { base: '/repo' }, system: {} } };
 vi.mock('../src/state/index.js', () => ({
     default: {
@@ -105,7 +106,7 @@ describe('runCargo environment', () => {
 
         mod.default(['build']);
 
-        expect(envOf(spawnSync).CARGO_HOME).toBe(path.join(work, 'home', '.crossbind', 'cargo'));
+        expect(upath.toUnix(envOf(spawnSync).CARGO_HOME)).toBe(upath.join(work, 'home', '.crossbind', 'cache', 'cargo'));
     });
 
     test('encodes rustflags with cargo separator, one argv per flag', async () => {
@@ -159,7 +160,7 @@ describe('where cargo runs', () => {
         expect(argv).toEqual(expect.arrayContaining(['--cap-drop', 'ALL', '--security-opt', 'no-new-privileges=true']));
         // The registry cache is bind-mounted, which is what keeps crate sources readable from the
         // host for bridge generation.
-        expect(argv.join(' ')).toContain(`${path.join(work, 'home', '.crossbind', 'cargo')}:/var/cache/crossbind/cargo`);
+        expect(upath.toUnix(argv.join(' '))).toContain(`${upath.join(work, 'home', '.crossbind', 'cache', 'cargo')}:/var/cache/crossbind/cargo`);
     });
 
     test('ios stays on the host even under a containerized runner', async () => {
@@ -186,7 +187,7 @@ describe('where cargo runs', () => {
     };
     const bothMounts = () => [
         { Destination: '/tmp/crossbind/live', Source: '/repo' },
-        { Destination: '/var/cache/crossbind/cargo', Source: path.join(work, 'home', '.crossbind', 'cargo') },
+        { Destination: '/var/cache/crossbind/cargo', Source: upath.join(work, 'home', '.crossbind', 'cache', 'cargo') },
     ];
 
     test('DOCKER_EXEC runs cargo in the existing container when its mounts are right', async () => {
@@ -238,7 +239,7 @@ describe('where cargo runs', () => {
         const { execFileSync } = await import('node:child_process');
         inspectReturning(execFileSync, [{ Destination: '/tmp/crossbind/live', Source: '/repo' }]);
 
-        expect(() => mod.default(['build'], { target: { platform: 'wasm' } })).toThrow(/does not mount[\s\S]*var\/cache\/crossbind\/cargo/);
+        expect(() => mod.default(['build'], { target: { platform: 'wasm' } })).toThrow(/does not mount[\s\S]*var\/cache\/crossbind\/cargo\. It was made before crossbind mounted this folder there: remove it with `docker rm -f [^`]+` and create it again\./);
     });
 
     test('DOCKER_EXEC fails when the container is stopped', async () => {
@@ -293,8 +294,8 @@ describe('on a remote runner', () => {
         expect(payload.url).toBe('http://runner.example');
         expect(options.env.CROSSBIND_TOKEN).toBe('web-token');
         expect(payload.mounts[0].inputRoots).toEqual(expect.arrayContaining(['app/.crossbind', 'core/embind-rust/crate']));
-        expect(payload.mounts[1]).toEqual({
-            host: path.join(work, 'home', '.crossbind', 'cargo'), container: '/var/cache/crossbind/cargo', inputRoots: [], outputRoots: ['registry/src/*/*', 'git/checkouts/*/*'],
+        expect({ ...payload.mounts[1], host: upath.toUnix(payload.mounts[1].host) }).toEqual({
+            host: upath.join(work, 'home', '.crossbind', 'cache', 'cargo'), container: '/var/cache/crossbind/cargo', inputRoots: [], outputRoots: ['registry/src/*/*', 'git/checkouts/*/*'],
         });
         expect(payload.cwd).toBe('/tmp/crossbind-cargo');
         expect(payload.argv).toEqual([

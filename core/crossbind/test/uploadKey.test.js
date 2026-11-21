@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import upath from 'upath';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 let home;
@@ -38,7 +39,7 @@ vi.mock('../src/utils/ask.js', () => ({
 const { makeUploadKey, showUploadKeyPassword, uploadKeyFile, useUploadKey } = await import('../src/actions/uploadKey.js');
 
 let printed;
-const systemConfig = () => JSON.parse(fs.readFileSync(path.join(home, '.crossbind.json'), 'utf8'));
+const systemConfig = () => JSON.parse(fs.readFileSync(upath.join(home, '.crossbind', 'config.json'), 'utf8'));
 const keytool = () => calls.find(({ program }) => program === 'docker');
 
 beforeEach(() => {
@@ -118,9 +119,10 @@ describe("a machine's upload key", () => {
     });
 
     test('is never made over a key the machine has, or over a file there', async () => {
-        fs.writeFileSync(path.join(home, '.crossbind.json'), JSON.stringify({ ANDROID_KEYSTORE: '/keys/old.p12' }));
+        fs.mkdirSync(upath.join(home, '.crossbind'), { recursive: true });
+        fs.writeFileSync(upath.join(home, '.crossbind', 'config.json'), JSON.stringify({ ANDROID_KEYSTORE: '/keys/old.p12' }));
         await expect(makeUploadKey()).rejects.toThrow("this machine's upload key is /keys/old.p12, and crossbind never makes another over it");
-        fs.rmSync(path.join(home, '.crossbind.json'));
+        fs.rmSync(upath.join(home, '.crossbind', 'config.json'));
         fs.mkdirSync(path.dirname(uploadKeyFile()), { recursive: true });
         fs.writeFileSync(uploadKeyFile(), 'old');
         await expect(makeUploadKey()).rejects.toThrow(`${uploadKeyFile()} is there already, and crossbind never replaces an upload key`);
@@ -132,7 +134,7 @@ describe("a machine's upload key", () => {
         fs.writeFileSync(own, 'jks');
         terminal.hidden = ['wrong password'];
         await expect(useUploadKey(own, { alias: 'mykey' })).rejects.toThrow(`${own} did not open with that password and the alias mykey`);
-        expect(fs.existsSync(path.join(home, '.crossbind.json'))).toBe(false);
+        expect(fs.existsSync(upath.join(home, '.crossbind', 'config.json'))).toBe(false);
 
         terminal.hidden = [keystorePassword];
         await useUploadKey(own, { alias: 'mykey' });

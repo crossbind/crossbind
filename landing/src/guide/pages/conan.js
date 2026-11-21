@@ -100,7 +100,7 @@ console.log(await Text.price(3.14159));`,
         { type: 'h2', id: 'build', text: 'What a build does' },
         {
             type: 'p',
-            text: 'ConanCenter publishes no binaries for these toolchains, so the first build of a package compiles it from source. Built packages stay in `~/.crossbind/conan/store`, shared by every project (`~/.crossbind/conan-local/store` for iOS, macOS and `RUNNER=LOCAL`). A target installs again only when `packages.conan`, the toolchain or `conan.lock` changes. A debug build links the release archives.',
+            text: 'ConanCenter publishes no binaries for these toolchains, so the first build of a package compiles it from source. Built packages stay in `~/.crossbind/cache/conan/store`, shared by every project (`~/.crossbind/cache/conan-local/store` for iOS, macOS and `RUNNER=LOCAL`). A target installs again only when `packages.conan`, the toolchain or `conan.lock` changes. A debug build links the release archives.',
         },
         {
             type: 'p',
@@ -117,7 +117,7 @@ console.log(await Text.price(3.14159));`,
             items: [
                 'Each `conan install` gets a work directory and a Conan home of its own, deleted when it ends: plugins, hooks, remotes or settings a recipe writes never reach the next install.',
                 'In the default Docker runner the container sees the package store and that work directory, not your project, and every path it reports back is checked before anything is copied. A [remote runner](/guide/remote-builds/) sends back only the built packages.',
-                'The store is shared and writable, so a recipe built for one project can change what another later takes from it. Delete `~/.crossbind/conan/store` to build every package again.',
+                'The store is shared and writable, so a recipe built for one project can change what another later takes from it. Delete `~/.crossbind/cache/conan/store` to build every package again.',
                 'Under `RUNNER=LOCAL`, and for iOS and macOS on any runner, recipes run on your machine with your permissions.',
             ],
         },

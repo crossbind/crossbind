@@ -1502,7 +1502,7 @@ crossbind's, or a device's name on Windows. All that is the source's goes by it,
 | An import of a package's header | `conan:<package>/<header>` |
 | The versions it resolved | `conan.lock`, beside `crossbind.config.js` |
 | What a build staged, its logs and the editor's types | `.crossbind/conan/` |
-| Its store, which every project of the machine shares | `~/.crossbind/conan/`, and `~/.crossbind/conan-local/` where its tool runs on the machine itself |
+| Its store, which every project of the machine shares | `~/.crossbind/cache/conan/`, and `~/.crossbind/cache/conan-local/` where its tool runs on the machine itself |
 
 `packages` takes a source's packages under the source's name, beside the crates of crossbind's own `cargo`
 ([rust.md](./rust.md)), and no other name: one that is neither stops the config as it loads, where a misspelt one would
@@ -1663,7 +1663,7 @@ extension and its run, and frozen. A package source's steps get [their own](#pac
 - `ask(question)`, `askYesNo(question)`: A question on the terminal, which fails without one.
 - `askHidden(question)`: A question whose answer the terminal does not show, as a key's, which fails without one.
 - `openUrl(url)`: Opens an http or https page in the user's browser, as a store's console.
-- `settings`: `get(key)` and `set(values)`: this machine's settings in `~/.crossbind.json`, by uppercase names, each
+- `settings`: `get(key)` and `set(values)`: this machine's settings in `~/.crossbind/config.json`, by uppercase names, each
   with text: crossbind's own by their names, which `set` takes as `crossbind config set` does, and by any other name the
   extension's own, which the file keeps apart from crossbind's and every other extension's, under `extensions` by the
   extension's name, as `{ "extensions": { "demo-store": { "TOKEN": "…" } } }`. `set` writes all it is given or none.

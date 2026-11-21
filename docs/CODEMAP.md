@@ -254,7 +254,7 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | @crossbind/core-embind-rust resolution (consumer-declared) | `src/utils/resolveEmbindRust.js` |
 | @crossbind/core-embind-napi resolution (consumer-declared) | `src/utils/resolveEmbindNapi.js` |
 | @crossbind/core-app-host resolution (consumer-declared) | `src/utils/resolveAppHost.js` |
-| Hermes for apps: React Native's pinned release for macOS and iOS in `~/.crossbind/hermes`, and the pins of the Android and source releases the android-app and linux images carry | `src/utils/hermes.js` |
+| Hermes for apps: React Native's pinned release for macOS and iOS in `~/.crossbind/cache/hermes`, and the pins of the Android and source releases the android-app and linux images carry | `src/utils/hermes.js` |
 | Property lists: XML for an Info.plist, the text form for a project.pbxproj | `src/utils/plist.js` |
 | App options: the name an app shows and its desktop window from `crossbind.config.js`, as the header a desktop host compiles; its URL schemes with their owners, the app's and its extensions'; and the options of the host's own extensions, as the instance's where it keeps one and the updater's `app.updater` | `src/utils/appOptions.js` |
 | App icon: each platform's icon files from the PNG `app.icon` names | `src/utils/appIcon.js` |
