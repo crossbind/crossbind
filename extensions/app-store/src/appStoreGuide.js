@@ -20,11 +20,12 @@ const file = (name) => path.join(APP_STORE_LISTING, name);
 // What crossbind app store --send sends of a locale, as a release does: its texts and its screenshots of
 // each display type.
 function localeLine({
-    locale, info, version, screenshots,
+    locale, info, version, screenshots, creativeAssets = {},
 }) {
     const parts = [
         Object.keys({ ...info, ...version }).map((field) => TEXTS[field]).join(', '),
         Object.entries(screenshots).map(([type, files]) => `${files.length} ${type} screenshots`).join(', '),
+        Object.keys(creativeAssets).map((role) => `${role} creative asset`).join(', '),
     ].filter(Boolean);
     return `${path.join(APP_STORE_LISTING, locale)}: ${parts.join('; ')}`;
 }

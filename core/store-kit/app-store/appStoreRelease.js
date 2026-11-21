@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { uploadParts } from './appStoreApi.js';
-import { APP_STORE_LISTING } from './appStoreListing.js';
+import { APP_STORE_LISTING, listingOf } from './appStoreListing.js';
+import { updateCreativeAssets } from './appStoreCreativeAssets.js';
 
 // App Store Connect's page of the team's apps.
 export const APP_STORE_CONNECT = 'https://appstoreconnect.apple.com/apps';
@@ -277,12 +278,13 @@ async function updateListing(call, appId, version, listings, afterwards) {
     const changed = [];
     const sets = [];
     for (const listing of listings) {
-        const isWanted = Object.keys(listing.version).length > 0 || Object.keys(listing.screenshots).length > 0;
+        const isWanted = Object.keys(listing.version).length > 0 || Object.keys(listing.screenshots).length > 0 || Boolean(listing.creativeAssets);
         const versionText = await localize(call, { type: 'appStoreVersionLocalizations', shown: versionTexts, owner: { appStoreVersion: to('appStoreVersions', version.id) } }, listing.locale, listing.version, isWanted);
         const infoText = info ? await localize(call, { type: 'appInfoLocalizations', shown: infoTexts, owner: { appInfo: to('appInfos', info.id) } }, listing.locale, listing.info) : { isChanged: false };
         const shotSets = await updateScreenshots(call, versionText.id, listing.screenshots);
+        const creativeChanged = listing.creativeAssets && await updateCreativeAssets(call, appId, versionText.id, listing.creativeAssets);
         sets.push(...shotSets);
-        if (versionText.isChanged || infoText.isChanged || shotSets.length > 0) changed.push(listing.locale);
+        if (versionText.isChanged || infoText.isChanged || shotSets.length > 0 || creativeChanged) changed.push(listing.locale);
     }
     await processedScreenshots(call, sets, afterwards);
     for (const { setId, uploaded } of sets) {
@@ -325,7 +327,7 @@ async function preparePage(call, {
     appId, versionString, listings, settings, platform, afterwards,
 }) {
     const version = await openVersion(call, appId, versionString, platform);
-    const listed = await updateListing(call, appId, version, listings, afterwards);
+    const listed = await updateListing(call, appId, version, listingOf(listings, platform), afterwards);
     const settled = await updateSettings(call, appId, version, settings);
     return { version, listed, settled };
 }

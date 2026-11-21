@@ -28,6 +28,47 @@ afterEach(() => {
 });
 
 describe("a project's App Store listing", () => {
+    test('previews shared and localized creative artwork and only includes it for iOS', () => {
+        write('en-US/creative-assets/universal.png', pngOf(5244, 2950));
+        write('en-US/creative-assets/search-results.jpg', jpegOf(3000, 2000));
+        write('tr/creative-assets/header.id', '6E4F57C4-447C-464F-9525-CA3856EA8AFC\n');
+        write('tr/keywords.txt', 'harita');
+        const listings = readAppStoreListing(project);
+        expect(listings[1].creativeAssets.header.id).toBe('6e4f57c4-447c-464f-9525-ca3856ea8afc');
+        expect(appStoreListingProblems(project, listingOf(listings, 'IOS'))).toEqual([]);
+        expect(listingOf(listings, 'MAC_OS')).toEqual([{ locale: 'tr', info: {}, version: { keywords: 'harita' }, screenshots: {} }]);
+        const guide = appStoreGuide({ project: { root: project }, config: { app: {} }, app: { category: { macos: 'public.app-category.utilities' } } });
+        expect(guide.sends.map(upath.toUnix)).toContain('store/app-store/en-US: search-results creative asset, universal creative asset');
+    });
+
+    test.each([
+        ['header.png', pngOf(3840, 1646), null],
+        ['search-results.png', pngOf(3840, 2560), null],
+        ['search-results.jpg', jpegOf(1920, 1280), null],
+        ['search-results.png', pngOf(5244, 2950), null],
+        ['header.png', pngOf(3840, 1646, { isTransparent: true }), 'transparency'],
+        ['universal.png', pngOf(5244, 2950, { colorType: RGBA }), 'transparency'],
+        ['header.jpg', jpegOf(3840, 1646), 'PNG'],
+        ['universal.png', pngOf(3840, 1646), '5244 × 2950'],
+        ['search-results.jpg', jpegOf(1920, 1300), '3:2'],
+        ['search-results.jpg', jpegOf(3843, 2562), '3:2'],
+        ['search-results.jpg', pngOf(1920, 1280), 'matching its filename'],
+        ['header.png', 'version https://git-lfs.github.com/spec/v1', 'matching its filename'],
+    ])('checks %s against its placement specification', (name, image, error) => {
+        write(`en-US/creative-assets/${name}`, image);
+        const problems = appStoreListingProblems(project, readAppStoreListing(project));
+        if (error) expect(problems).toEqual([expect.stringContaining(error)]);
+        else expect(problems).toEqual([]);
+    });
+
+    test('identifies invalid IDs and competing sources for one placement', () => {
+        write('tr/creative-assets/header.id', 'bad id');
+        expect(() => readAppStoreListing(project)).toThrow(/header.id.*UUID/);
+        write('tr/creative-assets/header.id', '6e4f57c4-447c-464f-9525-ca3856ea8afc');
+        write('tr/creative-assets/header.png', pngOf(3840, 1646));
+        expect(() => readAppStoreListing(project)).toThrow('two files for header');
+    });
+
     test('is none without its folder', () => {
         expect(readAppStoreListing(project)).toEqual([]);
     });

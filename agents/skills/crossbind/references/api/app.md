@@ -1803,6 +1803,9 @@ store/app-store/en-US/
 ├── promotional_text.txt      at most 170
 ├── support_url.txt
 ├── marketing_url.txt
+├── creative-assets/          iOS product page header and search results
+│   ├── universal.png         default artwork for both placements
+│   └── search-results.jpg    optional override for search results
 └── screenshots/
     ├── APP_IPHONE_67/          the 6.9-inch and 6.7-inch iPhone's: 01.png, 02.png, at most 10
     ├── APP_IPAD_PRO_3GEN_129/  the 13-inch iPad's
@@ -1831,6 +1834,33 @@ Connect's specifications give them, `APP_IPHONE_67` taking 1320 × 2868, 1290 ×
 `APP_IPAD_PRO_3GEN_129` 2064 × 2752 or 2048 × 2732 and `APP_DESKTOP` the 16:10 1280 × 800, 1440 × 900, 2560 × 1600
 or 2880 × 1800 alone, and at one with transparency, which App Store Connect takes in no image. It takes a 13-inch iPad's screenshots of every app that runs on iPads, as crossbind's iOS apps do, and scales the
 6.9-inch iPhone's down for smaller ones.
+
+#### Header and search results artwork
+
+The iOS version uses still images from each locale’s `creative-assets/` folder. Choose a shared image,
+individual images, or a shared image with a different one for a particular placement.
+
+| Filename | Placement | Accepted artwork |
+|---|---|---|
+| `universal.png` | Header and Search Results | 5244 × 2950 PNG |
+| `header.png` | Header | 3840 × 1646 PNG or the universal size |
+| `search-results.png`, `.jpg`, `.jpeg` | Search Results | 3:2 from 1920 × 1280 to 3840 × 2560, or the universal PNG |
+
+Use opaque images up to 500 MiB. To reuse an image already in the app’s Asset Library, put its image UUID in
+`universal.id`, `header.id`, or `search-results.id`. Supply one file per role. For example, `header.id` with
+`search-results.jpg` keeps an existing header and gives the locale its own search artwork.
+
+`crossbind app store app-store` lists the configured roles and checks local artwork.
+`crossbind app store app-store --send -p ios` applies them to the draft and `crossbind app release app-store -p ios`
+includes them when submitting the version. Crossbind waits for Apple to process new images before replacing placements.
+It reuses images it uploaded with the same content and updates only configured placements.
+
+Text is optional. If the artwork includes a phrase, localize it for the folder’s language and keep it inside the
+safe area for that placement. Apple provides layout templates and examples in its
+[asset best practices](https://developer.apple.com/app-store/asset-best-practices/) and
+[creative asset specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/creative-assets-specifications/).
+
+#### App settings
 
 Beside the locales, the folder holds the app's settings, by the names fastlane's deliver gives them, which a release and
 `--send` send where App Store Connect's differ:
