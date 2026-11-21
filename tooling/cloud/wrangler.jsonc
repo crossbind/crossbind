@@ -1,5 +1,6 @@
 // The crossbind cloud API on api.crossbind.dev: the playground with its compiler container, the accounts
-// `crossbind login` signs in to, and a runner per user and toolchain image for builds under RUNNER=REMOTE.
+// `crossbind login` signs in to, a runner per user and toolchain image for builds under RUNNER=REMOTE, and the snapshots
+// crossbind app preview --cloud uploads, kept in R2 and served to the account's devices from snapshots.crossbind.dev.
 // `pnpm run deploy` (or `deploy:staging`) assembles the image contexts first and migrates the accounts database (D1)
 // after. Secrets, set with `wrangler secret put [--env staging]`: SESSION_SECRET and RUNNER_SECRET (32+ random
 // characters each), TURNSTILE_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET (a GitHub OAuth app with the device flow
@@ -10,9 +11,13 @@
     "main": "worker/index.js",
     "compatibility_date": "2026-09-01",
     "workers_dev": false,
-    "routes": [{ "pattern": "api.crossbind.dev", "custom_domain": true }],
+    "routes": [
+        { "pattern": "api.crossbind.dev", "custom_domain": true },
+        { "pattern": "snapshots.crossbind.dev", "custom_domain": true }
+    ],
     "observability": { "enabled": true },
-    // Daily: drops the tokens, build seconds and deleted accounts' records the accounts keep only for a while.
+    // Daily: drops the tokens, build seconds and deleted accounts' records the accounts keep only for a while, and the
+    // snapshots' files no live snapshot names.
     "triggers": { "crons": ["17 3 * * *"] },
     // max_instances caps the bill: how many compiles, and how many builds per image, run at once.
     "containers": [
@@ -46,17 +51,22 @@
         "CloudRunnerWindows": { "type": "durable-object", "storage": "sqlite" }
     },
     "d1_databases": [{ "binding": "DB", "database_name": "crossbind-accounts", "migrations_dir": "migrations" }],
+    // The snapshots' files (worker/snapshots.js); a deploy makes the bucket under this name where there is none.
+    "r2_buckets": [{ "binding": "SNAPSHOTS", "bucket_name": "crossbind-snapshots" }],
     // Requests per minute, counted at each Cloudflare location: for a network, every route, starting a sign-in (a device's
     // or the CLI's of before), and the runners, which a build talks to far more often; a device's polls for its code;
-    // codes entered on the device page, for an account and for a network; and, with one key, the sign-ins everyone
-    // starts, in front of their exact count in the quota's Durable Object (worker/devices.js STARTS_PER_MINUTE).
+    // codes entered on the device page, for an account and for a network; with one key, the sign-ins everyone starts, in
+    // front of their exact count in the quota's Durable Object (worker/devices.js STARTS_PER_MINUTE); the snapshot host,
+    // for a network, as a snapshot loads many files at once; and an account's snapshot uploads.
     "ratelimits": [
         { "name": "API_LIMITER", "namespace_id": "1101", "simple": { "limit": 120, "period": 60 } },
         { "name": "LOGIN_LIMITER", "namespace_id": "1102", "simple": { "limit": 10, "period": 60 } },
         { "name": "RUNNER_LIMITER", "namespace_id": "1103", "simple": { "limit": 1200, "period": 60 } },
         { "name": "POLL_LIMITER", "namespace_id": "1104", "simple": { "limit": 13, "period": 60 } },
         { "name": "CODE_LIMITER", "namespace_id": "1105", "simple": { "limit": 10, "period": 60 } },
-        { "name": "STARTS_LIMITER", "namespace_id": "1106", "simple": { "limit": 300, "period": 60 } }
+        { "name": "STARTS_LIMITER", "namespace_id": "1106", "simple": { "limit": 300, "period": 60 } },
+        { "name": "SNAPSHOT_LIMITER", "namespace_id": "1107", "simple": { "limit": 3000, "period": 60 } },
+        { "name": "UPLOAD_LIMITER", "namespace_id": "1108", "simple": { "limit": 10, "period": 60 } }
     ],
     "vars": {
         "PLAYGROUND_ENABLED": "true",
@@ -73,7 +83,10 @@
         "MIN_GITHUB_ACCOUNT_DAYS": "30",
         "TURNSTILE_SITE_KEY": "0x4AAAAAAFTFcieHj3dC44NR",
         "TURNSTILE_HOSTNAMES": "crossbind.dev",
-        "BLOCKED_NETWORKS": ""
+        "BLOCKED_NETWORKS": "",
+        "SNAPSHOTS_ENABLED": "true",
+        "SNAPSHOTS_HOST": "snapshots.crossbind.dev",
+        "SNAPSHOTS_TOTAL_GB": "20"
     },
     "env": {
         // On api-staging.crossbind.dev (some networks refuse workers.dev names), for the landing's dev server and
@@ -81,7 +94,10 @@
         // browser check: smaller totals, one runner per image.
         "staging": {
             "workers_dev": false,
-            "routes": [{ "pattern": "api-staging.crossbind.dev", "custom_domain": true }],
+            "routes": [
+                { "pattern": "api-staging.crossbind.dev", "custom_domain": true },
+                { "pattern": "snapshots-staging.crossbind.dev", "custom_domain": true }
+            ],
             "triggers": { "crons": ["17 3 * * *"] },
             "containers": [
                 {
@@ -114,13 +130,16 @@
                 "CloudRunnerWindows": { "type": "durable-object", "storage": "sqlite" }
             },
             "d1_databases": [{ "binding": "DB", "database_name": "crossbind-accounts-staging", "migrations_dir": "migrations" }],
+            "r2_buckets": [{ "binding": "SNAPSHOTS", "bucket_name": "crossbind-snapshots-staging" }],
             "ratelimits": [
                 { "name": "API_LIMITER", "namespace_id": "1201", "simple": { "limit": 120, "period": 60 } },
                 { "name": "LOGIN_LIMITER", "namespace_id": "1202", "simple": { "limit": 10, "period": 60 } },
                 { "name": "RUNNER_LIMITER", "namespace_id": "1203", "simple": { "limit": 1200, "period": 60 } },
                 { "name": "POLL_LIMITER", "namespace_id": "1204", "simple": { "limit": 13, "period": 60 } },
                 { "name": "CODE_LIMITER", "namespace_id": "1205", "simple": { "limit": 10, "period": 60 } },
-                { "name": "STARTS_LIMITER", "namespace_id": "1206", "simple": { "limit": 300, "period": 60 } }
+                { "name": "STARTS_LIMITER", "namespace_id": "1206", "simple": { "limit": 300, "period": 60 } },
+                { "name": "SNAPSHOT_LIMITER", "namespace_id": "1207", "simple": { "limit": 3000, "period": 60 } },
+                { "name": "UPLOAD_LIMITER", "namespace_id": "1208", "simple": { "limit": 10, "period": 60 } }
             ],
             "vars": {
                 "PLAYGROUND_ENABLED": "true",
@@ -137,7 +156,10 @@
                 "MIN_GITHUB_ACCOUNT_DAYS": "30",
                 "TURNSTILE_SITE_KEY": "1x00000000000000000000AA",
                 "TURNSTILE_HOSTNAMES": "localhost,example.com",
-                "BLOCKED_NETWORKS": ""
+                "BLOCKED_NETWORKS": "",
+                "SNAPSHOTS_ENABLED": "true",
+                "SNAPSHOTS_HOST": "snapshots-staging.crossbind.dev",
+                "SNAPSHOTS_TOTAL_GB": "1"
             }
         }
     }

@@ -9,6 +9,8 @@ import { createQuota } from '../worker/quota.js';
 import { signSession, SESSION_COOKIE } from '../worker/session.js';
 import { memoryStorage } from '../scripts/memory-storage.mjs';
 import { sqliteD1 } from '../scripts/sqlite-d1.mjs';
+import { createSnapshots } from '../worker/snapshots.js';
+import { memoryBucket } from './support/bucket.mjs';
 
 // Each kind of token on each route that takes a token, the runners and the app's compile included: the design's table
 // of who may do what, with tokens made by the device sign-in itself.
@@ -29,6 +31,7 @@ const env = {
     GLOBAL_DAILY: '1000',
     TURNSTILE_SECRET: 'turnstile-secret',
     TURNSTILE_HOSTNAMES: 'crossbind.dev',
+    SNAPSHOTS_ENABLED: 'true',
 };
 const DEVICES = Object.freeze({
     app: {
@@ -50,11 +53,12 @@ function setup() {
     const calls = { compile: 0, runner: [], siteverify: 0 };
     const deps = {
         limits: {
-            api: unlimited, login: unlimited, runner: unlimited, starts: unlimited, poll: unlimited, code: unlimited,
+            api: unlimited, login: unlimited, runner: unlimited, starts: unlimited, poll: unlimited, code: unlimited, upload: unlimited, snapshot: unlimited,
         },
         accounts,
         devices: createDeviceCodes(db, () => NOW),
         sessions: createProjectSessions(db, () => NOW),
+        snapshots: createSnapshots(db, memoryBucket(), () => NOW),
         quota: createQuota(memoryStorage(), () => NOW),
         compiler: { fetch: async () => { calls.compile += 1; return Response.json(compiled); } },
         cache: { match: async () => undefined, put: async () => {} },
@@ -73,7 +77,7 @@ function setup() {
             ...(token === undefined ? {} : { authorization: `Bearer ${token}` }),
             ...(origin === undefined ? {} : { origin }),
             ...(cookie === undefined ? {} : { cookie }),
-            ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+            ...(body === undefined ? {} : { 'content-type': 'application/json', 'content-length': String(Buffer.byteLength(JSON.stringify(body))) }),
         },
         body: body === undefined ? undefined : JSON.stringify(body),
     }), env, deps);
@@ -98,6 +102,9 @@ const DEV_SESSION = {
     source: 'dev', project: { id: 'mWW-UyZhfd1-czxo9qk5Aw', name: 'made-up-app' }, addresses: ['192.168.1.6:5173'], protocol: 1, key: 'GheN2aAnJDjAj-qTuiyNWPEy-yOsSHLE15uyL80No6o',
 };
 
+// A snapshot no route has made: the CLI's upload to it gets 404.
+const SNAPSHOT = '/v1/snapshots/IRVUB8Fpwuh0lT_7NkiJ8Q';
+
 const ROUTES = Object.freeze([
     ['GET', '/v1/usage'],
     ['GET', '/v1/account'],
@@ -105,6 +112,8 @@ const ROUTES = Object.freeze([
     ['GET', '/v1/sessions'],
     ['GET', SESSION],
     ['DELETE', SESSION],
+    ['POST', '/v1/snapshots', { project: DEV_SESSION.project, protocol: 1 }],
+    ['PUT', SNAPSHOT, {}],
     ['POST', '/playground/compile', { files }],
     ['POST', '/runner/web/v1/missing', { hashes: [] }],
     ['DELETE', '/v1/token'],
@@ -125,8 +134,11 @@ test('takes each kind of token on the routes the design gives it alone, the runn
         }
     }
 
-    const sessions = { cli: ['200', '403', '403', '404'], app: ['403', '200', '404', '403'], partner: ['403', '403', '403', '403'] };
-    const sessionRoutes = (kind) => [`PUT ${SESSION}`, 'GET /v1/sessions', `GET ${SESSION}`, `DELETE ${SESSION}`].map((route, at) => `${route} ${sessions[kind][at]}`);
+    const sessions = {
+        cli: ['200', '403', '403', '404', '200', '404'], app: ['403', '200', '404', '403', '403', '403'], partner: ['403', '403', '403', '403', '403', '403'],
+    };
+    const sessionRoutes = (kind) => [`PUT ${SESSION}`, 'GET /v1/sessions', `GET ${SESSION}`, `DELETE ${SESSION}`, 'POST /v1/snapshots', `PUT ${SNAPSHOT}`]
+        .map((route, at) => `${route} ${sessions[kind][at]}`);
     assert.deepEqual(statuses, {
         cli: ['GET /v1/usage 200', 'GET /v1/account 200', ...sessionRoutes('cli'), 'POST /playground/compile 403', 'POST /runner/web/v1/missing 200', 'DELETE /v1/token 204', 'DELETE /v1/tokens 204', 'DELETE /v1/account 204'],
         app: ['GET /v1/usage 403', 'GET /v1/account 200', ...sessionRoutes('app'), 'POST /playground/compile 200', 'POST /runner/web/v1/missing 403', 'DELETE /v1/token 204', 'DELETE /v1/tokens 204', 'DELETE /v1/account 204'],

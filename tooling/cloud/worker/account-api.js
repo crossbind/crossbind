@@ -11,6 +11,7 @@ import {
     isDeviceLoginConfigured, minAccountDays, pollDeviceCode, requestDeviceCode, signInProviders,
 } from './oauth.js';
 import { devSessionOf, isSessionId, MAX_SESSIONS_PER_ACCOUNT } from './project-sessions.js';
+import { deleteAccountWithSnapshots, startSnapshotRoute, uploadSnapshotRoute } from './snapshots.js';
 
 // The API of `crossbind login`, `logout`, `usage` and `app preview`, of the crossbind app, and the account's own, under
 // /v1. No browser calls it: it sends no CORS headers and reads no cookies, only the token in the Authorization header.
@@ -36,6 +37,7 @@ const EVERY_KIND = Object.freeze(['cli', 'app']);
 // Sessions are read by the crossbind app alone, which opens them; the CLI registers and removes them.
 const APP_ONLY = Object.freeze(['app']);
 const SESSION_PATH = /^\/v1\/sessions\/([^/]+)$/;
+const SNAPSHOT_PATH = /^\/v1\/snapshots\/([^/]+)$/;
 const NO_SESSION = 'No session of this account has this id.';
 
 const now = (deps) => (deps.now ?? Date.now)();
@@ -215,11 +217,13 @@ const SESSION_ROUTES = Object.freeze({
         const removed = isSessionId(sessionId) && await deps.sessions.remove(user.id, sessionId);
         return removed ? noContent() : jsonResponse(404, { error: NO_SESSION });
     }),
-    GET: authenticated(async ({ deps, sessionId }, user) => {
-        const session = isSessionId(sessionId) ? await deps.sessions.find(user.id, sessionId) : null;
+    GET: authenticated(async ({ deps, settings, sessionId }, user) => {
+        const session = isSessionId(sessionId) ? await deps.sessions.find(user.id, sessionId, { snapshots: settings.snapshotsEnabled }) : null;
         return session ? jsonResponse(200, session) : jsonResponse(404, { error: NO_SESSION });
     }, { kinds: APP_ONLY }),
 });
+
+const UPLOAD_ROUTE = authenticated(uploadSnapshotRoute);
 
 const ROUTES = Object.freeze({
     'POST /v1/login/device': deviceRoute,
@@ -228,7 +232,9 @@ const ROUTES = Object.freeze({
     'POST /v1/device/token': deviceTokenRoute,
     'GET /v1/usage': authenticated(usageRoute),
     'GET /v1/account': authenticated((context, user) => jsonResponse(200, { id: user.id, name: nameOf(user) }), { kinds: EVERY_KIND }),
-    'GET /v1/sessions': authenticated(async ({ deps }, user) => jsonResponse(200, { sessions: await deps.sessions.list(user.id) }), { kinds: APP_ONLY }),
+    'GET /v1/sessions': authenticated(async ({ deps, settings }, user) => jsonResponse(200, { sessions: await deps.sessions.list(user.id, { snapshots: settings.snapshotsEnabled }) }), { kinds: APP_ONLY }),
+    // crossbind app preview --cloud asks for its snapshot's id, then uploads to it (worker/snapshots.js).
+    'POST /v1/snapshots': authenticated(startSnapshotRoute),
     'DELETE /v1/token': authenticated(async ({ deps }, user, token) => {
         await deps.accounts.revokeToken(token);
         log({ event: 'token-revoked', who: userKey(user.id), all: false });
@@ -242,7 +248,7 @@ const ROUTES = Object.freeze({
     }, { kinds: EVERY_KIND }),
     // A blocked account may delete itself too; what stays of it keeps the block (worker/accounts.js).
     'DELETE /v1/account': authenticated(async ({ deps }, user) => {
-        await deps.accounts.deleteAccount(user.id);
+        await deleteAccountWithSnapshots(deps, user.id);
         log({ event: 'account-deleted', who: userKey(user.id) });
         return noContent();
     }, { allowBlocked: true, kinds: EVERY_KIND }),
@@ -253,6 +259,9 @@ export function handleAccountRequest(context) {
     const { method } = context.request;
     const { pathname } = new URL(context.request.url);
     const session = SESSION_PATH.exec(pathname);
-    const route = session ? SESSION_ROUTES[method] : ROUTES[`${method} ${pathname}`];
-    return route ? route({ ...context, sessionId: session?.[1] }) : jsonResponse(404, { error: 'Not found.' });
+    const snapshot = SNAPSHOT_PATH.exec(pathname);
+    let route = ROUTES[`${method} ${pathname}`];
+    if (session) route = SESSION_ROUTES[method];
+    else if (snapshot) route = method === 'PUT' ? UPLOAD_ROUTE : undefined;
+    return route ? route({ ...context, sessionId: (session ?? snapshot)?.[1] }) : jsonResponse(404, { error: 'Not found.' });
 }

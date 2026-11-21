@@ -9,6 +9,7 @@ import { finishLogin, minAccountDays, signInProviders } from './oauth.js';
 import { handleRunnerRequest } from './runner-api.js';
 import { readSignedIn, clearCookie, SESSION_COOKIE } from './session.js';
 import { settingsOf } from './settings.js';
+import { handleSnapshotHost } from './snapshots.js';
 
 const PREFIX = 'playground';
 const MAX_TURNSTILE_TOKEN_LENGTH = 2048;
@@ -221,7 +222,7 @@ const PLAYGROUND_ROUTES = Object.freeze({
 // cache, fetch and waitUntil, so tests can stand in for them.
 export async function handleRequest(request, env, deps) {
     const settings = settingsOf(env);
-    const { pathname } = new URL(request.url);
+    const { hostname, pathname } = new URL(request.url);
     const ip = request.headers.get('cf-connecting-ip') ?? 'unknown';
     const network = networkOf(ip);
     const origin = request.headers.get('origin');
@@ -230,6 +231,8 @@ export async function handleRequest(request, env, deps) {
     const context = {
         request, env, deps, settings, corsOrigin, respond, ip, network,
     };
+    // The snapshot host answers snapshots alone, under a limiter of its own, and the API's host none (worker/snapshots.js).
+    if (settings.snapshotsHost && hostname === settings.snapshotsHost) return handleSnapshotHost(context);
     // A build talks to its runner far more often than a person to the rest; worker/runner-api.js picks its limiter.
     if (pathname.startsWith('/runner/')) return handleRunnerRequest(context);
     // Before anything that costs: a session, an account, the quota, GitHub or the compiler.
