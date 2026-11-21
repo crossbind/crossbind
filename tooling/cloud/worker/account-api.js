@@ -11,7 +11,9 @@ import {
     isDeviceLoginConfigured, minAccountDays, pollDeviceCode, requestDeviceCode, signInProviders,
 } from './oauth.js';
 import { devSessionOf, isSessionId, MAX_SESSIONS_PER_ACCOUNT } from './project-sessions.js';
-import { deleteAccountWithSnapshots, startSnapshotRoute, uploadSnapshotRoute } from './snapshots.js';
+import {
+    deleteAccountWithSnapshots, removeSnapshotRoute, startSnapshotRoute, uploadSnapshotRoute,
+} from './snapshots.js';
 
 // The API of `crossbind login`, `logout`, `usage` and `app preview`, of the crossbind app, and the account's own, under
 // /v1. No browser calls it: it sends no CORS headers and reads no cookies, only the token in the Authorization header.
@@ -223,7 +225,11 @@ const SESSION_ROUTES = Object.freeze({
     }, { kinds: APP_ONLY }),
 });
 
-const UPLOAD_ROUTE = authenticated(uploadSnapshotRoute);
+const SNAPSHOT_ROUTES = Object.freeze({
+    PUT: authenticated(uploadSnapshotRoute),
+    // The crossbind app removes a snapshot it lists, crossbind app preview --cloud --remove its project's.
+    DELETE: authenticated(removeSnapshotRoute, { kinds: EVERY_KIND }),
+});
 
 const ROUTES = Object.freeze({
     'POST /v1/login/device': deviceRoute,
@@ -265,6 +271,6 @@ export function handleAccountRequest(context) {
     const snapshot = SNAPSHOT_PATH.exec(pathname);
     let route = ROUTES[`${method} ${pathname}`];
     if (session) route = SESSION_ROUTES[method];
-    else if (snapshot) route = method === 'PUT' ? UPLOAD_ROUTE : undefined;
+    else if (snapshot) route = Object.hasOwn(SNAPSHOT_ROUTES, method) ? SNAPSHOT_ROUTES[method] : undefined;
     return route ? route({ ...context, sessionId: (session ?? snapshot)?.[1] }) : jsonResponse(404, { error: 'Not found.' });
 }

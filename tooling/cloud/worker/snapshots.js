@@ -1,6 +1,6 @@
 import { nameOf, userKey } from './accounts.js';
 import {
-    BodyTooLarge, jsonResponse, log, readLimited,
+    BodyTooLarge, SECURITY_HEADERS, jsonResponse, log, readLimited,
 } from './http.js';
 import { isProject, isProtocol, isSessionId } from './project-sessions.js';
 import { fromBase64Url, randomToken, toBase64Url } from './session.js';
@@ -364,6 +364,12 @@ export function createSnapshots(db, bucket, now = () => Date.now(), indexes = IS
             await db.batch(results.map(({ id }) => statement.bind(randomToken(), id, userId)));
         },
 
+        // Whether the account had a snapshot of that id, live or not, whose row is now gone.
+        async remove(userId, id) {
+            const { meta } = await db.prepare("DELETE FROM sessions WHERE id = ? AND user_id = ? AND source = 'snapshot'").bind(id, userId).run();
+            return meta.changes > 0;
+        },
+
         // The ids of an account's snapshots, read before the account is deleted, whose rows go with it.
         async idsOf(userId) {
             const { results } = await db.prepare("SELECT id FROM sessions WHERE user_id = ? AND source = 'snapshot'").bind(userId).all();
@@ -462,6 +468,19 @@ export async function uploadSnapshotRoute({
         log({ event: 'snapshot-refused', who: userKey(user.id), status: error.status });
         return jsonResponse(error.status, { error: error.message });
     }
+}
+
+// DELETE /v1/snapshots/<id>: the account's snapshot removed, by the crossbind app or by crossbind app preview --cloud
+// --remove. Its row goes first, so that it answers at once as one that never was: 404 to the account's tokens, the
+// host's 403; then its files, kept going by waitUntil for a client that left, and taken by the daily prune where that
+// fails. Snapshots paused, it is removed all the same.
+export async function removeSnapshotRoute({ deps, sessionId }, user) {
+    if (!(isSessionId(sessionId) && await deps.snapshots.remove(user.id, sessionId))) return jsonResponse(404, { error: NO_SNAPSHOT });
+    const removing = deps.snapshots.removeFiles([sessionId]);
+    deps.waitUntil(removing);
+    await removing.catch((error) => log({ event: 'snapshot-files-left', who: userKey(user.id), message: error.message }));
+    log({ event: 'snapshot-removed', who: userKey(user.id) });
+    return new Response(null, { status: 204, headers: SECURITY_HEADERS });
 }
 
 const gateKey = (key) => crypto.subtle.importKey('raw', fromBase64Url(key), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
