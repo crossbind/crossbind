@@ -10,7 +10,7 @@ import { createProjectSessions, MAX_SESSIONS_PER_ACCOUNT } from '../worker/proje
 import { createQuota } from '../worker/quota.js';
 import { signSession, SESSION_COOKIE } from '../worker/session.js';
 import {
-    createSnapshots, MAX_SNAPSHOT_BYTES, MAX_SNAPSHOT_FILES, MAX_SNAPSHOTS_PER_ACCOUNT, SNAPSHOT_DAYS,
+    createSnapshots, INDEXES_KEPT, MAX_SNAPSHOT_BYTES, MAX_SNAPSHOT_FILES, MAX_SNAPSHOTS_PER_ACCOUNT, SNAPSHOT_DAYS,
 } from '../worker/snapshots.js';
 import { memoryStorage } from '../scripts/memory-storage.mjs';
 import { sqliteD1 } from '../scripts/sqlite-d1.mjs';
@@ -416,7 +416,7 @@ test('leaves nothing of an upload cut half way, its cleanup kept going by waitUn
     assert.equal((await host(`/${id}/index.html`, { key })).status, 200);
 });
 
-test('answers a failure that is no refusal, as R2 failing a put, with 503 in crossbind\'s words: its own words are logged, not sent, and what the upload wrote goes', async (t) => {
+test('answers a failure that is no refusal, as R2 failing the archive\'s put, with 503 in crossbind\'s words: its own words are logged, not sent, and nothing of the upload is kept', async (t) => {
     const {
         call, bucket, signedIn, objects, settle,
     } = setup();
@@ -424,10 +424,10 @@ test('answers a failure that is no refusal, as R2 failing a put, with 503 in cro
     const { body: { id } } = await start(call, owner);
     const lines = [];
     t.mock.method(console, 'log', (line) => lines.push(line));
-    // R2 takes the page, then fails the script's put once its bytes are in.
+    // R2 takes the archive's bytes, then fails its put.
     const { put } = bucket;
     t.mock.method(bucket, 'put', async (key, value) => {
-        if (!key.endsWith('/assets/app.js')) return put(key, value);
+        if (!key.endsWith('/archive.tar')) return put(key, value);
         await new Response(value).arrayBuffer();
         throw new Error('made-up R2 failure: words of its own');
     });
@@ -454,10 +454,207 @@ test('makes a new upload live whole, its version risen, and deletes the one befo
     await settle();
 
     assert.deepEqual([second.status, second.body.version, second.body.files], [200, 2, 1]);
-    assert.equal(objects().length, 1);
+    assert.deepEqual(objects().map((key) => key.split('/').pop()), ['archive.tar', 'index.json']);
     assert.equal((await host(`/${id}/index.html`, { key })).body, '<!doctype html><title>second</title>');
     assert.equal((await host(`/${id}/assets/app.js`, { key })).status, 404);
     assert.equal((await call('GET', `/v1/sessions/${id}`, { token: owner.app })).body.version, 2);
+});
+
+test('keeps an upload as its archive, one object as it was sent with what follows its end, its index beside it, and serves each file as a range of it, an empty one with no read', async (t) => {
+    const {
+        call, host, signedIn, bucket, objects,
+    } = setup();
+    const owner = await signedIn(dev);
+    const { body: { id } } = await start(call, owner);
+    const sent = Buffer.concat([archiveOf([['index.html', PAGE], ['assets/app.js', SCRIPT], ['empty.txt', '']]), Buffer.from('made-up bytes past the end')]);
+
+    const put = await call('PUT', `/v1/snapshots/${id}`, { token: owner.cli, archive: sent });
+    const { key } = (await call('GET', `/v1/sessions/${id}`, { token: owner.app })).body;
+    const reads = [];
+    const { get } = bucket;
+    t.mock.method(bucket, 'get', (name, options) => {
+        reads.push(`${name.split('/').pop()}${options?.range ? ` ${options.range.offset}+${options.range.length}` : ''}`);
+        return get(name, options);
+    });
+    const served = await Promise.all(['index.html', 'assets/app.js', 'empty.txt'].map((path) => host(`/${id}/${path}`, { key })));
+    const head = await host(`/${id}/assets/app.js`, { key, method: 'HEAD' });
+
+    const [archive, index] = objects();
+    assert.deepEqual([put.status, put.body.files, put.body.bytes], [200, 3, PAGE.length + SCRIPT.length]);
+    assert.deepEqual([archive.split('/').pop(), index.split('/').pop()], ['archive.tar', 'index.json']);
+    assert.ok(Buffer.from(bucket.objects.get(archive).bytes).equals(sent));
+    // Each file's bytes follow its header, a block, and start a block: at 512, 1536 and 2560 here.
+    assert.deepEqual(JSON.parse(Buffer.from(bucket.objects.get(index).bytes).toString()), [['index.html', 512, PAGE.length], ['assets/app.js', 1536, SCRIPT.length], ['empty.txt', 2560, 0]]);
+    assert.deepEqual(served.map(({ status, body }) => [status, body]), [[200, PAGE], [200, SCRIPT], [200, '']]);
+    assert.deepEqual([head.status, head.body, head.headers.get('content-length')], [200, '', String(SCRIPT.length)]);
+    // The index once, then a ranged read of the archive for each file with bytes: none for the empty one or the HEAD.
+    assert.deepEqual(reads.sort(), [`archive.tar 1536+${SCRIPT.length}`, `archive.tar 512+${PAGE.length}`, 'index.json']);
+});
+
+test('reads an upload\'s index from R2 once in an isolate, and answers alike from another isolate, which reads it once more, and from a new upload\'s own index', async (t) => {
+    const context = setup();
+    const {
+        call, host, signedIn, uploaded, bucket, db,
+    } = context;
+    const owner = await signedIn(dev);
+    const { id, key } = await uploaded(owner);
+    let indexReads = 0;
+    const { get } = bucket;
+    t.mock.method(bucket, 'get', (name, options) => {
+        if (name.endsWith('/index.json')) indexReads += 1;
+        return get(name, options);
+    });
+
+    const here = [await host(`/${id}/index.html`, { key }), await host(`/${id}/assets/app.js`, { key }), await host(`/${id}/index.html`, { key })];
+    // Another isolate, which keeps no index yet.
+    context.deps.snapshots = createSnapshots(db, bucket, () => NOW, new Map());
+    const elsewhere = await host(`/${id}/assets/app.js`, { key });
+    const second = await call('PUT', `/v1/snapshots/${id}`, { token: owner.cli, archive: archiveOf([['index.html', '<!doctype html><title>second</title>']]) });
+    const renewed = await host(`/${id}/index.html`, { key });
+
+    assert.deepEqual(here.map(({ body }) => body), [PAGE, SCRIPT, PAGE]);
+    assert.equal(elsewhere.body, SCRIPT);
+    assert.deepEqual([second.status, renewed.body], [200, '<!doctype html><title>second</title>']);
+    assert.equal(indexReads, 3);
+});
+
+test('finds a file by its upload\'s index\'s own entries alone: no name Object.prototype holds is a file of it', async () => {
+    const { host, signedIn, uploaded } = setup();
+    const owner = await signedIn(dev);
+    const { id, key } = await uploaded(owner, [['index.html', PAGE], ['__proto__', 'made up']]);
+
+    const asked = [];
+    for (const path of ['__proto__', 'constructor', 'toString', 'hasOwnProperty']) {
+        const { status, body } = await host(`/${id}/${path}`, { key });
+        asked.push([path, status, status === 200 ? body : body.error]);
+    }
+
+    assert.deepEqual(asked, [['__proto__', 200, 'made up'], ['constructor', 404, 'Not found.'], ['toString', 404, 'Not found.'], ['hasOwnProperty', 404, 'Not found.']]);
+});
+
+test(`keeps the indexes of ${INDEXES_KEPT} uploads at most in an isolate, the least lately used going first`, async (t) => {
+    const { bucket, db } = setup();
+    const kept = new Map();
+    const snapshots = createSnapshots(db, bucket, () => NOW, kept);
+    let reads = 0;
+    const { get } = bucket;
+    t.mock.method(bucket, 'get', (name, options) => {
+        reads += 1;
+        return get(name, options);
+    });
+    const ask = (at) => snapshots.file({ id: 'IRVUB8Fpwuh0lT_7NkiJ8Q', upload: `madeup${at}` }, 'index.html', { head: true });
+    const prefix = (at) => `snapshots/IRVUB8Fpwuh0lT_7NkiJ8Q/madeup${at}/`;
+
+    for (let at = 0; at <= INDEXES_KEPT; at += 1) await ask(at);
+    await ask(1);
+    const readsBefore = reads;
+    await ask(0);
+
+    assert.equal(kept.size, INDEXES_KEPT);
+    assert.deepEqual([readsBefore, reads], [INDEXES_KEPT + 1, INDEXES_KEPT + 2]);
+    assert.deepEqual([kept.has(prefix(0)), kept.has(prefix(1)), kept.has(prefix(2))], [true, true, false]);
+});
+
+test('aborts the archive\'s put at a refusal, so that nothing of the upload is kept and nothing is cleaned up', async (t) => {
+    const {
+        call, signedIn, uploaded, bucket, objects, settle,
+    } = setup();
+    const owner = await signedIn(dev);
+    const { id } = await uploaded(owner);
+    await settle();
+    const live = objects();
+    const deleted = [];
+    const { delete: remove, put } = bucket;
+    t.mock.method(bucket, 'delete', (keys) => {
+        deleted.push(keys);
+        return remove(keys);
+    });
+    // How each archive's put ended: an aborted one fails, a finished one is kept.
+    const puts = [];
+    t.mock.method(bucket, 'put', (name, value) => {
+        const putting = put(name, value);
+        if (name.endsWith('/archive.tar')) putting.then(() => puts.push('kept'), () => puts.push('aborted'));
+        return putting;
+    });
+    const files = (count) => Array.from({ length: count }, (_, at) => [at === 0 ? 'index.html' : `f${at}.js`, 'made up']);
+
+    const refused = [
+        await call('PUT', `/v1/snapshots/${id}`, { token: owner.cli, archive: archiveOf(files(MAX_SNAPSHOT_FILES + 1)) }),
+        await call('PUT', `/v1/snapshots/${id}`, { token: owner.cli, archive: archiveOf([['index.html', PAGE]], { end: false }) }),
+        await call('PUT', `/v1/snapshots/${id}`, { token: owner.cli, archive: archiveOf([['assets/app.js', SCRIPT]]) }),
+    ];
+    await settle();
+
+    assert.deepEqual(refused.map(({ status }) => status), [413, 400, 400]);
+    assert.deepEqual(puts, ['aborted', 'aborted', 'aborted']);
+    assert.deepEqual(objects(), live);
+    assert.deepEqual(deleted, []);
+});
+
+test('deletes an upload\'s archive and index when its index cannot be kept or its UPDATE fails, and answers 503', async (t) => {
+    const context = setup();
+    const {
+        call, signedIn, uploaded, bucket, db, objects, settle,
+    } = context;
+    const owner = await signedIn(dev);
+    const { id } = await uploaded(owner);
+    await settle();
+    const live = objects();
+    const { put } = bucket;
+    const failing = t.mock.method(bucket, 'put', async (name, value) => {
+        if (name.endsWith('/index.json')) throw new Error('made-up R2 failure of the index');
+        return put(name, value);
+    });
+
+    const indexFailed = await call('PUT', `/v1/snapshots/${id}`, { token: owner.cli, archive: archiveOf(BUILD) });
+    await settle();
+    const afterIndex = objects();
+    failing.mock.restore();
+    // A database that fails the UPDATE making an upload live.
+    context.deps.snapshots = createSnapshots({
+        ...db,
+        prepare: (sql) => (sql.startsWith('UPDATE sessions SET upload') ? { bind: () => ({ first: async () => { throw new Error('made-up D1 failure'); } }) } : db.prepare(sql)),
+    }, bucket, () => NOW);
+    const updateFailed = await call('PUT', `/v1/snapshots/${id}`, { token: owner.cli, archive: archiveOf(BUILD) });
+    await settle();
+
+    assert.deepEqual([indexFailed.status, indexFailed.body.error, updateFailed.status], [503, UNTAKEN, 503]);
+    assert.deepEqual([afterIndex, objects()], [live, live]);
+});
+
+test('answers 503 when R2 fails the archive\'s put before it reads a byte, the writes that wait on it ended rather than left waiting', { timeout: 5000 }, async (t) => {
+    const {
+        call, signedIn, bucket, objects,
+    } = setup();
+    const owner = await signedIn(dev);
+    const { body: { id } } = await start(call, owner);
+    const { put } = bucket;
+    t.mock.method(bucket, 'put', async (name, value) => {
+        if (name.endsWith('/archive.tar')) throw new Error('made-up R2 failure before a byte');
+        return put(name, value);
+    });
+
+    const answer = await call('PUT', `/v1/snapshots/${id}`, { token: owner.cli, archive: archiveOf(BUILD) });
+
+    assert.deepEqual([answer.status, answer.body.error], [503, UNTAKEN]);
+    assert.deepEqual(objects(), []);
+});
+
+test('answers 404 for each file of an upload of the layout before, a file an object and no index, until the next upload replaces it', async () => {
+    const {
+        call, host, signedIn, uploaded, bucket, db,
+    } = setup();
+    const owner = await signedIn(dev);
+    const { id, key } = await uploaded(owner);
+    // The layout before: each file an object of its own, and no index.
+    await bucket.put(`snapshots/${id}/layoutbefore/index.html`, PAGE);
+    await db.prepare('UPDATE sessions SET upload = ? WHERE id = ?').bind('layoutbefore', id).run();
+
+    const before = await host(`/${id}/index.html`, { key });
+    const next = await call('PUT', `/v1/snapshots/${id}`, { token: owner.cli, archive: archiveOf(BUILD) });
+    const after = await host(`/${id}/index.html`, { key });
+
+    assert.deepEqual([before.status, next.status, after.status, after.body], [404, 200, 200, PAGE]);
 });
 
 test(`keeps ${MAX_SNAPSHOTS_PER_ACCOUNT} snapshots an account and refuses a fourth project's, which one that ended, or waited an hour for its upload in vain, makes room for`, async () => {
@@ -583,7 +780,7 @@ test('counts the uploads of an account and of everyone by the day, exactly, befo
     assert.deepEqual([past.status, past.body.error], [429, 'This account has made 3 uploads today, as many as it may: try again tomorrow.']);
     assert.deepEqual([theirsTaken.status, everyonesPast.status, everyonesPast.body.error], [200, 503, 'crossbind cloud has taken as many uploads today as it can; try again tomorrow.']);
     assert.equal(pulled, 0);
-    assert.deepEqual([kept.length, afterPast], [3, kept]);
+    assert.deepEqual([kept.length, afterPast], [2, kept]);
     assert.equal(nextDay.status, 200);
     // Counts of their own, apart from the compiles' (`user:<id>` and `*`), which an upload leaves as they were.
     assert.deepEqual(Object.fromEntries(storage.data), {
@@ -787,7 +984,7 @@ test('prunes every file no live snapshot names once an hour old: a cleanup\'s le
     assert.notEqual(first, second);
     assert.deepEqual(objects(`snapshots/${ending.id}/`), []);
     assert.deepEqual(objects(`snapshots/${ofBlocked.id}/`), []);
-    assert.deepEqual(objects(`snapshots/${live.id}/`), [...BUILD.map(([path]) => `snapshots/${live.id}/${second}/${path}`), `snapshots/${live.id}/onitsway0001/index.html`].sort());
+    assert.deepEqual(objects(`snapshots/${live.id}/`), [`snapshots/${live.id}/${second}/archive.tar`, `snapshots/${live.id}/${second}/index.json`, `snapshots/${live.id}/onitsway0001/index.html`].sort());
 });
 
 test('serves a blocked account\'s snapshot to no device, and refuses its uploads', async () => {

@@ -1,7 +1,7 @@
 // Stand-ins for what the snapshots use of R2 and of the archives crossbind app preview --cloud uploads, for the tests.
 
 // The part of an R2 bucket the snapshots use, kept in a Map: put takes a stream of a known length, as R2's does (in Node,
-// test/support/register.mjs's FixedLengthStream), and list pages by `limit` with a cursor.
+// test/support/register.mjs's FixedLengthStream), get reads a range of an object, and list pages by `limit` with a cursor.
 export function memoryBucket(now = () => Date.now()) {
     const objects = new Map();
     const described = (key) => ({ key, size: objects.get(key).bytes.length, uploaded: objects.get(key).uploaded });
@@ -12,8 +12,11 @@ export function memoryBucket(now = () => Date.now()) {
             objects.set(key, { bytes, uploaded: new Date(now()) });
             return described(key);
         },
-        async get(key) {
-            return objects.has(key) ? { ...described(key), body: new Response(objects.get(key).bytes).body } : null;
+        async get(key, { range } = {}) {
+            if (!objects.has(key)) return null;
+            const { bytes } = objects.get(key);
+            const part = range ? bytes.subarray(range.offset, range.offset + range.length) : bytes;
+            return { ...described(key), body: new Response(part).body, json: async () => JSON.parse(new TextDecoder().decode(part)) };
         },
         async head(key) {
             return objects.has(key) ? described(key) : null;
