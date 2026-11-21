@@ -301,7 +301,7 @@ describe('crossbind usage', () => {
 
         expect(usageLines(fresh)).toEqual([
             'Signed in as Apple account …7777.',
-            'Cloud builds open to this account on 20 December 2026, or as soon as a GitHub account is linked.',
+            'Cloud builds open to this account on 20 December 2026, or as soon as a GitHub account at least 30 days old is linked.',
             'Playground: 20 of 20 compiles left today.',
         ]);
         expect(usageLines({ ...fresh, builds: { ...fresh.builds, opensOn: '2026-13-20' } })[1]).toBe('Cloud builds in 2026-11: 0s of 0s used, 0s left.');

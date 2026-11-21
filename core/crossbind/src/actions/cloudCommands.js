@@ -266,7 +266,8 @@ export function dayWords(day) {
     return `${Number(date)} ${MONTH_NAMES[Number(month) - 1]} ${year}`;
 }
 
-// A new account's builds open on `opensOn`: one made with an Apple ID, before it links a GitHub account.
+// A new account's builds open on `opensOn`: one with no GitHub account at least 30 days old linked, in its first 30
+// days, or until its young GitHub account is 30 days old.
 export function usageLines({ login: name, builds, playground }) {
     const images = Object.entries(builds.byImage).sort(([, a], [, b]) => b - a);
     const column = Math.max(...images.map(([image]) => image.length)) + 3;
@@ -274,7 +275,7 @@ export function usageLines({ login: name, builds, playground }) {
     return [
         `Signed in as ${printable(name)}.`,
         typeof builds.opensOn === 'string' && DAY.test(builds.opensOn)
-            ? `Cloud builds open to this account on ${dayWords(builds.opensOn)}, or as soon as a GitHub account is linked.`
+            ? `Cloud builds open to this account on ${dayWords(builds.opensOn)}, or as soon as a GitHub account at least 30 days old is linked.`
             : `Cloud builds in ${printable(builds.month)}: ${formatSeconds(builds.usedSeconds)} of ${formatSeconds(builds.limitSeconds)} used, ${formatSeconds(left)} left.`,
         ...images.map(([image, seconds]) => `  ${printable(image).padEnd(column)}${formatSeconds(seconds)}`),
         `Playground: ${playground.remaining} of ${playground.limit} compiles left today.`,
