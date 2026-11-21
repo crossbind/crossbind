@@ -102,7 +102,7 @@ const DEV_SESSION = {
     source: 'dev', project: { id: 'mWW-UyZhfd1-czxo9qk5Aw', name: 'made-up-app' }, addresses: ['192.168.1.6:5173'], protocol: 1, key: 'GheN2aAnJDjAj-qTuiyNWPEy-yOsSHLE15uyL80No6o',
 };
 
-// A snapshot no route has made: the CLI's upload to it gets 404.
+// A snapshot no route has made: the CLI's upload to it gets 404, and so does a removal of a kind that may remove one.
 const SNAPSHOT = '/v1/snapshots/IRVUB8Fpwuh0lT_7NkiJ8Q';
 
 const ROUTES = Object.freeze([
@@ -114,6 +114,7 @@ const ROUTES = Object.freeze([
     ['DELETE', SESSION],
     ['POST', '/v1/snapshots', { project: DEV_SESSION.project, protocol: 1 }],
     ['PUT', SNAPSHOT, {}],
+    ['DELETE', SNAPSHOT],
     ['POST', '/playground/compile', { files }],
     ['POST', '/runner/web/v1/missing', { hashes: [] }],
     ['DELETE', '/v1/token'],
@@ -135,9 +136,9 @@ test('takes each kind of token on the routes the design gives it alone, the runn
     }
 
     const sessions = {
-        cli: ['200', '403', '403', '404', '200', '404'], app: ['403', '200', '404', '403', '403', '403'], partner: ['403', '403', '403', '403', '403', '403'],
+        cli: ['200', '403', '403', '404', '200', '404', '404'], app: ['403', '200', '404', '403', '403', '403', '404'], partner: ['403', '403', '403', '403', '403', '403', '403'],
     };
-    const sessionRoutes = (kind) => [`PUT ${SESSION}`, 'GET /v1/sessions', `GET ${SESSION}`, `DELETE ${SESSION}`, 'POST /v1/snapshots', `PUT ${SNAPSHOT}`]
+    const sessionRoutes = (kind) => [`PUT ${SESSION}`, 'GET /v1/sessions', `GET ${SESSION}`, `DELETE ${SESSION}`, 'POST /v1/snapshots', `PUT ${SNAPSHOT}`, `DELETE ${SNAPSHOT}`]
         .map((route, at) => `${route} ${sessions[kind][at]}`);
     assert.deepEqual(statuses, {
         cli: ['GET /v1/usage 200', 'GET /v1/account 200', ...sessionRoutes('cli'), 'POST /playground/compile 403', 'POST /runner/web/v1/missing 200', 'DELETE /v1/token 204', 'DELETE /v1/tokens 204', 'DELETE /v1/account 204'],

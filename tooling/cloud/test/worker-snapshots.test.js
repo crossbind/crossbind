@@ -1029,6 +1029,154 @@ test('deletes an account\'s snapshots with it, their files at once, from the CLI
     assert.equal(await db.prepare("SELECT count(1) AS rows FROM sessions WHERE source = 'snapshot'").first('rows'), 1);
 });
 
+test('removes a snapshot of the account for its CLI\'s token and its crossbind app\'s, its row and its files at once, and then answers as one that never was', async (t) => {
+    const {
+        call, db, deps, host, signedIn, uploaded, objects,
+    } = setup();
+    const owner = await signedIn(dev);
+    const byCli = await uploaded(owner);
+    const byApp = await uploaded(owner, BUILD, project('second'));
+    const kept = await uploaded(owner, BUILD, project('kept'));
+    const lines = [];
+    t.mock.method(console, 'log', (line) => lines.push(line));
+    // What a removal hands on to outlive a client that left.
+    const keptGoing = [];
+    deps.waitUntil = (promise) => keptGoing.push(promise);
+    const challenge = randomBytes(32).toString('base64url');
+
+    const removed = [await call('DELETE', `/v1/snapshots/${byCli.id}`, { token: owner.cli }), await call('DELETE', `/v1/snapshots/${byApp.id}`, { token: owner.app })];
+    const filesAfter = objects();
+    const again = await call('DELETE', `/v1/snapshots/${byCli.id}`, { token: owner.app });
+    const listed = await call('GET', '/v1/sessions', { token: owner.app });
+    const found = await call('GET', `/v1/sessions/${byCli.id}`, { token: owner.app });
+    const served = await host(`/${byCli.id}/index.html`, { key: byCli.key });
+    const session = await host(`/${byCli.id}/__crossbind/session?challenge=${challenge}`, { key: byCli.key });
+    const put = await call('PUT', `/v1/snapshots/${byCli.id}`, { token: owner.cli, archive: archiveOf(BUILD) });
+
+    assert.deepEqual(removed.map(({ status, body }) => [status, body]), [[204, ''], [204, '']]);
+    assert.equal(keptGoing.length, 2);
+    assert.deepEqual([...new Set(filesAfter.map((key) => key.split('/')[1]))], [kept.id]);
+    assert.deepEqual(await db.prepare("SELECT id FROM sessions WHERE source = 'snapshot'").all().then(({ results }) => results.map((row) => row.id)), [kept.id]);
+    assert.deepEqual([again.status, again.body.error, found.status], [404, NO_SNAPSHOT, 404]);
+    assert.deepEqual(listed.body.sessions.map(({ id }) => id), [kept.id]);
+    assert.deepEqual([served.status, served.body.error, session.status, session.body.error], [403, ONLY_ITS_DEVICES, 403, ONLY_ITS_DEVICES]);
+    assert.deepEqual([put.status, put.body.error], [404, NO_SNAPSHOT]);
+    assert.equal((await host(`/${kept.id}/index.html`, { key: kept.key })).status, 200);
+    assert.deepEqual(lines.slice(0, 2).map((line) => JSON.parse(line)), [{ event: 'snapshot-removed', who: `user:${owner.user.id}` }, { event: 'snapshot-removed', who: `user:${owner.user.id}` }]);
+    assert.ok(lines.every((line) => ![byCli.id, byApp.id, byCli.key].some((secret) => line.includes(secret))));
+});
+
+test('removes no other account\'s snapshot, no dev session by its id and nothing by an id out of form, each with the one 404', async () => {
+    const {
+        call, host, signedIn, uploaded,
+    } = setup();
+    const owner = await signedIn(dev);
+    const stranger = await signedIn(other);
+    const { id, key } = await uploaded(owner);
+    const devId = newId();
+    await call('PUT', `/v1/sessions/${devId}`, {
+        token: owner.cli,
+        body: {
+            source: 'dev', project: project(), addresses: ['192.168.1.6:5173'], protocol: 1, key: randomBytes(32).toString('base64url'),
+        },
+    });
+
+    const refused = [
+        await call('DELETE', `/v1/snapshots/${id}`, { token: stranger.cli }),
+        await call('DELETE', `/v1/snapshots/${id}`, { token: stranger.app }),
+        await call('DELETE', `/v1/snapshots/${devId}`, { token: owner.cli }),
+        await call('DELETE', `/v1/snapshots/${newId()}`, { token: owner.app }),
+        await call('DELETE', '/v1/snapshots/made-up', { token: owner.cli }),
+    ];
+
+    assert.deepEqual(refused.map(({ status, body }) => [status, body.error]), refused.map(() => [404, NO_SNAPSHOT]));
+    assert.equal((await host(`/${id}/index.html`, { key })).status, 200);
+    assert.deepEqual((await call('GET', '/v1/sessions', { token: owner.app })).body.sessions.map(({ id: each }) => each).sort(), [id, devId].sort());
+});
+
+test('removes a snapshot that waits for its first upload, one that ended, and one while snapshots are paused', async () => {
+    const context = setup();
+    const {
+        call, signedIn, uploaded, objects, advance,
+    } = context;
+    const owner = await signedIn(dev);
+    const ended = await uploaded(owner, BUILD, project('ended'));
+    advance(SNAPSHOT_DAYS * DAY + MINUTE);
+    const waitingProject = project('waiting');
+    const waiting = await start(call, owner, waitingProject);
+    const live = await uploaded(owner, BUILD, project('live'));
+    const paused = setup({ environment: { ...env, SNAPSHOTS_ENABLED: 'false' } });
+    Object.assign(paused.deps, { accounts: context.accounts, sessions: context.deps.sessions, snapshots: context.deps.snapshots });
+
+    const answers = [
+        await call('DELETE', `/v1/snapshots/${waiting.body.id}`, { token: owner.cli }),
+        await call('DELETE', `/v1/snapshots/${ended.id}`, { token: owner.cli }),
+        await paused.call('DELETE', `/v1/snapshots/${live.id}`, { token: owner.app }),
+    ];
+    const madeAgain = await start(call, owner, waitingProject);
+
+    assert.deepEqual(answers.map(({ status }) => status), [204, 204, 204]);
+    assert.deepEqual(objects(), []);
+    assert.notEqual(madeAgain.body.id, waiting.body.id);
+});
+
+test('answers a removal whose files R2 fails to delete with 204 all the same, the snapshot gone and the failure logged, and the daily prune takes its files', async (t) => {
+    const {
+        call, bucket, host, signedIn, uploaded, objects, advance, deps,
+    } = setup();
+    const owner = await signedIn(dev);
+    const { id, key } = await uploaded(owner);
+    const lines = [];
+    t.mock.method(console, 'log', (line) => lines.push(line));
+    const failing = t.mock.method(bucket, 'delete', async () => { throw new Error('made-up R2 failure of a delete'); });
+
+    const answer = await call('DELETE', `/v1/snapshots/${id}`, { token: owner.cli });
+    const left = objects();
+    failing.mock.restore();
+    advance(HOUR + MINUTE);
+    await deps.snapshots.prune();
+
+    assert.equal(answer.status, 204);
+    assert.equal((await host(`/${id}/index.html`, { key })).status, 403);
+    assert.equal(left.length, 2);
+    assert.deepEqual(lines.map((line) => JSON.parse(line)), [
+        { event: 'snapshot-files-left', who: `user:${owner.user.id}`, message: 'made-up R2 failure of a delete' },
+        { event: 'snapshot-removed', who: `user:${owner.user.id}` },
+    ]);
+    assert.deepEqual(objects(), []);
+});
+
+test('discards an upload whose snapshot is removed while it is sent, and answers it 404: nothing of it is kept', async () => {
+    const {
+        call, signedIn, objects, settle,
+    } = setup();
+    const owner = await signedIn(dev);
+    const { body: { id } } = await start(call, owner);
+    const archive = archiveOf(BUILD);
+    // The archive's last bytes wait until the snapshot is removed.
+    let release;
+    const held = new Promise((resolve) => { release = resolve; });
+    const slow = new ReadableStream({
+        async start(controller) {
+            controller.enqueue(archive.subarray(0, 1024));
+            await held;
+            controller.enqueue(archive.subarray(1024));
+            controller.close();
+        },
+    });
+
+    const uploading = call('PUT', `/v1/snapshots/${id}`, { token: owner.cli, archive: slow, length: archive.length });
+    await new Promise((resolve) => { setTimeout(resolve, 20); });
+    const removed = await call('DELETE', `/v1/snapshots/${id}`, { token: owner.cli });
+    release();
+    const upload = await uploading;
+    await settle();
+
+    assert.equal(removed.status, 204);
+    assert.deepEqual([upload.status, upload.body.error], [404, NO_SNAPSHOT]);
+    assert.deepEqual(objects(), []);
+});
+
 test('gives each snapshot of the account a new key when a crossbind app is signed out, by its token or on the account\'s page: the old key\'s token gets 403, and a device still signed in reads the new one and opens; a CLI\'s sign-out leaves the keys', async () => {
     const {
         call, host, signedIn, uploaded, accounts,
