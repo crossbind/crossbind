@@ -11,6 +11,7 @@ import { minAccountDays } from '../../tooling/cloud/worker/oauth.js';
 import { PENDING_TTL_SECONDS, SESSION_TTL_MS } from '../../tooling/cloud/worker/session.js';
 import { RUNNER_IDLE_SECONDS } from '../../tooling/cloud/worker/runner-api.js';
 import { settingsOf } from '../../tooling/cloud/worker/settings.js';
+import { SNAPSHOT_DAYS } from '../../tooling/cloud/worker/snapshots.js';
 
 const DAY_MS = 24 * 3600 * 1000;
 const text = JSON.stringify(PRIVACY_PAGE);
@@ -60,6 +61,14 @@ test('names how long a preview\'s session stays listed once it ends without stop
     assert.ok(scheduled.includes('createProjectSessions(env.DB).prune()'));
     assert.ok(text.includes('leaves your devices\' list within ten minutes, and is deleted within a day'));
     assert.ok(text.includes('within ten minutes if it ends without stopping, and deleted within a day'));
+});
+
+test('names how long a snapshot is kept after its last upload, and that the daily prune deletes its files', () => {
+    const scheduled = readFileSync(new URL('../../tooling/cloud/worker/index.js', import.meta.url), 'utf8');
+    assert.equal(SNAPSHOT_DAYS, 30);
+    assert.ok(scheduled.includes('createSnapshots(env.DB, env.SNAPSHOTS).prune()'));
+    assert.ok(text.includes('A snapshot is kept for 30 days after its last upload'));
+    assert.ok(text.includes('30 days after its last upload, or until a new upload replaces it'));
 });
 
 test("names the one permission the CLI's Google Play sign-in asks for, and the keychain entry it keeps", () => {
