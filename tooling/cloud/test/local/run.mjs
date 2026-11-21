@@ -4,9 +4,9 @@
 // a device's sign-in on /device, by scripts/device-check.mjs playing the app and by crossbind login's own code, each
 // typing the number read off the page; then a first sign-in's question; a session crossbind app preview lists, which
 // scripts/session-check.mjs, playing the app of two accounts, finds for its own and not for the other; a snapshot crossbind
-// app preview --cloud uploads into a local bucket, which scripts/snapshot-check.mjs opens through the snapshot host and
-// finds its caps held, and which the account's deletion takes; linking and unlinking both ways, and an identity held with
-// the day workerd words. Made-up accounts alone, and an Apple key made
+// app preview --cloud uploads into a local bucket, which scripts/snapshot-check.mjs opens through the snapshot host, reads
+// a byte range of and finds its caps held, which --cloud --remove removes and --cloud makes anew, and which the account's
+// deletion takes; linking and unlinking both ways, and an identity held with the day workerd words. Made-up accounts alone, and an Apple key made
 // for the run; Chromium resolves no name but localhost, and wrangler is asked for no Cloudflare request details from
 // outside, so nothing leaves this machine, a redirect included. Chromium comes from the workspace's Playwright.
 // usage: node test/local/run.mjs
@@ -361,32 +361,39 @@ async function runSessions(owner, other) {
 
 // crossbind app preview --cloud, signed in on the device page as `owner`'s account, uploads the web build a Vite standing
 // in for one writes into the Worker's local bucket, and draws its link as a QR code; then scripts/snapshot-check.mjs,
-// whose two codes the same page approves, opens it through the snapshot host as the crossbind app does, and finds the
-// caps held. Every write of the bucket is workerd's own.
+// whose two codes the same page approves, opens it through the snapshot host as the crossbind app does, reads a byte
+// range, finds the caps held and removes its own; then --cloud --remove removes the project's, and --cloud makes it anew.
+// Every write of the bucket is workerd's own.
 async function runSnapshots(owner) {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-cloud-local-snapshot-'));
     const project = previewProject();
+    const previewRun = async (args) => {
+        const preview = spawn(process.execPath, [CLI, 'app', 'preview', ...args], {
+            cwd: project, env: { ...process.env, HOME: home, USERPROFILE: home, CROSSBIND_CLOUD_URL: API, NO_COLOR: '1' },
+        });
+        const said = outputOf(preview);
+        const status = await new Promise((resolve) => { preview.on('close', resolve); });
+        return { status, text: said.text };
+    };
+    const linkOf = (text) => /scan this with a phone's camera, or open (https:\/\/crossbind\.dev\/open\/\?s=([A-Za-z0-9_-]{22}))\n/.exec(text);
     let link;
     try {
         await step('crossbind app preview --cloud, signed in with crossbind login on the device page, uploads the web build as a snapshot and draws its link as a QR code', async () => {
             const signed = await cliSignInOnPage(owner, home);
             if (!signed.ok) return signed;
-            const preview = spawn(process.execPath, [CLI, 'app', 'preview', '--cloud'], {
-                cwd: project, env: { ...process.env, HOME: home, USERPROFILE: home, CROSSBIND_CLOUD_URL: API, NO_COLOR: '1' },
-            });
-            const said = outputOf(preview);
-            const status = await new Promise((resolve) => { preview.on('close', resolve); });
-            link = /scan this with a phone's camera, or open (https:\/\/crossbind\.dev\/open\/\?s=[A-Za-z0-9_-]{22})\n/.exec(said.text)?.[1];
-            const kept = /uploaded as a snapshot, version 1, kept until (\d{1,2} [A-Z][a-z]+ \d{4})\n/.exec(said.text)?.[1];
-            const drawn = said.text.split('\n').filter((line) => /^ {2}[ █▀▄]+$/.test(line)).map((line) => line.slice(2));
+            const { status, text } = await previewRun(['--cloud']);
+            link = linkOf(text)?.[1];
+            const kept = /uploaded as a snapshot, version 1, kept until (\d{1,2} [A-Z][a-z]+ \d{4})\n/.exec(text)?.[1];
+            const drawn = text.split('\n').filter((line) => /^ {2}[ █▀▄]+$/.test(line)).map((line) => line.slice(2));
             return {
                 ok: status === 0 && kept !== undefined && link !== undefined && JSON.stringify(drawn) === JSON.stringify(halfBlocks(qrMatrix(link).modules)),
-                detail: link ? `version 1, kept until ${kept}; ${link.replace(/[A-Za-z0-9_-]{22}$/, '<session>')}, ${drawn.length} lines of half blocks` : said.text.split('\n').find((line) => line.startsWith('crossbind:')),
+                detail: link ? `version 1, kept until ${kept}; ${link.replace(/[A-Za-z0-9_-]{22}$/, '<session>')}, ${drawn.length} lines of half blocks` : text.split('\n').find((line) => line.startsWith('crossbind:')),
             };
         });
 
-        await step('scripts/snapshot-check.mjs, playing the CLI and the crossbind app, opens it through the snapshot host with its key\'s token alone, and finds the caps held: one of 50 MB and one of 500 files taken, 413 past either, the snapshot before kept', async () => {
-            const checker = spawn(process.execPath, [path.join(PACKAGE_DIR, 'scripts/snapshot-check.mjs'), '--url', API, '--snapshots', SNAPSHOTS, '--session', link], { stdio: ['pipe', 'pipe', 'pipe'] });
+        await step('scripts/snapshot-check.mjs, playing the CLI and the crossbind app, opens it through the snapshot host with its key\'s token alone, reads a byte range, finds the caps held (one of 50 MB and one of 500 files taken, 413 past either, the snapshot before kept), and removes its own', async () => {
+            // The 50 MB archive paced as from a line of 25 MB a second, as --rate sends it on staging at a slower one.
+            const checker = spawn(process.execPath, [path.join(PACKAGE_DIR, 'scripts/snapshot-check.mjs'), '--url', API, '--snapshots', SNAPSHOTS, '--session', link, '--rate', '25000000'], { stdio: ['pipe', 'pipe', 'pipe'] });
             const said = outputOf(checker);
             const exited = new Promise((resolve) => { checker.on('close', resolve); });
             try {
@@ -398,12 +405,26 @@ async function runSnapshots(owner) {
                 }
                 const status = await exited;
                 const passes = said.text.match(/(?:PASS|FAIL) [^\n]*/g) ?? [];
-                return { ok: status === 0 && passes.length === 8 && passes.every((line) => line.startsWith('PASS')), detail: passes.join('; ') };
+                return { ok: status === 0 && passes.length === 10 && passes.every((line) => line.startsWith('PASS')), detail: passes.join('; ') };
             } catch (error) {
                 throw new Error(`${error.message}; the check's last words: ${said.text.trim().split('\n').at(-1)}`);
             } finally {
                 checker.kill();
             }
+        });
+
+        await step('crossbind app preview --cloud --remove removes the project\'s snapshot, its files gone from the bucket at once, and --cloud after it makes the project a snapshot anew, under another id', async () => {
+            const id = link.slice(-22);
+            const before = await snapshotObjects(`snapshots/${id}/`);
+            const removed = await previewRun(['--cloud', '--remove']);
+            const after = await snapshotObjects(`snapshots/${id}/`);
+            const again = await previewRun(['--cloud']);
+            const anew = linkOf(again.text)?.[2];
+            return {
+                ok: removed.status === 0 && removed.text.includes(`removed its snapshot from crossbind cloud: no device signed in as ${NAME} lists it now`) && before > 0 && after === 0
+                    && again.status === 0 && anew !== undefined && anew !== id,
+                detail: `exit ${removed.status}, ${before} objects before and ${after} after; --cloud again exits ${again.status}, ${anew === undefined ? 'with no link' : `under ${anew === id ? 'the same' : 'another'} id`}`,
+            };
         });
     } finally {
         fs.rmSync(home, { recursive: true, force: true });
@@ -411,8 +432,8 @@ async function runSnapshots(owner) {
     }
 }
 
-// How many objects the local bucket holds under the snapshots' prefix.
-const snapshotObjects = async () => (await (await fetch(`${API}/__standin/objects?prefix=snapshots/`)).json()).count;
+// How many objects the local bucket holds under a prefix, the snapshots' by default.
+const snapshotObjects = async (prefix = 'snapshots/') => (await (await fetch(`${API}/__standin/objects?prefix=${encodeURIComponent(prefix)}`)).json()).count;
 
 // A device's sign-in, approved on the device page by `page`, signed in to the stand-in's account: the app played by
 // scripts/device-check.mjs, which reads the number from its input, and the CLI by crossbind login's own code; a denial;
