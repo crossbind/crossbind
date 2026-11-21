@@ -235,4 +235,10 @@ describe("what crossbind app preview hands Vite", () => {
         expect(previewOf({ CROSSBIND_APP_PREVIEW: JSON.stringify(preview) }).key).toBe(key);
         expect(() => previewOf({ CROSSBIND_APP_PREVIEW: JSON.stringify({ key: 'short' }) })).toThrow('CROSSBIND_APP_PREVIEW holds no key');
     });
+
+    test('takes the web build --cloud uploads with no key, as it serves nothing, and nothing else without one', () => {
+        expect(previewOf({ CROSSBIND_APP_PREVIEW: JSON.stringify({ build: true }) })).toEqual({ build: true });
+        expect(() => previewOf({ CROSSBIND_APP_PREVIEW: JSON.stringify({ build: 'yes' }) })).toThrow('CROSSBIND_APP_PREVIEW holds no key');
+        expect(() => previewOf({ CROSSBIND_APP_PREVIEW: '{}' })).toThrow('CROSSBIND_APP_PREVIEW holds no key');
+    });
 });
