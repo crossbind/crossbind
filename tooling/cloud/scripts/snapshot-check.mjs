@@ -44,13 +44,29 @@ async function signedIn(client, whom) {
 
 // An archive of [path, bytes] files as crossbind app preview --cloud writes one, and its upload to the snapshot.
 const archiveOf = (files) => Buffer.concat([...files.flatMap(([path, bytes]) => [ustarHeader(path, bytes.length), bytes, Buffer.alloc((BLOCK - (bytes.length % BLOCK)) % BLOCK)]), Buffer.alloc(2 * BLOCK)]);
+// Its answer, the seconds it took, and a refusal's words: crossbind's, or where no JSON of crossbind's came back, the
+// title of the page that did instead, Cloudflare's own, or its first words.
 async function put(token, id, files) {
     const body = archiveOf(files);
+    const started = performance.now();
     const response = await fetch(`${url}/v1/snapshots/${id}`, {
         method: 'PUT', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/x-tar', 'content-length': String(body.length) }, body, redirect: 'error',
     });
-    return { status: response.status, body: await response.json().catch(() => ({})) };
+    const text = await response.text();
+    const seconds = ((performance.now() - started) / 1000).toFixed(1);
+    let answer = {};
+    try {
+        answer = JSON.parse(text);
+    } catch {
+        // No JSON of crossbind's: its words come from the page below.
+    }
+    const words = answer.error ?? (response.ok ? '' : (/<title>([^<]*)<\/title>/i.exec(text)?.[1] ?? text).replace(/\s+/g, ' ').trim().slice(0, 120));
+    return {
+        status: response.status, body: answer, seconds, words,
+    };
 }
+// An upload's status, its seconds and a refusal's words, as the checks print them.
+const told = ({ status, seconds, words }) => `${status} in ${seconds} s${words ? `: ${words}` : ''}`;
 const smallFiles = (count) => [['index.html', PAGE], ...Array.from({ length: count - 1 }, (_, at) => [`f${String(at).padStart(3, '0')}.js`, Buffer.from(`// ${at}\n`)])];
 
 // The snapshot host as the crossbind app's proxy asks it, with the gate's token of the key the account's list gives.
@@ -80,14 +96,14 @@ check('the cloud makes the made-up project\'s snapshot, or finds it again', made
 const { id } = made.body;
 
 const near = await put(cli.access_token, id, [['index.html', PAGE], ['big.bin', Buffer.alloc(MAX_SNAPSHOT_BYTES - PAGE.length, 7)]]);
-check(`a snapshot of ${MAX_SNAPSHOT_BYTES / 1024 / 1024} MB of files, the cap, goes up`, near.status === 200 && near.body.bytes === MAX_SNAPSHOT_BYTES, `${near.status}, version ${near.body.version}`);
+check(`a snapshot of ${MAX_SNAPSHOT_BYTES / 1024 / 1024} MB of files, the cap, goes up`, near.status === 200 && near.body.bytes === MAX_SNAPSHOT_BYTES, `${told(near)}, version ${near.body.version}`);
 const many = await put(cli.access_token, id, smallFiles(MAX_SNAPSHOT_FILES));
-check(`a snapshot of ${MAX_SNAPSHOT_FILES} small files goes up`, many.status === 200 && many.body.files === MAX_SNAPSHOT_FILES, `${many.status}, version ${many.body.version}`);
+check(`a snapshot of ${MAX_SNAPSHOT_FILES} small files goes up`, many.status === 200 && many.body.files === MAX_SNAPSHOT_FILES, `${told(many)}, version ${many.body.version}`);
 
 // Each over the cap at its last file, so that the refusal comes once nearly all of it was sent.
 const overBytes = await put(cli.access_token, id, [['index.html', PAGE], ['big.bin', Buffer.alloc(MAX_SNAPSHOT_BYTES - PAGE.length, 7)], ['z.bin', Buffer.alloc(1024, 7)]]);
 const overFiles = await put(cli.access_token, id, smallFiles(MAX_SNAPSHOT_FILES + 1));
-check('over the cap, of bytes and of files, an upload is refused with 413', overBytes.status === 413 && overFiles.status === 413, `${overBytes.status} ${overBytes.body.error}; ${overFiles.status} ${overFiles.body.error}`);
+check('over the cap, of bytes and of files, an upload is refused with 413', overBytes.status === 413 && overFiles.status === 413, `${told(overBytes)}; ${told(overFiles)}`);
 
 const kept = await listed(id);
 const last = kept && await open(kept, `f${String(MAX_SNAPSHOT_FILES - 2).padStart(3, '0')}.js`);
