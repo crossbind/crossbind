@@ -2,10 +2,11 @@
 // the run, and Chromium signing in on /login through stand-ins for GitHub's page and Apple's, signing devices out,
 // signing out everywhere and deleting the account, while the site, an origin of the same site as the API's, is refused;
 // a device's sign-in on /device, by scripts/device-check.mjs playing the app and by crossbind login's own code, each
-// typing the number read off the page; then a first sign-in's question, linking and unlinking both ways, and an
-// identity held with the day workerd words. Made-up accounts alone, and an Apple key made for the run; Chromium
-// resolves no name but localhost, and wrangler is asked for no Cloudflare request details from outside, so nothing
-// leaves this machine, a redirect included. Chromium comes from the workspace's Playwright.
+// typing the number read off the page; then a first sign-in's question; a session crossbind app preview lists, which
+// scripts/session-check.mjs, playing the app of two accounts, finds for its own and not for the other; linking and
+// unlinking both ways, and an identity held with the day workerd words. Made-up accounts alone, and an Apple key made
+// for the run; Chromium resolves no name but localhost, and wrangler is asked for no Cloudflare request details from
+// outside, so nothing leaves this machine, a redirect included. Chromium comes from the workspace's Playwright.
 // usage: node test/local/run.mjs
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash, webcrypto } from 'node:crypto';
@@ -17,10 +18,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
 import { login as cliLogin } from '../../../../core/crossbind/src/actions/cloudCommands.js';
+import { halfBlocks, qrMatrix } from '../../../../core/crossbind/src/utils/qrMatrix.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PACKAGE_DIR = path.resolve(HERE, '../..');
 const CONFIG = path.join(HERE, 'wrangler.jsonc');
+const CLI = path.resolve(PACKAGE_DIR, '../../core/crossbind/src/cli.js');
 // The GitHub account the stand-in answers for, and Apple's Services ID (wrangler.jsonc).
 const NAME = 'made_up_local';
 const SERVICES_ID = 'dev.made-up.local';
@@ -233,11 +236,12 @@ async function deviceCheck(page) {
     }
 }
 
-// crossbind login's own code, its question answered with the number read off the page. Answers its token too.
-async function cliSignInOnPage(page) {
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-cloud-local-cli-'));
+// crossbind login's own code, its question answered with the number read off the page, its credentials where a machine
+// of the home given keeps them. Answers its token too.
+async function cliSignInOnPage(page, given) {
+    const home = given ?? fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-cloud-local-cli-'));
     try {
-        const credentials = path.join(home, 'credentials.json');
+        const credentials = path.join(home, '.crossbind', 'credentials.json');
         let printed = '';
         let typeNumber;
         const typed = new Promise((resolve) => { typeNumber = resolve; });
@@ -255,7 +259,86 @@ async function cliSignInOnPage(page) {
             token, ok: login === NAME && cli.words.startsWith(`The crossbind CLI ${CROSSBIND_VERSION} asked`) && await usage(token) === 200, detail: `${printed.trim()} ${cli.words}`,
         };
     } finally {
+        if (!given) fs.rmSync(home, { recursive: true, force: true });
+    }
+}
+
+// A project for crossbind app preview whose Vite stands in for one: it says it runs, and runs until a signal ends it.
+function previewProject() {
+    const project = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-cloud-local-project-'));
+    const vite = path.join(project, 'node_modules', 'vite');
+    fs.mkdirSync(path.join(vite, 'bin'), { recursive: true });
+    fs.writeFileSync(path.join(project, 'package.json'), JSON.stringify({
+        name: 'made-up-app', version: '1.0.0', type: 'module', devDependencies: { '@crossbind/core-app-host': '*' },
+    }));
+    fs.writeFileSync(path.join(project, 'crossbind.config.mjs'), 'export default {};\n');
+    fs.writeFileSync(path.join(vite, 'package.json'), JSON.stringify({ name: 'vite', version: '8.3.8', bin: { vite: 'bin/vite.js' } }));
+    fs.writeFileSync(path.join(vite, 'bin', 'vite.js'), "console.log('VITE running');\nsetInterval(() => {}, 1000);\n");
+    return project;
+}
+
+// A child's output as it comes, and a wait for it to match.
+function outputOf(child) {
+    const said = { text: '' };
+    child.stdout.on('data', (chunk) => { said.text += chunk; });
+    child.stderr.on('data', (chunk) => { said.text += chunk; });
+    return said;
+}
+
+// crossbind app preview, signed in on the device page as `owner`'s account, lists its session with this Worker; then
+// scripts/session-check.mjs plays the crossbind app of that account and of `other`'s, approving each code on its page:
+// the first lists the session with its key, the second lists nothing of it, and a Ctrl-C to the preview takes it off.
+// No address or key of the session is printed.
+async function runSessions(owner, other) {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-cloud-local-preview-'));
+    const project = previewProject();
+    let preview;
+    let previewEnded;
+    let link;
+    try {
+        await step('crossbind app preview, signed in with crossbind login on the device page, lists its session with the Worker and draws its link as a QR code', async () => {
+            const signed = await cliSignInOnPage(owner, home);
+            if (!signed.ok) return signed;
+            preview = spawn(process.execPath, [CLI, 'app', 'preview'], {
+                cwd: project, env: { ...process.env, HOME: home, USERPROFILE: home, CROSSBIND_CLOUD_URL: API, NO_COLOR: '1' }, detached: true,
+            });
+            previewEnded = new Promise((resolve) => { preview.on('exit', resolve); });
+            const said = outputOf(preview);
+            await until(() => said.text.includes('VITE running') || preview.exitCode !== null, 30_000);
+            link = /scan this with a phone's camera, or open (https:\/\/crossbind\.dev\/open\/\?s=[A-Za-z0-9_-]{22})\n/.exec(said.text)?.[1];
+            const drawn = said.text.split('\n').filter((line) => /^ {2}[ █▀▄]+$/.test(line)).map((line) => line.slice(2));
+            return {
+                ok: said.text.includes(`signed in to crossbind cloud as ${NAME}`) && link !== undefined && JSON.stringify(drawn) === JSON.stringify(halfBlocks(qrMatrix(link).modules)),
+                detail: link ? `${link.replace(/[A-Za-z0-9_-]{22}$/, '<session>')}, ${drawn.length} lines of half blocks` : said.text.split('\n').find((line) => line.startsWith('crossbind:')),
+            };
+        });
+
+        await step('scripts/session-check.mjs, playing the crossbind app, finds the session for the preview\'s account with its key, nothing of it for another account, and it gone once a Ctrl-C ends the preview', async () => {
+            const checker = spawn(process.execPath, [path.join(PACKAGE_DIR, 'scripts/session-check.mjs'), '--url', API, '--session', link], { stdio: ['pipe', 'pipe', 'pipe'] });
+            const said = outputOf(checker);
+            const exited = new Promise((resolve) => { checker.on('close', resolve); });
+            try {
+                for (const [at, page] of [[0, owner], [1, other]]) {
+                    const code = await until(() => [...said.text.matchAll(/enter the code ([A-Z]{4}-[A-Z]{4})/g)][at]?.[1], STEP_MS);
+                    const decided = await decideOnPage(page, code);
+                    await until(() => said.text.split('type it here').length > at + 1, STEP_MS);
+                    checker.stdin.write(`${decided.number}\n`);
+                }
+                await until(() => said.text.includes('stop crossbind app preview with Ctrl-C'), STEP_MS);
+                process.kill(-preview.pid, 'SIGINT');
+                const ended = await previewEnded;
+                checker.stdin.end('\n');
+                const status = await exited;
+                const passes = said.text.match(/(?:PASS|FAIL) [^\n]*/g) ?? [];
+                return { ok: ended === 130 && status === 0 && passes.length === 4 && passes.every((line) => line.startsWith('PASS')), detail: `preview ended ${ended}; ${passes.join('; ')}` };
+            } finally {
+                checker.kill();
+            }
+        });
+    } finally {
+        if (preview?.exitCode === null) process.kill(-preview.pid, 'SIGKILL');
         fs.rmSync(home, { recursive: true, force: true });
+        fs.rmSync(project, { recursive: true, force: true });
     }
 }
 
@@ -390,6 +473,10 @@ async function runApple(browser, owner) {
     const named = /Signed in as Apple account …\d{4}\./.exec(await apple.textContent('main'))?.[0];
     check('a first sign-in with Apple asks, and Make a new account makes an account named by the last four digits of its id',
         question.includes('No crossbind account signs in with this Apple ID yet.') && named !== undefined, named);
+
+    // Two accounts now, unlinked: the GitHub account's and the Apple ID's.
+    await runSessions(owner, apple);
+    await apple.goto(`${API}/login`);
 
     // A browser of the same account whose link goes to GitHub's page itself: the policy lets the form's redirect leave
     // for it, and the resolver finds no name there, so nothing leaves this machine.
