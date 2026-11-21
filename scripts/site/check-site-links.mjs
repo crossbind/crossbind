@@ -20,6 +20,7 @@ export const REQUIRED_ROUTES = [
     '/llms.txt',
     '/sitemap.xml',
     '/robots.txt',
+    '/.well-known/apple-app-site-association',
 ];
 
 const HREF = /\b(?:href|src)="([^"]*)"/g;

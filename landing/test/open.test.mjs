@@ -12,6 +12,14 @@ const headers = readFileSync(new URL('../public/_headers', import.meta.url), 'ut
 const ruleOf = (path) => headers.match(new RegExp(`^${path.replaceAll('*', '\\*')}\\n((?: {2}.+\\n?)+)`, 'm'))?.[1].trim().split('\n').map((line) => line.trim());
 const SESSION = 'IRVUB8Fpwuh0lT_7NkiJ8Q';
 
+// Apple's platforms read crossbind.dev/.well-known/apple-app-site-association, over https and with no redirect, to open
+// the site's links in an app: once the crossbind app is installed, a preview's link opens it in place of this page.
+const ASSOCIATION = '/.well-known/apple-app-site-association';
+// A rule's path as Cloudflare Pages reads it in _headers and _redirects: * takes any run of characters, :name a segment.
+const takes = (rule, path) =>
+    new RegExp(`^${rule.split('*').map((part) => part.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')).join('.*').replace(/:[A-Za-z]\w*/g, '[^/]+')}$`).test(path);
+const rulePaths = (file) => file.split('\n').filter((line) => line.startsWith('/')).map((line) => line.split(/\s+/)[0]);
+
 test('hands the crossbind app the session its address names, as crossbind://open?s=<session>', () => {
     assert.equal(appLink(`?s=${SESSION}`), `crossbind://open?s=${SESSION}`);
     assert.equal(appLink(`?x=1&s=${SESSION}`), `crossbind://open?s=${SESSION}`);
@@ -35,4 +43,19 @@ test('comes with a policy that lets it ask nothing of any server or be framed, a
         "Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
         'Referrer-Policy: no-referrer',
     ]);
+});
+
+test('Apple\'s association file names the crossbind app, by its Team ID and its one bundle id on iOS and macOS, for /open/ alone', () => {
+    const association = JSON.parse(readFileSync(new URL(`../public${ASSOCIATION}`, import.meta.url), 'utf8'));
+    assert.deepEqual(association, { applinks: { details: [{ appIDs: ['7ZZLDWBUVT.dev.crossbind.app'], components: [{ '/': '/open/*' }] }] } });
+});
+
+test('Apple\'s association file is served as JSON, under a rule of _headers that no other rule meets', () => {
+    assert.deepEqual(ruleOf(ASSOCIATION), ['Content-Type: application/json', 'Cache-Control: public, max-age=3600']);
+    assert.deepEqual(rulePaths(headers).filter((rule) => takes(rule, ASSOCIATION)), [ASSOCIATION]);
+});
+
+test('Apple\'s association file is served with no redirect: no rule of _redirects takes its path', () => {
+    const redirects = readFileSync(new URL('../public/_redirects', import.meta.url), 'utf8');
+    assert.deepEqual(rulePaths(redirects).filter((rule) => takes(rule, ASSOCIATION)), []);
 });
