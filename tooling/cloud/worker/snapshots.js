@@ -209,19 +209,18 @@ async function passArchive(input, writer) {
 }
 
 // An upload's index, its files' paths to the offset and the size of their bytes in its archive, or null where it has none
-// (the layout before): read from R2 once while this isolate keeps it, whatever its files asked at once. The gate and the
-// live upload are read for each request, so no answer rests on what is kept.
-function indexOf(bucket, kept, prefix) {
-    let index = kept.get(prefix);
-    if (index) {
+// (the layout before). This isolate keeps the indexes its requests have read, each the index itself and never a promise
+// of one, as a request may not wait on I/O another request began: a request that comes before an index is kept reads it
+// itself. The gate and the live upload are read for each request, so no answer rests on what is kept.
+async function indexOf(bucket, kept, prefix) {
+    if (kept.has(prefix)) {
+        const index = kept.get(prefix);
         kept.delete(prefix);
-    } else {
-        index = bucket.get(`${prefix}${INDEX}`).then(async (object) => (object ? new Map((await object.json()).map(([path, offset, size]) => [path, { offset, size }])) : null));
-        // A read that failed is not kept, so the next request reads again.
-        index.catch(() => {
-            if (kept.get(prefix) === index) kept.delete(prefix);
-        });
+        kept.set(prefix, index);
+        return index;
     }
+    const object = await bucket.get(`${prefix}${INDEX}`);
+    const index = object ? new Map((await object.json()).map(([path, offset, size]) => [path, { offset, size }])) : null;
     kept.set(prefix, index);
     if (kept.size > INDEXES_KEPT) kept.delete(kept.keys().next().value);
     return index;
