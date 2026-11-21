@@ -411,12 +411,12 @@ test('leaves nothing of an upload cut half way, its cleanup kept going by waitUn
     const answer = await call('PUT', `/v1/snapshots/${id}`, { token: owner.cli, archive: cut, length: archive.length });
     await settle();
 
-    assert.deepEqual([answer.status, answer.body.error], [502, UNTAKEN]);
+    assert.deepEqual([answer.status, answer.body.error], [503, UNTAKEN]);
     assert.deepEqual(objects(), live);
     assert.equal((await host(`/${id}/index.html`, { key })).status, 200);
 });
 
-test('answers a failure that is no refusal, as R2 failing a put, with 502 in crossbind\'s words: its own words are logged, not sent, and what the upload wrote goes', async (t) => {
+test('answers a failure that is no refusal, as R2 failing a put, with 503 in crossbind\'s words: its own words are logged, not sent, and what the upload wrote goes', async (t) => {
     const {
         call, bucket, signedIn, objects, settle,
     } = setup();
@@ -435,11 +435,11 @@ test('answers a failure that is no refusal, as R2 failing a put, with 502 in cro
     const answer = await call('PUT', `/v1/snapshots/${id}`, { token: owner.cli, archive: archiveOf(BUILD) });
     await settle();
 
-    assert.deepEqual([answer.status, answer.body], [502, { error: UNTAKEN }]);
+    assert.deepEqual([answer.status, answer.body], [503, { error: UNTAKEN }]);
     assert.deepEqual(objects(), []);
     assert.deepEqual(lines.map((line) => JSON.parse(line)), [
         { event: 'snapshot-upload-failed', who: `user:${owner.user.id}`, message: 'made-up R2 failure: words of its own' },
-        { event: 'snapshot-refused', who: `user:${owner.user.id}`, status: 502 },
+        { event: 'snapshot-refused', who: `user:${owner.user.id}`, status: 503 },
     ]);
 });
 

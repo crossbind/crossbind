@@ -248,9 +248,10 @@ export function createSnapshots(db, bucket, now = () => Date.now()) {
             } catch (error) {
                 await discard();
                 if (error instanceof Refused) throw error;
-                // No refusal, as R2 failing a put or the connection cut: its own words go to the log alone.
+                // No refusal, as R2 failing a put or the connection cut: its own words go to the log alone, and the answer is
+                // a 503, which Cloudflare passes on as it is, where it puts a page of its own in place of a Worker's 502.
                 log({ event: 'snapshot-upload-failed', who: userKey(userId), message: error.message });
-                throw new Refused(502, 'crossbind cloud could not take this upload; try again in a moment.');
+                throw new Refused(503, 'crossbind cloud could not take this upload; try again in a moment.');
             }
             input.cancel();
             // Live only while the snapshot is: one that ended meanwhile goes back through start(), which counts it.
