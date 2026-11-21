@@ -180,6 +180,7 @@ Be kind, be specific, assume good faith. Disagreements about technical direction
 
 - Bugs / feature requests → [GitHub Issues](https://github.com/crossbind/crossbind/issues)
 - General questions → open a [Discussion](https://github.com/crossbind/crossbind/discussions)
-- Security issues → see `SECURITY.md` if present, otherwise email the maintainer privately (don't open a public issue).
+- Security issues → report them privately, as [SECURITY.md](SECURITY.md) says; never in a public issue.
+- Anything else → [support@crossbind.dev](mailto:support@crossbind.dev)
 
 Thanks for being here. Have fun.
