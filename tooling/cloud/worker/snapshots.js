@@ -8,7 +8,9 @@ import { fromBase64Url, randomToken, toBase64Url } from './session.js';
 // Snapshots: a project's web build that crossbind app preview --cloud uploads, kept in R2 for the account's own devices
 // under a session of the source 'snapshot' (migrations/0002's `sessions`), and served to them alone from the snapshot
 // host, behind the gate of the session's pairing key, as crossbind app preview's dev server is
-// (core/crossbind/src/utils/previewSession.js). R2 keeps a snapshot's files as snapshots/<session>/<upload>/<path>.
+// (core/crossbind/src/utils/previewSession.js). R2 keeps an upload as two objects under snapshots/<session>/<upload>/:
+// the archive as it was sent, and its index, each file's path with the offset and the size of its bytes in the archive.
+// An upload is then two writes, whatever its files, and a file is served as a range of the archive.
 
 // A snapshot lives this long after its last upload.
 export const SNAPSHOT_DAYS = 30;
@@ -27,6 +29,12 @@ const MAX_BODY_BYTES = 1024;
 const DELETE_BATCH = 1000;
 // What no live snapshot names is pruned once it is this old, so that an upload on its way keeps its files.
 const PRUNE_AFTER_MS = 3600 * 1000;
+// The indexes of uploads an isolate keeps, the least lately used going first past this many: 500 files each at most.
+export const INDEXES_KEPT = 64;
+const ARCHIVE = 'archive.tar';
+const INDEX = 'index.json';
+// This isolate's: an upload's index never changes, so a kept one is as good as R2's.
+const ISOLATE_INDEXES = new Map();
 const DAY_MS = 24 * 3600 * 1000;
 // A path of plain names, which a URL writes as it is; none of them . or .., and none under __crossbind/, whose paths
 // this host and the crossbind app answer themselves.
@@ -91,7 +99,7 @@ class Refused extends Error {
 export const isPlainPath = (path) => typeof path === 'string' && PLAIN_PATH.test(path) && !path.startsWith(OWN_PATHS)
     && path.split('/').every((name) => name !== '.' && name !== '..');
 
-// The archive's bytes as they come: a block taken whole, or a file's bytes handed on to its writer, never held whole.
+// The archive's bytes as they come, never held whole: a block taken to be read, or bytes handed on to a writer.
 function byteReader(stream) {
     const reader = stream.getReader();
     let held = new Uint8Array(0);
@@ -108,16 +116,6 @@ function byteReader(stream) {
         }
         return true;
     };
-    // `size` bytes, each part handed to `use`.
-    const consume = async (size, use) => {
-        for (let left = size; left > 0;) {
-            if (held.length === 0 && !(await more())) throw new Refused(400, UNREADABLE);
-            const part = held.subarray(0, Math.min(left, held.length));
-            held = held.subarray(part.length);
-            left -= part.length;
-            await use(part);
-        }
-    };
     return {
         // The next block, or null where the archive ends before it.
         async block() {
@@ -131,8 +129,22 @@ function byteReader(stream) {
             held = held.subarray(BLOCK);
             return block;
         },
-        pass: (size, writer) => consume(size, (part) => writer.write(part)),
-        skip: (size) => consume(size, () => {}),
+        // `size` bytes, handed on to `writer` as they come.
+        async pass(size, writer) {
+            for (let left = size; left > 0;) {
+                if (held.length === 0 && !(await more())) throw new Refused(400, UNREADABLE);
+                const part = held.subarray(0, Math.min(left, held.length));
+                held = held.subarray(part.length);
+                left -= part.length;
+                await writer.write(part);
+            }
+        },
+        // Every byte left, handed on to `writer` unread.
+        async rest(writer) {
+            if (held.length > 0) await writer.write(held);
+            held = new Uint8Array(0);
+            for (let next = await reader.read(); !next.done; next = await reader.read()) await writer.write(next.value);
+        },
         cancel: () => reader.cancel().catch(() => {}),
     };
 }
@@ -167,24 +179,57 @@ async function removePrefix(bucket, prefix) {
     }
 }
 
-// One file's bytes into R2 as they come, through a stream of its known length, which R2 asks of a stream.
-async function putFile(bucket, key, size, input) {
-    const { readable, writable } = new FixedLengthStream(size);
-    const putting = bucket.put(key, readable);
-    putting.catch(() => {});
-    const writer = writable.getWriter();
-    try {
-        await input.pass(size, writer);
-        await writer.close();
-    } catch (error) {
-        await writer.abort(error).catch(() => {});
-        throw error;
+// The archive as it comes, every byte handed on to `writer` once and each header read as it passes, by a snapshot's
+// rules: each cap checked before a file's bytes go on, an index.html at its root, its end; what follows the end goes on
+// unread. { entries, files, bytes }, an entry being a file's path with the offset and the size of its bytes.
+async function passArchive(input, writer) {
+    const entries = [];
+    let [files, bytes, at, index] = [0, 0, 0, false];
+    for (;;) {
+        const block = await input.block();
+        if (block === null) throw new Refused(400, UNREADABLE);
+        if (block.every((byte) => byte === 0)) {
+            await writer.write(block);
+            break;
+        }
+        const { path, size } = entryOf(block);
+        [files, bytes] = [files + 1, bytes + size];
+        if (files > MAX_SNAPSHOT_FILES) throw new Refused(413, TOO_MANY_FILES);
+        if (bytes > MAX_SNAPSHOT_BYTES) throw new Refused(413, TOO_BIG);
+        const padded = size + ((BLOCK - (size % BLOCK)) % BLOCK);
+        entries.push([path, at + BLOCK, size]);
+        await writer.write(block);
+        await input.pass(padded, writer);
+        at += BLOCK + padded;
+        index ||= path === 'index.html';
     }
-    await putting;
+    if (!index) throw new Refused(400, 'A snapshot is a web build: an index.html at its root.');
+    await input.rest(writer);
+    return { entries, files, bytes };
 }
 
-// The snapshots in D1 and R2, each query held to its account but the host's, which the pairing key's gate holds.
-export function createSnapshots(db, bucket, now = () => Date.now()) {
+// An upload's index, its files' paths to the offset and the size of their bytes in its archive, or null where it has none
+// (the layout before): read from R2 once while this isolate keeps it, whatever its files asked at once. The gate and the
+// live upload are read for each request, so no answer rests on what is kept.
+function indexOf(bucket, kept, prefix) {
+    let index = kept.get(prefix);
+    if (index) {
+        kept.delete(prefix);
+    } else {
+        index = bucket.get(`${prefix}${INDEX}`).then(async (object) => (object ? new Map((await object.json()).map(([path, offset, size]) => [path, { offset, size }])) : null));
+        // A read that failed is not kept, so the next request reads again.
+        index.catch(() => {
+            if (kept.get(prefix) === index) kept.delete(prefix);
+        });
+    }
+    kept.set(prefix, index);
+    if (kept.size > INDEXES_KEPT) kept.delete(kept.keys().next().value);
+    return index;
+}
+
+// The snapshots in D1 and R2, each query held to its account but the host's, which the pairing key's gate holds;
+// `indexes` the ones this isolate keeps.
+export function createSnapshots(db, bucket, now = () => Date.now(), indexes = ISOLATE_INDEXES) {
     return {
         // The account's snapshot of a project, made with an id and a key of the cloud's, drawn at random, or found again
         // by the project's id: { id }, or { error: 'full' } where it would make one more than MAX_SNAPSHOTS_PER_ACCOUNT
@@ -202,10 +247,11 @@ export function createSnapshots(db, bucket, now = () => Date.now()) {
             return row ? { id: row.id } : { error: 'full' };
         },
 
-        // An upload of a live snapshot of the account, read entry by entry from `body` into R2 as it comes, and live once
-        // every file is in, when the upload before it goes: { id, version, files, bytes, expiresAt }. A refusal throws
-        // with its status and words, each cap checked before an entry's bytes are written; what a refused or broken upload
-        // wrote is deleted before the answer, and waitUntil keeps that going for a client that left. `count` counts the
+        // An upload of a live snapshot of the account: its archive passed from `body` into one R2 object as it comes, its
+        // headers read on the way, then its index beside it, and the upload live, when the one before it goes:
+        // { id, version, files, bytes, expiresAt }. A refusal throws with its status and words, each cap checked before a
+        // file's bytes go on, and aborts the archive's put, so that R2 keeps nothing of it; should the index or the
+        // UPDATE fail, both objects are deleted, waitUntil keeping that going for a client that left. `count` counts the
         // upload for the day, or refuses it, once the checks that read nothing have passed.
         async receive(userId, id, body, {
             declared, totalBytes, count, waitUntil,
@@ -220,51 +266,54 @@ export function createSnapshots(db, bucket, now = () => Date.now()) {
             // Before a byte of the archive is read: a refusal past here stays counted.
             await count();
             const upload = randomId(12);
-            const prefix = `${PREFIX}${id}/${upload}/`;
-            const written = [];
-            const input = byteReader(body);
-            const discard = async () => {
-                input.cancel();
-                const cleanup = removeKeys(bucket, written);
-                waitUntil(cleanup);
-                await cleanup.catch((error) => log({ event: 'snapshot-cleanup-failed', who: userKey(userId), message: error.message }));
-            };
-            let [files, bytes, index] = [0, 0, false];
-            try {
-                for (;;) {
-                    const block = await input.block();
-                    if (block === null) throw new Refused(400, UNREADABLE);
-                    if (block.every((byte) => byte === 0)) break;
-                    const { path, size } = entryOf(block);
-                    [files, bytes] = [files + 1, bytes + size];
-                    if (files > MAX_SNAPSHOT_FILES) throw new Refused(413, TOO_MANY_FILES);
-                    if (bytes > MAX_SNAPSHOT_BYTES) throw new Refused(413, TOO_BIG);
-                    written.push(`${prefix}${path}`);
-                    await putFile(bucket, `${prefix}${path}`, size, input);
-                    await input.skip((BLOCK - (size % BLOCK)) % BLOCK);
-                    index ||= path === 'index.html';
-                }
-                if (!index) throw new Refused(400, 'A snapshot is a web build: an index.html at its root.');
-            } catch (error) {
-                await discard();
-                if (error instanceof Refused) throw error;
+            const keys = [`${PREFIX}${id}/${upload}/${ARCHIVE}`, `${PREFIX}${id}/${upload}/${INDEX}`];
+            const failed = (error) => {
+                if (error instanceof Refused) return error;
                 // No refusal, as R2 failing a put or the connection cut: its own words go to the log alone, and the answer is
                 // a 503, which Cloudflare passes on as it is, where it puts a page of its own in place of a Worker's 502.
                 log({ event: 'snapshot-upload-failed', who: userKey(userId), message: error.message });
-                throw new Refused(503, 'crossbind cloud could not take this upload; try again in a moment.');
+                return new Refused(503, 'crossbind cloud could not take this upload; try again in a moment.');
+            };
+            const input = byteReader(body);
+            const { readable, writable } = new FixedLengthStream(declared);
+            const writer = writable.getWriter();
+            const putting = bucket.put(keys[0], readable);
+            // A put that fails ends the writes waiting on it.
+            putting.catch((error) => writer.abort(error).catch(() => {}));
+            let passed;
+            try {
+                passed = await passArchive(input, writer);
+                await writer.close();
+                await putting;
+            } catch (error) {
+                // R2 keeps nothing of a put that did not end: nothing is left to delete.
+                input.cancel();
+                await writer.abort(error).catch(() => {});
+                throw failed(error);
             }
-            input.cancel();
-            // Live only while the snapshot is: one that ended meanwhile goes back through start(), which counts it.
-            const done = await db.prepare(`UPDATE sessions SET upload = ?1, bytes = ?2, version = version + 1, expires_at = ?3
-                WHERE id = ?4 AND user_id = ?5 AND source = 'snapshot' AND expires_at > ?6 RETURNING version, expires_at`)
-                .bind(upload, bytes, timestamp(at + SNAPSHOT_DAYS * DAY_MS), id, userId, timestamp(now())).first();
+            const discard = async () => {
+                const cleanup = removeKeys(bucket, keys);
+                waitUntil(cleanup);
+                await cleanup.catch((error) => log({ event: 'snapshot-cleanup-failed', who: userKey(userId), message: error.message }));
+            };
+            let done;
+            try {
+                await bucket.put(keys[1], JSON.stringify(passed.entries));
+                // Live only while the snapshot is: one that ended meanwhile goes back through start(), which counts it.
+                done = await db.prepare(`UPDATE sessions SET upload = ?1, bytes = ?2, version = version + 1, expires_at = ?3
+                    WHERE id = ?4 AND user_id = ?5 AND source = 'snapshot' AND expires_at > ?6 RETURNING version, expires_at`)
+                    .bind(upload, passed.bytes, timestamp(at + SNAPSHOT_DAYS * DAY_MS), id, userId, timestamp(now())).first();
+            } catch (error) {
+                await discard();
+                throw failed(error);
+            }
             if (!done) {
                 await discard();
                 throw new Refused(404, NO_SNAPSHOT);
             }
             if (row.upload) waitUntil(removePrefix(bucket, `${PREFIX}${id}/${row.upload}/`));
             return {
-                id, version: done.version, files, bytes, expiresAt: done.expires_at,
+                id, version: done.version, files: passed.files, bytes: passed.bytes, expiresAt: done.expires_at,
             };
         },
 
@@ -276,10 +325,15 @@ export function createSnapshots(db, bucket, now = () => Date.now()) {
                 .bind(id, timestamp(now())).first();
         },
 
-        // A file of a snapshot's upload, its body left out for a HEAD.
-        file({ id, upload }, path, { head }) {
-            const key = `${PREFIX}${id}/${upload}/${path}`;
-            return head ? bucket.head(key) : bucket.get(key);
+        // A file of a snapshot's upload, by the upload's index: { size, body }, the body a ranged read of the archive, none
+        // for a HEAD or an empty file; null where the index has no such file, or the upload no index.
+        async file({ id, upload }, path, { head }) {
+            const prefix = `${PREFIX}${id}/${upload}/`;
+            const entry = (await indexOf(bucket, indexes, prefix))?.get(path);
+            if (!entry) return null;
+            if (head || entry.size === 0) return { size: entry.size, body: null };
+            const object = await bucket.get(`${prefix}${ARCHIVE}`, { range: { offset: entry.offset, length: entry.size } });
+            return object && { size: entry.size, body: object.body };
         },
 
         // A new key, drawn at random, for each snapshot of the account once a device that may have read the keys is
