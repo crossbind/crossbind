@@ -23,6 +23,8 @@ const FAILURE_CACHE_SECONDS = 10 * 60;
 const COMPILING_KINDS = Object.freeze(['app']);
 // The compiler caps its outputs well below this (compiler/compile.js OUTPUT_LIMITS).
 const MAX_COMPILER_ANSWER_BYTES = 12 * 1024 * 1024;
+// The hosts of the local run (test/local/run.mjs) and of scripts/local.mjs, which answer plain http on this machine alone.
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 // Results that the same sources always give again; a timeout depends on the load at the time.
 const isCacheable = (result) => result.ok === true || result.reason === 'compile';
@@ -221,8 +223,12 @@ const PLAYGROUND_ROUTES = Object.freeze({
 // deps: the rate limiters, the accounts, the devices' sign-in codes, the quota and compiler Durable Object stubs, the
 // cache, fetch and waitUntil, so tests can stand in for them.
 export async function handleRequest(request, env, deps) {
+    const url = new URL(request.url);
+    // Over plain http a token, or the gate's, and its answer cross in the clear: refused before anything else, the local
+    // run's loopback hosts apart, where wrangler dev answers on this machine alone.
+    if (url.protocol === 'http:' && !LOOPBACK_HOSTS.has(url.hostname)) return jsonResponse(403, { error: 'crossbind cloud answers over https alone.' });
     const settings = settingsOf(env);
-    const { hostname, pathname } = new URL(request.url);
+    const { hostname, pathname } = url;
     const ip = request.headers.get('cf-connecting-ip') ?? 'unknown';
     const network = networkOf(ip);
     const origin = request.headers.get('origin');
