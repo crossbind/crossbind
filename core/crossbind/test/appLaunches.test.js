@@ -56,11 +56,11 @@ describe("an Apple app's document types", () => {
         ]);
     });
 
-    test("declare an iOS app's own identifier for a type Apple has none of, which it opens where it is", () => {
+    test("declare an iOS app's own identifier for a type Apple has none of, which it opens where it is, with the rank App Store Connect asks for", () => {
         expect(iosDocumentTypes([geojson, csv], '$(PRODUCT_BUNDLE_IDENTIFIER)')).toEqual({
             CFBundleDocumentTypes: [
-                { CFBundleTypeName: 'GeoJSON', CFBundleTypeRole: 'Editor', LSItemContentTypes: ['$(PRODUCT_BUNDLE_IDENTIFIER).geojson'] },
-                { CFBundleTypeName: 'CSV', CFBundleTypeRole: 'Viewer', LSItemContentTypes: ['public.comma-separated-values-text'] },
+                { CFBundleTypeName: 'GeoJSON', CFBundleTypeRole: 'Editor', LSHandlerRank: 'Default', LSItemContentTypes: ['$(PRODUCT_BUNDLE_IDENTIFIER).geojson'] },
+                { CFBundleTypeName: 'CSV', CFBundleTypeRole: 'Viewer', LSHandlerRank: 'Default', LSItemContentTypes: ['public.comma-separated-values-text'] },
             ],
             UTImportedTypeDeclarations: [{
                 UTTypeIdentifier: '$(PRODUCT_BUNDLE_IDENTIFIER).geojson',
