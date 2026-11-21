@@ -476,7 +476,8 @@ test('keeps an upload as its archive, one object as it was sent with what follow
         reads.push(`${name.split('/').pop()}${options?.range ? ` ${options.range.offset}+${options.range.length}` : ''}`);
         return get(name, options);
     });
-    const served = await Promise.all(['index.html', 'assets/app.js', 'empty.txt'].map((path) => host(`/${id}/${path}`, { key })));
+    const served = [];
+    for (const path of ['index.html', 'assets/app.js', 'empty.txt']) served.push(await host(`/${id}/${path}`, { key }));
     const head = await host(`/${id}/assets/app.js`, { key, method: 'HEAD' });
 
     const [archive, index] = objects();
@@ -491,31 +492,49 @@ test('keeps an upload as its archive, one object as it was sent with what follow
     assert.deepEqual(reads.sort(), [`archive.tar 1536+${SCRIPT.length}`, `archive.tar 512+${PAGE.length}`, 'index.json']);
 });
 
-test('reads an upload\'s index from R2 once in an isolate, and answers alike from another isolate, which reads it once more, and from a new upload\'s own index', async (t) => {
+test('keeps an upload\'s index once a request has read it, the index itself and no promise, each request that comes before reading it itself, and answers alike from another isolate and from a new upload\'s own index', async (t) => {
     const context = setup();
     const {
         call, host, signedIn, uploaded, bucket, db,
     } = context;
     const owner = await signedIn(dev);
     const { id, key } = await uploaded(owner);
+    const kept = new Map();
+    context.deps.snapshots = createSnapshots(db, bucket, () => NOW, kept);
     let indexReads = 0;
+    let waiting = [];
     const { get } = bucket;
-    t.mock.method(bucket, 'get', (name, options) => {
-        if (name.endsWith('/index.json')) indexReads += 1;
+    t.mock.method(bucket, 'get', async (name, options) => {
+        if (name.endsWith('/index.json')) {
+            indexReads += 1;
+            // Each read of an index waits until three have begun, or 50 ms: requests that come at once, before any has it.
+            await new Promise((go) => {
+                waiting.push(go);
+                const release = () => waiting.splice(0).forEach((each) => each());
+                if (waiting.length >= 3) release();
+                else setTimeout(release, 50);
+            });
+        }
         return get(name, options);
     });
 
-    const here = [await host(`/${id}/index.html`, { key }), await host(`/${id}/assets/app.js`, { key }), await host(`/${id}/index.html`, { key })];
+    const atOnce = await Promise.all(['index.html', 'assets/app.js', 'crossbind.wasm'].map((path) => host(`/${id}/${path}`, { key })));
+    const readAtOnce = indexReads;
+    const later = await host(`/${id}/assets/app.js`, { key });
+    const readLater = indexReads;
+    const keptThen = [...kept.values()];
     // Another isolate, which keeps no index yet.
     context.deps.snapshots = createSnapshots(db, bucket, () => NOW, new Map());
     const elsewhere = await host(`/${id}/assets/app.js`, { key });
     const second = await call('PUT', `/v1/snapshots/${id}`, { token: owner.cli, archive: archiveOf([['index.html', '<!doctype html><title>second</title>']]) });
     const renewed = await host(`/${id}/index.html`, { key });
 
-    assert.deepEqual(here.map(({ body }) => body), [PAGE, SCRIPT, PAGE]);
-    assert.equal(elsewhere.body, SCRIPT);
+    assert.deepEqual(atOnce.map(({ status }) => status), [200, 200, 200]);
+    assert.deepEqual([atOnce[0].body, atOnce[1].body, later.body, elsewhere.body], [PAGE, SCRIPT, SCRIPT, SCRIPT]);
+    assert.deepEqual([readAtOnce, readLater], [3, 3]);
+    assert.ok(keptThen.length === 1 && keptThen[0] instanceof Map, 'the index itself is kept, not a promise of it');
     assert.deepEqual([second.status, renewed.body], [200, '<!doctype html><title>second</title>']);
-    assert.equal(indexReads, 3);
+    assert.equal(indexReads, 5);
 });
 
 test('finds a file by its upload\'s index\'s own entries alone: no name Object.prototype holds is a file of it', async () => {
