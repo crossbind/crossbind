@@ -7,9 +7,11 @@ import { dirname, join, relative, resolve } from 'node:path';
 import config from '../crossbind.config.mjs';
 import { REACH_PORT } from './launch.mjs';
 import { answerPreview } from './endpoint.mjs';
+import { ACCOUNT, TOKEN, standInCloud } from './cloud.mjs';
 
 // Opens a preview in the conformance app `pnpm build` made, as the crossbind app will: runs crossbind app preview in the
-// project given, serves its open: line at the run's endpoint, which src/preview.js opens, and reads what the previewed
+// project given, signed in to a stand-in for crossbind cloud (cloud.mjs), whose list it must reach with its session,
+// serves its open: line at the run's endpoint, which src/preview.js opens, and reads what the previewed
 // page logs in the preview's terminal as the run edits the project's files; then asks the dev server from this machine
 // as another one on the network would. A project other than e2e/app-preview gets that page's check module beside its
 // src/main.js for the run, and every file the run touched is put back as it ends. With CROSSBIND_APP_PLATFORM=ios the
@@ -84,6 +86,7 @@ const kept = new Map();
 let preview = null;
 let opened = null;
 let endpoint = null;
+let cloud = null;
 
 // Each file the run changes or makes, as it was, which the run puts back however it ends.
 function keep(file) {
@@ -124,6 +127,7 @@ function finish(problem) {
     endTree(opened?.child);
     endTree(preview);
     endpoint?.close();
+    cloud?.close();
     putBack();
     const said = `--- the preview's terminal:\n${terminal.text()}\n--- the app:\n${device.text()}`;
     if (problem) {
@@ -140,7 +144,7 @@ process.on('exit', putBack);
 function startPreview() {
     const crossbind = join(dirname(createRequire(join(project, 'package.json')).resolve('crossbind/package.json')), 'src', 'cli.js');
     const { FORCE_COLOR, ...env } = process.env;
-    const child = spawn(process.execPath, [crossbind, 'app', 'preview', ...process.argv.slice(3)], { cwd: project, env: { ...env, NO_COLOR: '1' } });
+    const child = spawn(process.execPath, [crossbind, 'app', 'preview', ...process.argv.slice(3)], { cwd: project, env: { ...env, ...cloud.env, NO_COLOR: '1' } });
     child.stdout.on('data', terminal.take);
     child.stderr.on('data', terminal.take);
     child.once('exit', (code) => setTimeout(() => finish(`crossbind app preview exited with ${code}`), SETTLE_MS));
@@ -240,6 +244,24 @@ async function checkStops() {
     return stops;
 }
 
+// 14. crossbind app preview listed its session for the account it signs in as, with the open: line's address and key,
+// and the session the page proved names that account and that session.
+async function checkListed(open) {
+    const opening = await device.waitFor(/PAGE GETS preview-open /, LINE_MS, "the app page's opening");
+    const { session } = jsonOf(opening, 'PAGE GETS preview-open ');
+    const [asked, put] = cloud.calls;
+    const line = new URL(open);
+    const id = put?.call.split('/').pop();
+    expect(asked?.call === 'GET /v1/account' && put?.call.startsWith('PUT /v1/sessions/'), `crossbind app preview asked crossbind cloud: ${cloud.calls.map(({ call }) => call).join(', ')}`);
+    expect(cloud.calls.every(({ authorization }) => authorization === `Bearer ${TOKEN}`), 'crossbind app preview sent crossbind cloud another token than its sign-in');
+    const listed = put.body;
+    const isTheLine = listed.source === 'dev' && listed.project.name === session.project.name && listed.protocol === 1
+        && JSON.stringify(listed.addresses) === JSON.stringify([line.host]) && listed.key === new URLSearchParams(line.hash.slice(1)).get('k');
+    expect(isTheLine, `the session listed is not the open: line's: ${JSON.stringify({ ...listed, key: listed.key === undefined ? 'none' : 'another' })}`);
+    expect(JSON.stringify(session.account) === JSON.stringify(ACCOUNT) && session.session === id, `the page's session names ${JSON.stringify(session.account)} and ${session.session}`);
+    return { session: id, account: session.account.name };
+}
+
 // 9. The device asked the dev server for nothing its app answers itself.
 function checkPageApiAsked() {
     const asked = terminal.lines.filter((line) => line.text.includes('asked this dev server for /__crossbind/app.js'));
@@ -332,6 +354,7 @@ async function checkOptimizedDependency(source, token) {
 
 async function run() {
     addCheck();
+    cloud = await standInCloud();
     preview = startPreview();
     const open = (await terminal.waitFor(/^\s*open: http:\/\/\S+/, START_MS, "crossbind app preview's open: line")).text.trim().slice('open: '.length);
     const source = new URL(open).origin;
@@ -340,6 +363,7 @@ async function run() {
     opened = await launch();
     opened.child.once('exit', (code) => setTimeout(() => finish(`the app exited with ${code}`), SETTLE_MS));
     const stops = await checkStops();
+    const listed = await checkListed(open);
     const { load, paths, dialog } = await checkLoad();
     const js = await checkJsEdit(load);
     const cpp = await checkNativeEdit(opened);
@@ -347,7 +371,9 @@ async function run() {
     const dependency = await checkOptimizedDependency(source, token);
     checkPageApiAsked();
     const named = relative(repository, project).replaceAll('\\', '/');
-    console.log(`PREVIEW CHECKS ${JSON.stringify({ platform: devicePlatform, project: named, stops, load, paths, dialog, other, dependency })}`);
+    console.log(`PREVIEW CHECKS ${JSON.stringify({
+        platform: devicePlatform, project: named, stops, listed, load, paths, dialog, other, dependency,
+    })}`);
     console.log(`TIMING a JavaScript edit to the page: ${js} ms${cpp === null ? '' : `; a C++ edit to the page: ${cpp} ms`}`);
     console.log(`ok: ${devicePlatform} preview of ${named}`);
 }
