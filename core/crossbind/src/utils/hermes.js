@@ -26,24 +26,31 @@ export default async function resolveHermes() {
     return `${dir}/source/destroot`;
 }
 
-// The dSYMs of the release's frameworks, with which App Store Connect shows Hermes' frames in an iOS app's crash reports
-// as functions and lines.
+// The dSYMs of the release's frameworks, with which App Store Connect shows Hermes' frames in an iOS or macOS app's crash
+// reports as functions and lines.
 export const HERMES_DSYM = {
     url: `https://repo1.maven.org/maven2/com/facebook/hermes/hermes-ios/${HERMES.version}/hermes-ios-${HERMES.version}-hermes-framework-dSYM-release.tar.gz`,
     sha256: '5cea3dd57ecadb42c40d1cc8acf2e178dbfbe6a230410742d997ff3fe313a9c0',
 };
 
-// The dSYM of the device's framework, downloaded once and checked against the pinned sha256. The release's 360 MB hold
-// every Apple platform's, of which only the device's 80 MB are kept.
-export async function resolveHermesDsym() {
+// The release's folder of the framework an app of the platform ships: an iOS device's, or macOS's.
+const DSYM_FOLDERS = { ios: 'iphoneos', macos: 'macosx' };
+
+// The dSYM of the framework an app of the platform ships, downloaded once and checked against the pinned sha256. The
+// release's 360 MB hold every Apple platform's, of which an iOS device's 80 MB and macOS's 178 MB are kept.
+export async function resolveHermesDsym(platform = 'ios') {
+    if (!DSYM_FOLDERS[platform]) throw new Error(`crossbind: Hermes ships no dSYM of a ${platform} app, only of an iOS or a macOS one.`);
     const dir = `${hermesDir()}-dsym`;
-    const dsym = `${dir}/source/iphoneos/hermesvm.framework.dSYM`;
-    if (!fs.existsSync(dsym)) logger.info(`crossbind: downloading the dSYM of Hermes ${HERMES.version} once, 360 MB of which 80 MB stay, for crash reports.`);
+    const dsym = `${dir}/source/${DSYM_FOLDERS[platform]}/hermesvm.framework.dSYM`;
+    if (!fs.existsSync(dsym)) logger.info(`crossbind: downloading the dSYM of Hermes ${HERMES.version} once, 360 MB of which 260 MB stay, for crash reports.`);
     fs.mkdirSync(path.dirname(dir), { recursive: true });
     await withDirLock(`${dir}.lock`, async () => {
+        // A cache that kept an iOS device's alone, as earlier releases did, takes the archive again.
+        if (!fs.existsSync(dsym)) fs.rmSync(`${dir}/source`, { recursive: true, force: true });
         await downloadAndExtractFile(HERMES_DSYM.url, dir, HERMES_DSYM.sha256);
         fs.rmSync(`${dir}/${path.basename(HERMES_DSYM.url)}`, { force: true });
-        fs.readdirSync(`${dir}/source`).filter((entry) => entry !== 'iphoneos')
+        const kept = Object.values(DSYM_FOLDERS);
+        fs.readdirSync(`${dir}/source`).filter((entry) => !kept.includes(entry))
             .forEach((entry) => fs.rmSync(`${dir}/source/${entry}`, { recursive: true, force: true }));
     });
     return dsym;

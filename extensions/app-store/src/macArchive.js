@@ -28,8 +28,8 @@ const plist = (root) => [
 ].join('\n');
 
 // The archive Xcode exports for App Store Connect, of the app crossbind built and signed ad hoc, as an archive of Xcode's
-// own holds one: the app under Products/Applications, and an Info.plist that names it, its version and its team. Xcode
-// takes the app's entitlements from its signature.
+// own holds one: the app under Products/Applications, its dSYM under dSYMs, and an Info.plist that names it, its version
+// and its team. Xcode takes the app's entitlements from its signature.
 export function writeArchive(api, { app, arch }, { team }) {
     const name = path.basename(app, '.app');
     const archive = path.join(api.workDir, `${name}.xcarchive`);
@@ -56,5 +56,12 @@ export function writeArchive(api, { app, arch }, { team }) {
         Name: name,
         SchemeName: name,
     }));
+    // App Store Connect asks for the dSYM of each binary. crossbind builds a macOS app without debug information, so its
+    // dSYM holds the symbols the binary keeps, which give crash reports functions without files and lines.
+    const binary = path.join(applications, path.basename(app), 'Contents', 'MacOS', name);
+    const dsym = spawnSync('dsymutil', [binary, '-o', path.join(archive, 'dSYMs', `${path.basename(app)}.dSYM`)], { encoding: 'utf8' });
+    if (dsym.error || dsym.status !== 0) {
+        throw new Error(`crossbind: dsymutil could not write the dSYM of ${binary}: ${(dsym.stderr || dsym.error?.message || '').trim()}`);
+    }
     return archive;
 }

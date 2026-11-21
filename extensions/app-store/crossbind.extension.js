@@ -183,12 +183,13 @@ async function uploadIos(api, { key, dsyms, facts }, { project }) {
     return { published: { appId: facts.id, version: api.app.appleVersion, build } };
 }
 
-// Puts the macOS app crossbind built in an archive Xcode exports to App Store Connect, which signs it and its installer
-// package in the cloud.
-async function uploadMac(api, { key, facts }, { apps }) {
+// Puts the macOS app crossbind built in an archive, with its dSYM and Hermes', which Xcode exports to App Store Connect,
+// which signs it and its installer package in the cloud.
+async function uploadMac(api, { key, dsyms, facts }, { apps }) {
     const [built] = apps;
     if (!built) throw new Error('crossbind: the build made no macOS app, so nothing went to App Store Connect.');
     const archive = writeArchive(api, built, { team: facts.team });
+    addDsyms(archive, dsyms);
     const build = api.app.buildNumber;
     api.log(`crossbind: uploading the app to App Store Connect for team ${facts.team} with ${key ? `the API key ${key.keyId}` : "Xcode's account"}, which signs it and its installer package.`);
     await untilDone(api, () => uploadArchive(api, archive, {
@@ -280,9 +281,9 @@ export default function appStore() {
                 const unready = await macRecordMissing(api, key);
                 if (unready.length > 0) return { missing: unready };
                 const facts = { id: api.app.id, team: api.app.team };
-                const dsyms = api.platform === 'ios' ? { dsyms: await api.apple.dsyms() } : {};
+                const dsyms = await api.apple.dsyms();
                 api.log(`crossbind: publishing ${facts.id} ${api.app.appleVersion} for ${platform.name} to App Store Connect for team ${facts.team}; building the app first.`);
-                return { session: { key, ...dsyms, facts } };
+                return { session: { key, dsyms, facts } };
             },
 
             // Xcode numbers a build without CROSSBIND_APP_BUILD_NUMBER after those App Store Connect has.
