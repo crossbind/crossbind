@@ -6,6 +6,7 @@ import { SITE_ROUTES } from '../src/site-pages.js';
 import { PLAY_SCOPE } from '../../extensions/google-play/src/googlePlay.js';
 import { TOKEN_IDLE_DAYS, USAGE_MONTHS_KEPT } from '../../tooling/cloud/worker/accounts.js';
 import { DEVICE_CODE_SECONDS } from '../../tooling/cloud/worker/devices.js';
+import { DEV_SESSION_SECONDS } from '../../tooling/cloud/worker/project-sessions.js';
 import { minAccountDays } from '../../tooling/cloud/worker/oauth.js';
 import { PENDING_TTL_SECONDS, SESSION_TTL_MS } from '../../tooling/cloud/worker/session.js';
 import { RUNNER_IDLE_SECONDS } from '../../tooling/cloud/worker/runner-api.js';
@@ -48,6 +49,17 @@ test('names how long a device\'s sign-in code works, and that the daily prune de
     assert.deepEqual(crons, ['"17 3 * * *"', '"17 3 * * *"']);
     assert.ok(text.includes('The code works for ten minutes') && text.includes('is deleted within a day'));
     assert.ok(text.includes('It works ten minutes, and is deleted within a day'));
+});
+
+test('names how long a preview\'s session stays listed once it ends without stopping, and that the daily prune deletes it within a day', () => {
+    const wrangler = readFileSync(new URL('../../tooling/cloud/wrangler.jsonc', import.meta.url), 'utf8');
+    const scheduled = readFileSync(new URL('../../tooling/cloud/worker/index.js', import.meta.url), 'utf8');
+    const crons = [...wrangler.matchAll(/"crons": \[([^\]]*)\]/g)].map(([, list]) => list);
+    assert.equal(DEV_SESSION_SECONDS, 10 * 60);
+    assert.deepEqual(crons, ['"17 3 * * *"', '"17 3 * * *"']);
+    assert.ok(scheduled.includes('createProjectSessions(env.DB).prune()'));
+    assert.ok(text.includes('leaves your devices\' list within ten minutes, and is deleted within a day'));
+    assert.ok(text.includes('within ten minutes if it ends without stopping, and deleted within a day'));
 });
 
 test("names the one permission the CLI's Google Play sign-in asks for, and the keychain entry it keeps", () => {

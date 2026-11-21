@@ -14,3 +14,9 @@
 /playground/sandbox
   Content-Security-Policy: sandbox allow-scripts; default-src 'none'; script-src 'sha256-6ueMHMAPndT2H8rXtZmr1FBIEmzhoKkXFAMOPhgfA+I=' blob: 'unsafe-eval' 'wasm-unsafe-eval'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'
   Cache-Control: no-cache
+
+# The page a preview's QR code opens, whose address names a session: it hands the session to the crossbind app and asks
+# nothing of any server, frames nowhere, and sends its address on with no link.
+/open/*
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  Referrer-Policy: no-referrer
