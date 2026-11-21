@@ -2,6 +2,7 @@ import { networkOf } from './http.js';
 
 const DEFAULT_LIMITS = Object.freeze({
     anonymousDaily: 5, userDaily: 100, newAccountDaily: 20, globalDaily: 1000, buildSecondsMonthly: 3600, globalBuildHoursMonthly: 100, globalBuildHoursDaily: 10, snapshotsTotalGb: 20,
+    snapshotUploadsDaily: 50, globalSnapshotUploadsDaily: 1000,
 });
 const HOUR_SECONDS = 3600;
 const GB = 1024 ** 3;
@@ -29,9 +30,12 @@ export function settingsOf(env) {
         blockedNetworks: new Set(list(env.BLOCKED_NETWORKS).map(networkOf)),
         turnstileHostnames: list(env.TURNSTILE_HOSTNAMES),
         compilerVersion: env.COMPILER_VERSION ?? '',
-        // Snapshots (worker/snapshots.js): their switch, the host that serves them, and what they hold together at most.
+        // Snapshots (worker/snapshots.js): their switch, the host that serves them, what they hold together at most, and
+        // the uploads a day of an account and of everyone, as R2 bills each file an upload writes.
         snapshotsEnabled: env.SNAPSHOTS_ENABLED === 'true',
         snapshotsHost: env.SNAPSHOTS_HOST ?? '',
         snapshotsTotalBytes: numberOr(env.SNAPSHOTS_TOTAL_GB, DEFAULT_LIMITS.snapshotsTotalGb) * GB,
+        snapshotUploadsDaily: numberOr(env.SNAPSHOT_UPLOADS_DAILY, DEFAULT_LIMITS.snapshotUploadsDaily),
+        globalSnapshotUploadsDaily: numberOr(env.GLOBAL_SNAPSHOT_UPLOADS_DAILY, DEFAULT_LIMITS.globalSnapshotUploadsDaily),
     };
 }
