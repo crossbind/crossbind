@@ -3,8 +3,10 @@
 // signing out everywhere and deleting the account, while the site, an origin of the same site as the API's, is refused;
 // a device's sign-in on /device, by scripts/device-check.mjs playing the app and by crossbind login's own code, each
 // typing the number read off the page; then a first sign-in's question; a session crossbind app preview lists, which
-// scripts/session-check.mjs, playing the app of two accounts, finds for its own and not for the other; linking and
-// unlinking both ways, and an identity held with the day workerd words. Made-up accounts alone, and an Apple key made
+// scripts/session-check.mjs, playing the app of two accounts, finds for its own and not for the other; a snapshot crossbind
+// app preview --cloud uploads into a local bucket, which scripts/snapshot-check.mjs opens through the snapshot host and
+// finds its caps held, and which the account's deletion takes; linking and unlinking both ways, and an identity held with
+// the day workerd words. Made-up accounts alone, and an Apple key made
 // for the run; Chromium resolves no name but localhost, and wrangler is asked for no Cloudflare request details from
 // outside, so nothing leaves this machine, a redirect included. Chromium comes from the workspace's Playwright.
 // usage: node test/local/run.mjs
@@ -53,6 +55,8 @@ const refOf = (token) => createHash('sha256').update(token).digest('hex').slice(
 const state = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-cloud-local-'));
 const [apiPort, sitePort] = [await freePort(), await freePort()];
 const API = `http://localhost:${apiPort}`;
+// The snapshot host, another name of the same Worker (wrangler.jsonc SNAPSHOTS_HOST).
+const SNAPSHOTS = `http://127.0.0.1:${apiPort}`;
 // The site, another origin of the API's own site as crossbind.dev is to api.crossbind.dev: the browser sends the API's
 // cookie with its requests, and the Worker takes it for the playground (ALLOWED_ORIGINS) and for nothing of the account.
 const SITE = `http://localhost:${sitePort}`;
@@ -263,7 +267,8 @@ async function cliSignInOnPage(page, given) {
     }
 }
 
-// A project for crossbind app preview whose Vite stands in for one: it says it runs, and runs until a signal ends it.
+// A project for crossbind app preview whose Vite stands in for one: it says it runs, and runs until a signal ends it;
+// asked to build, it writes a web build of three files, one of them empty.
 function previewProject() {
     const project = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-cloud-local-project-'));
     const vite = path.join(project, 'node_modules', 'vite');
@@ -273,7 +278,19 @@ function previewProject() {
     }));
     fs.writeFileSync(path.join(project, 'crossbind.config.mjs'), 'export default {};\n');
     fs.writeFileSync(path.join(vite, 'package.json'), JSON.stringify({ name: 'vite', version: '8.3.8', bin: { vite: 'bin/vite.js' } }));
-    fs.writeFileSync(path.join(vite, 'bin', 'vite.js'), "console.log('VITE running');\nsetInterval(() => {}, 1000);\n");
+    fs.writeFileSync(path.join(vite, 'bin', 'vite.js'), `const fs = require('node:fs');
+const args = process.argv.slice(2);
+if (args[0] === 'build') {
+    const out = args[args.indexOf('--outDir') + 1];
+    fs.mkdirSync(out + '/assets', { recursive: true });
+    fs.writeFileSync(out + '/index.html', '<!doctype html><title>made-up snapshot</title><script type="module" src="/assets/app.js"></script>');
+    fs.writeFileSync(out + '/assets/app.js', 'console.log("made up");');
+    fs.writeFileSync(out + '/empty.txt', '');
+} else {
+    console.log('VITE running');
+    setInterval(() => {}, 1000);
+}
+`);
     return project;
 }
 
@@ -341,6 +358,61 @@ async function runSessions(owner, other) {
         fs.rmSync(project, { recursive: true, force: true });
     }
 }
+
+// crossbind app preview --cloud, signed in on the device page as `owner`'s account, uploads the web build a Vite standing
+// in for one writes into the Worker's local bucket, and draws its link as a QR code; then scripts/snapshot-check.mjs,
+// whose two codes the same page approves, opens it through the snapshot host as the crossbind app does, and finds the
+// caps held. Every write of the bucket is workerd's own.
+async function runSnapshots(owner) {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-cloud-local-snapshot-'));
+    const project = previewProject();
+    let link;
+    try {
+        await step('crossbind app preview --cloud, signed in with crossbind login on the device page, uploads the web build as a snapshot and draws its link as a QR code', async () => {
+            const signed = await cliSignInOnPage(owner, home);
+            if (!signed.ok) return signed;
+            const preview = spawn(process.execPath, [CLI, 'app', 'preview', '--cloud'], {
+                cwd: project, env: { ...process.env, HOME: home, USERPROFILE: home, CROSSBIND_CLOUD_URL: API, NO_COLOR: '1' },
+            });
+            const said = outputOf(preview);
+            const status = await new Promise((resolve) => { preview.on('close', resolve); });
+            link = /scan this with a phone's camera, or open (https:\/\/crossbind\.dev\/open\/\?s=[A-Za-z0-9_-]{22})\n/.exec(said.text)?.[1];
+            const kept = /uploaded as a snapshot, version 1, kept until (\d{1,2} [A-Z][a-z]+ \d{4})\n/.exec(said.text)?.[1];
+            const drawn = said.text.split('\n').filter((line) => /^ {2}[ █▀▄]+$/.test(line)).map((line) => line.slice(2));
+            return {
+                ok: status === 0 && kept !== undefined && link !== undefined && JSON.stringify(drawn) === JSON.stringify(halfBlocks(qrMatrix(link).modules)),
+                detail: link ? `version 1, kept until ${kept}; ${link.replace(/[A-Za-z0-9_-]{22}$/, '<session>')}, ${drawn.length} lines of half blocks` : said.text.split('\n').find((line) => line.startsWith('crossbind:')),
+            };
+        });
+
+        await step('scripts/snapshot-check.mjs, playing the CLI and the crossbind app, opens it through the snapshot host with its key\'s token alone, and finds the caps held: one of 50 MB and one of 500 files taken, 413 past either, the snapshot before kept', async () => {
+            const checker = spawn(process.execPath, [path.join(PACKAGE_DIR, 'scripts/snapshot-check.mjs'), '--url', API, '--snapshots', SNAPSHOTS, '--session', link], { stdio: ['pipe', 'pipe', 'pipe'] });
+            const said = outputOf(checker);
+            const exited = new Promise((resolve) => { checker.on('close', resolve); });
+            try {
+                for (const at of [0, 1]) {
+                    const code = await until(() => [...said.text.matchAll(/enter the code ([A-Z]{4}-[A-Z]{4})/g)][at]?.[1], STEP_MS);
+                    const decided = await decideOnPage(owner, code);
+                    await until(() => said.text.split('type it here').length > at + 1, STEP_MS);
+                    checker.stdin.write(`${decided.number}\n`);
+                }
+                const status = await exited;
+                const passes = said.text.match(/(?:PASS|FAIL) [^\n]*/g) ?? [];
+                return { ok: status === 0 && passes.length === 8 && passes.every((line) => line.startsWith('PASS')), detail: passes.join('; ') };
+            } catch (error) {
+                throw new Error(`${error.message}; the check's last words: ${said.text.trim().split('\n').at(-1)}`);
+            } finally {
+                checker.kill();
+            }
+        });
+    } finally {
+        fs.rmSync(home, { recursive: true, force: true });
+        fs.rmSync(project, { recursive: true, force: true });
+    }
+}
+
+// How many objects the local bucket holds under the snapshots' prefix.
+const snapshotObjects = async () => (await (await fetch(`${API}/__standin/objects?prefix=snapshots/`)).json()).count;
 
 // A device's sign-in, approved on the device page by `page`, signed in to the stand-in's account: the app played by
 // scripts/device-check.mjs, which reads the number from its input, and the CLI by crossbind login's own code; a denial;
@@ -476,6 +548,7 @@ async function runApple(browser, owner) {
 
     // Two accounts now, unlinked: the GitHub account's and the Apple ID's.
     await runSessions(owner, apple);
+    await runSnapshots(owner);
     await apple.goto(`${API}/login`);
 
     // A browser of the same account whose link goes to GitHub's page itself: the policy lets the form's redirect leave
@@ -498,7 +571,10 @@ async function runApple(browser, owner) {
 
     await owner.goto(`${API}/login`);
     await owner.check('input[name="confirm"]');
+    const objectsBefore = await snapshotObjects();
     await submit(owner, 'button:has-text("Delete account")');
+    const objectsAfter = await snapshotObjects();
+    check('deleting the account deletes its snapshots\' files in the bucket at once', objectsBefore > 0 && objectsAfter === 0, `${objectsBefore} objects before, ${objectsAfter} after`);
     const linked = await submit(apple, 'button:has-text("Link a GitHub account")');
     check('once that account is deleted, the GitHub account links: one account with both, named by GitHub',
         linked === 'The GitHub account is linked: it signs in to this account too.' && (await apple.textContent('main')).includes(`Signed in as ${NAME}`) && await apple.locator('.sign-ins li').count() === 2, linked);

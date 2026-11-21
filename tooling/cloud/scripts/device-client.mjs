@@ -8,6 +8,8 @@ import readline from 'node:readline/promises';
 export const CLIENT = Object.freeze({
     client: 'app', version: '0.0.0', platform: 'macos', os: '0.0',
 });
+// The same as `crossbind login` asks, for a check that uploads as the CLI does: "crossbind CLI 0.0.0".
+export const CLI_CLIENT = Object.freeze({ client: 'cli', version: '0.0.0' });
 const SLOW_DOWN_SECONDS = 5;
 const NUMBER = /^\s*([1-9]\d)\s*$/;
 
