@@ -296,10 +296,9 @@ export function createAccounts(db, now = () => Date.now(), drawId = randomAccoun
             }));
         },
 
-        // Whether a device of the account had that reference, whose token is now revoked.
+        // The kind of the account's device that had that reference, whose token is now revoked, or null where none had it.
         async revokeDevice(userId, ref) {
-            const { meta } = await db.prepare(`DELETE FROM tokens WHERE user_id = ? AND substr(hash, 1, ${DEVICE_REF_LENGTH}) = ?`).bind(userId, ref).run();
-            return meta.changes > 0;
+            return (await db.prepare(`DELETE FROM tokens WHERE user_id = ? AND substr(hash, 1, ${DEVICE_REF_LENGTH}) = ? RETURNING kind`).bind(userId, ref).first('kind')) ?? null;
         },
 
         // Seconds a cloud runner was up until `at`, for its user and image, and for everyone's month and day.

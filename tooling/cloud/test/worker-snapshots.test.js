@@ -664,6 +664,62 @@ test('deletes an account\'s snapshots with it, their files at once, from the CLI
     assert.equal(await db.prepare("SELECT count(1) AS rows FROM sessions WHERE source = 'snapshot'").first('rows'), 1);
 });
 
+test('gives each snapshot of the account a new key when a crossbind app is signed out, by its token or on the account\'s page: the old key\'s token gets 403, and a device still signed in reads the new one and opens; a CLI\'s sign-out leaves the keys', async () => {
+    const {
+        call, host, signedIn, uploaded, accounts,
+    } = setup();
+    const owner = await signedIn(dev);
+    const tablet = await accounts.issueToken(owner.user.id, { kind: 'app', label: 'crossbind app 1.0.0 on iPadOS 27.1' });
+    const phone = await accounts.issueToken(owner.user.id, { kind: 'app', label: 'crossbind app 1.0.0 on Android 17' });
+    const laptop = await accounts.issueToken(owner.user.id);
+    const first = await uploaded(owner);
+    const second = await uploaded(owner);
+    const keysOf = async (token) => Promise.all([first, second].map(async ({ id }) => (await call('GET', `/v1/sessions/${id}`, { token })).body.key));
+    const opens = async (key) => (await host(`/${first.id}/index.html`, { key })).status;
+    const refOf = async (label) => (await accounts.devices(owner.user.id)).find((device) => device.label === label).ref;
+    const cookie = `${SESSION_COOKIE}=${await signSession({ id: owner.user.id, name: 'made_up_dev' }, env.SESSION_SECRET, NOW)}`;
+
+    const cliByToken = await call('DELETE', '/v1/token', { token: laptop });
+    const cliOnPage = await call('POST', '/account/tokens/revoke', { form: { ref: await refOf('crossbind CLI') }, cookie });
+    const afterClis = await keysOf(phone);
+    const appByToken = await call('DELETE', '/v1/token', { token: owner.app });
+    const afterApp = await keysOf(phone);
+    const openedAfterApp = [await opens(first.key), await opens(afterApp[0])];
+    const appOnPage = await call('POST', '/account/tokens/revoke', { form: { ref: await refOf('crossbind app 1.0.0 on Android 17') }, cookie });
+    const afterPage = await keysOf(tablet);
+    const openedAfterPage = [await opens(afterApp[0]), await opens(afterPage[0])];
+
+    assert.deepEqual([cliByToken.status, cliOnPage.status, appByToken.status, appOnPage.status], [204, 303, 204, 303]);
+    assert.deepEqual(afterClis, [first.key, second.key]);
+    assert.equal(new Set([first.key, second.key, ...afterApp, ...afterPage]).size, 6);
+    assert.ok([...afterApp, ...afterPage].every((key) => /^[A-Za-z0-9_-]{43}$/.test(key)));
+    assert.deepEqual([openedAfterApp, openedAfterPage], [[403, 200], [403, 200]]);
+});
+
+test('gives each snapshot of the account a new key at Sign out everywhere, by the CLI or on the account\'s page: the old key\'s token gets 403, and a device signed in again reads the new one and opens', async () => {
+    const {
+        call, host, signedIn, uploaded, accounts, advance,
+    } = setup();
+    const owner = await signedIn(dev);
+    const { id, key } = await uploaded(owner);
+    const keyOf = async (token) => (await call('GET', `/v1/sessions/${id}`, { token })).body.key;
+    const opens = async (gateKey) => (await host(`/${id}/index.html`, { key: gateKey })).status;
+    const signedInAgain = () => accounts.issueToken(owner.user.id, { kind: 'app', label: 'crossbind app 1.0.0 on iOS 27.1' });
+
+    const byCli = await call('DELETE', '/v1/tokens', { token: owner.cli });
+    const afterCli = await keyOf(await signedInAgain());
+    const openedAfterCli = [await opens(key), await opens(afterCli)];
+    advance(MINUTE);
+    const cookie = `${SESSION_COOKIE}=${await signSession({ id: owner.user.id, name: 'made_up_dev' }, env.SESSION_SECRET, NOW + MINUTE)}`;
+    const onPage = await call('POST', '/account/logout-everywhere', { form: {}, cookie });
+    const afterPage = await keyOf(await signedInAgain());
+    const openedAfterPage = [await opens(afterCli), await opens(afterPage)];
+
+    assert.deepEqual([byCli.status, onPage.status], [204, 303]);
+    assert.equal(new Set([key, afterCli, afterPage]).size, 3);
+    assert.deepEqual([openedAfterCli, openedAfterPage], [[403, 200], [403, 200]]);
+});
+
 test('prunes every file no live snapshot names once an hour old: a cleanup\'s leftover, a replaced upload\'s, an ended one\'s and a blocked account\'s', async () => {
     const context = setup();
     const {

@@ -278,6 +278,15 @@ export function createSnapshots(db, bucket, now = () => Date.now()) {
             return head ? bucket.head(key) : bucket.get(key);
         },
 
+        // A new key, drawn at random, for each snapshot of the account once a device that may have read the keys is
+        // signed out: its gate tokens open nothing then, and a device still signed in reads the session again.
+        async rekey(userId) {
+            const { results } = await db.prepare("SELECT id FROM sessions WHERE user_id = ? AND source = 'snapshot'").bind(userId).all();
+            if (results.length === 0) return;
+            const statement = db.prepare("UPDATE sessions SET key = ? WHERE id = ? AND user_id = ? AND source = 'snapshot'");
+            await db.batch(results.map(({ id }) => statement.bind(randomToken(), id, userId)));
+        },
+
         // The ids of an account's snapshots, read before the account is deleted, whose rows go with it.
         async idsOf(userId) {
             const { results } = await db.prepare("SELECT id FROM sessions WHERE user_id = ? AND source = 'snapshot'").bind(userId).all();

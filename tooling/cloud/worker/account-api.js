@@ -235,14 +235,17 @@ const ROUTES = Object.freeze({
     'GET /v1/sessions': authenticated(async ({ deps, settings }, user) => jsonResponse(200, { sessions: await deps.sessions.list(user.id, { snapshots: settings.snapshotsEnabled }) }), { kinds: APP_ONLY }),
     // crossbind app preview --cloud asks for its snapshot's id, then uploads to it (worker/snapshots.js).
     'POST /v1/snapshots': authenticated(startSnapshotRoute),
+    // A crossbind app signed out may have read the snapshots' keys: they change (worker/snapshots.js rekey).
     'DELETE /v1/token': authenticated(async ({ deps }, user, token) => {
         await deps.accounts.revokeToken(token);
+        if (user.kind === 'app') await deps.snapshots.rekey(user.id);
         log({ event: 'token-revoked', who: userKey(user.id), all: false });
         return noContent();
     }, { kinds: EVERY_KIND }),
     // `crossbind logout --all` does what the account's page does as "Sign out everywhere": the browsers go too.
     'DELETE /v1/tokens': authenticated(async ({ deps }, user) => {
         await deps.accounts.signOutEverywhere(user.id);
+        await deps.snapshots.rekey(user.id);
         log({ event: 'token-revoked', who: userKey(user.id), all: true });
         return noContent();
     }, { kinds: EVERY_KIND }),

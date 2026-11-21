@@ -451,7 +451,7 @@ test('lists an account\'s devices by their last use, each by the start of its to
         { ref: refOf(newer), kind: 'cli', label: 'crossbind CLI', createdAt: '2026-10-09T12:00:00.000Z', lastUsedAt: '2026-10-09T12:00:00.000Z' },
         { ref: refOf(older), kind: 'cli', label: 'crossbind CLI', createdAt: AT, lastUsedAt: AT },
     ]);
-    assert.deepEqual(outcomes, [false, true]);
+    assert.deepEqual(outcomes, [null, 'cli']);
     assert.deepEqual(await Promise.all([older, newer, theirs].map(async (token) => (await accounts.userOfToken(token))?.login ?? null)), [null, 'octocat', 'mojombo']);
 });
 
