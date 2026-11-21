@@ -41,6 +41,7 @@ const BUILD_BYTES = PAGE.length + SCRIPT.length + 8;
 const NO_SNAPSHOT = 'No snapshot of this account has this id.';
 const ONLY_ITS_DEVICES = 'This snapshot answers the devices of its account alone.';
 const FULL = `This account keeps ${MAX_SNAPSHOTS_PER_ACCOUNT} snapshots, as many as it may: each ends ${SNAPSHOT_DAYS} days after its last upload.`;
+const UNTAKEN = 'crossbind cloud could not take this upload; try again in a moment.';
 const unlimited = { limit: async () => ({ success: true }) };
 
 const newId = () => randomBytes(16).toString('base64url');
@@ -399,9 +400,36 @@ test('leaves nothing of an upload cut half way, its cleanup kept going by waitUn
     const answer = await call('PUT', `/v1/snapshots/${id}`, { token: owner.cli, archive: cut, length: archive.length });
     await settle();
 
-    assert.deepEqual([answer.status, answer.body.error], [400, 'The archive could not be read: Network connection lost.']);
+    assert.deepEqual([answer.status, answer.body.error], [502, UNTAKEN]);
     assert.deepEqual(objects(), live);
     assert.equal((await host(`/${id}/index.html`, { key })).status, 200);
+});
+
+test('answers a failure that is no refusal, as R2 failing a put, with 502 in crossbind\'s words: its own words are logged, not sent, and what the upload wrote goes', async (t) => {
+    const {
+        call, bucket, signedIn, objects, settle,
+    } = setup();
+    const owner = await signedIn(dev);
+    const { body: { id } } = await start(call, owner);
+    const lines = [];
+    t.mock.method(console, 'log', (line) => lines.push(line));
+    // R2 takes the page, then fails the script's put once its bytes are in.
+    const { put } = bucket;
+    t.mock.method(bucket, 'put', async (key, value) => {
+        if (!key.endsWith('/assets/app.js')) return put(key, value);
+        await new Response(value).arrayBuffer();
+        throw new Error('made-up R2 failure: words of its own');
+    });
+
+    const answer = await call('PUT', `/v1/snapshots/${id}`, { token: owner.cli, archive: archiveOf(BUILD) });
+    await settle();
+
+    assert.deepEqual([answer.status, answer.body], [502, { error: UNTAKEN }]);
+    assert.deepEqual(objects(), []);
+    assert.deepEqual(lines.map((line) => JSON.parse(line)), [
+        { event: 'snapshot-upload-failed', who: `user:${owner.user.id}`, message: 'made-up R2 failure: words of its own' },
+        { event: 'snapshot-refused', who: `user:${owner.user.id}`, status: 502 },
+    ]);
 });
 
 test('makes a new upload live whole, its version risen, and deletes the one before it', async () => {

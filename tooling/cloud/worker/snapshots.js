@@ -247,7 +247,10 @@ export function createSnapshots(db, bucket, now = () => Date.now()) {
                 if (!index) throw new Refused(400, 'A snapshot is a web build: an index.html at its root.');
             } catch (error) {
                 await discard();
-                throw error instanceof Refused ? error : new Refused(400, `The archive could not be read: ${error.message}`);
+                if (error instanceof Refused) throw error;
+                // No refusal, as R2 failing a put or the connection cut: its own words go to the log alone.
+                log({ event: 'snapshot-upload-failed', who: userKey(userId), message: error.message });
+                throw new Refused(502, 'crossbind cloud could not take this upload; try again in a moment.');
             }
             input.cancel();
             // Live only while the snapshot is: one that ended meanwhile goes back through start(), which counts it.
