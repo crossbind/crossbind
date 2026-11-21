@@ -3,6 +3,35 @@
 <!-- release-notes:start -->
 <!-- Generated from releases/crossbind/<version>.md by scripts/release/render-changelog.mjs. Edit the note, then run `pnpm changelog`. -->
 
+## 2.0.0-beta.81
+
+Mac App Store uploads include debug symbols for the app and Hermes, iOS apps declare a handler rank for each document type, and crossbind cloud lets newer GitHub accounts sign in.
+
+### Highlights
+
+- You can sign in to crossbind cloud with a GitHub account less than 30 days old. Cloud builds become available when
+  either your crossbind cloud account or your linked GitHub account reaches 30 days. `crossbind usage` shows the date.
+
+### Breaking changes
+
+None.
+
+### Migration notes
+
+None.
+
+### Fixes
+
+- Mac App Store archives now include the app's dSYM and the matching Hermes dSYM. This fixes the “Upload Symbols
+  Failed” warnings for both binaries in App Store Connect.
+- On iOS, crossbind sets `LSHandlerRank` to `Default` for each document type the app opens. This fixes App Store
+  Connect warning `ITMS-90788`.
+
+### Known limitations
+
+The macOS app binary is built without debug information. Its dSYM identifies functions in crash reports, but source
+files and line numbers are unavailable for the app's own code.
+
 ## 2.0.0-beta.80
 
 This machine's settings move to `~/.crossbind/config.json` and what crossbind downloads or builds again to `~/.crossbind/cache/`, which can be deleted whenever no build runs; `crossbind login` signs in on crossbind cloud's device page with GitHub or Apple; `crossbind config set` keeps an App Store Connect API key; and an extension can serve an origin of the app's own, whose pages reach the functions of their role alone.
