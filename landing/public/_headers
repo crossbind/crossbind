@@ -20,3 +20,9 @@
 /open/*
   Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
   Referrer-Policy: no-referrer
+
+# What Apple's platforms read to open crossbind.dev's links in an app: the crossbind app, for /open/, where a preview's
+# QR code leads. Apple reads it as JSON; Pages would serve a file with no extension as application/octet-stream.
+/.well-known/apple-app-site-association
+  Content-Type: application/json
+  Cache-Control: public, max-age=3600

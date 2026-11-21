@@ -1,0 +1,10 @@
+{
+    "applinks": {
+        "details": [
+            {
+                "appIDs": ["7ZZLDWBUVT.dev.crossbind.app"],
+                "components": [{ "/": "/open/*" }]
+            }
+        ]
+    }
+}
