@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import upath from 'upath';
 import {
-    deleteAccount, listSession, login, logout, fetchUsage, previewAccount, uploadSnapshot, usageLines, RENEW_MS,
+    deleteAccount, listSession, login, logout, fetchUsage, previewAccount, removeSnapshot, uploadSnapshot, usageLines, RENEW_MS,
 } from '../src/actions/cloudCommands.js';
 import { DEFAULT_CLOUD_URL, cloudUrl, cloudCredentials } from '../src/utils/cloudAccount.js';
 
@@ -472,5 +472,34 @@ describe("crossbind app preview --cloud's upload", () => {
 
         await expect(upload(noId.fetcher)).rejects.toThrow('crossbind: crossbind cloud sent no snapshot.');
         await expect(upload(noDay.fetcher)).rejects.toThrow('crossbind: crossbind cloud sent no snapshot.');
+    });
+});
+
+describe('crossbind app preview --cloud --remove', () => {
+    const ID = 'IRVUB8Fpwuh0lT_7NkiJ8Q';
+    const PROJECT = { id: 'mWW-UyZhfd1-czxo9qk5Aw', name: 'made-up-app' };
+    const remove = (fetcher) => removeSnapshot({
+        url: URL_, token: TOKEN, project: PROJECT, protocol: 1, fetcher,
+    });
+
+    test("finds the project's snapshot as an upload finds it, then removes it by its id, with the token", async () => {
+        const { fetcher, calls } = server([[200, { id: ID }], [204]]);
+
+        await remove(fetcher);
+
+        expect(calls.map(({ method, url }) => [method, url])).toEqual([['POST', `${URL_}/v1/snapshots`], ['DELETE', `${URL_}/v1/snapshots/${ID}`]]);
+        expect(calls[0].body).toEqual({ project: PROJECT, protocol: 1 });
+        expect(calls[1].headers).toEqual({ authorization: `Bearer ${TOKEN}` });
+    });
+
+    test("stops with crossbind cloud's words where it refuses either call, and removes nothing by an id of another form", async () => {
+        const paused = server([[503, { error: 'Snapshots are paused in crossbind cloud; preview from this machine meanwhile, without --cloud.' }]]);
+        const gone = server([[200, { id: ID }], [404, { error: 'No snapshot of this account has this id.' }]]);
+        const noId = server([[200, { id: 'not-an-id' }]]);
+
+        await expect(remove(paused.fetcher)).rejects.toThrow('crossbind: Snapshots are paused in crossbind cloud; preview from this machine meanwhile, without --cloud.');
+        await expect(remove(gone.fetcher)).rejects.toThrow('crossbind: No snapshot of this account has this id.');
+        await expect(remove(noId.fetcher)).rejects.toThrow('crossbind: crossbind cloud sent no snapshot.');
+        expect([paused.calls.length, gone.calls.length, noId.calls.length]).toEqual([1, 2, 1]);
     });
 });

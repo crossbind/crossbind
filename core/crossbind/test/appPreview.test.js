@@ -44,9 +44,10 @@ function projectWith(config, viteVersion = '8.3.8') {
 const preview = (...args) => spawnSync(process.execPath, [CLI, 'app', 'preview', ...args], { cwd: dir, encoding: 'utf8', env: { ...process.env, HOME: dir, USERPROFILE: dir } });
 
 // crossbind cloud as a preview asks it, on this machine: the account TOKEN signs in to, and the session's registration,
-// which `refuse` answers with its [status, body], and its removal; a snapshot made, and its upload, which `refuseUpload`
-// answers; each call recorded with its body, JSON or the bytes sent, and the length it said.
-function standInCloud({ refuse, refuseUpload } = {}) {
+// which `refuse` answers with its [status, body], and its removal; a snapshot made, its upload, which `refuseUpload`
+// answers, and its removal, which `refuseRemoval` answers; each call recorded with its body, JSON or the bytes sent, and
+// the length it said.
+function standInCloud({ refuse, refuseUpload, refuseRemoval } = {}) {
     const calls = [];
     const server = http.createServer((request, response) => {
         const chunks = [];
@@ -67,6 +68,8 @@ function standInCloud({ refuse, refuseUpload } = {}) {
                 answer(...(refuseUpload ?? [200, {
                     id: SNAPSHOT, version: 3, files: 2, bytes: 49, expiresAt: '2026-12-21T10:00:00.000Z',
                 }]));
+            } else if (request.url === `/v1/snapshots/${SNAPSHOT}` && request.method === 'DELETE') {
+                answer(...(refuseRemoval ?? [204]));
             } else if (isSession && request.method === 'PUT') answer(...(refuse ?? [200, { id: request.url.slice('/v1/sessions/'.length), expiresAt: '2026-11-21T10:10:00.000Z' }]));
             else if (isSession && request.method === 'DELETE') answer(204);
             else answer(404, { error: 'Not found.' });
@@ -245,6 +248,44 @@ describe('crossbind app preview', () => {
             expect(status).toBe(1);
             expect(stderr).toContain('crossbind: A snapshot holds 50 MB at most.');
             expect(stdout).not.toContain('scan this');
+        } finally {
+            cloud.close();
+        }
+    });
+
+    test('with --cloud --remove finds the project\'s snapshot as an upload finds it and removes it, with no Vite and no build, and says so', async () => {
+        // A Vite too old for a preview, which a removal never asks.
+        projectWith('export default {};\n', '7.3.1');
+        const cloud = await standInCloud();
+        signIn(cloud);
+        try {
+            const { status, stdout } = await previewWith(cloud, '--cloud', '--remove');
+
+            expect(status).toBe(0);
+            expect(stdout).toBe('crossbind app preview: demo\n  signed in to crossbind cloud as made-up-dev\n  removed its snapshot from crossbind cloud: no device signed in as made-up-dev lists it now\n');
+            expect(cloud.calls.map(({ call }) => call)).toEqual(['GET /v1/account', 'POST /v1/snapshots', `DELETE /v1/snapshots/${SNAPSHOT}`]);
+            expect(cloud.calls.map(({ authorization }) => authorization)).toEqual(Array(3).fill(`Bearer ${TOKEN}`));
+            expect(cloud.calls[1].body).toEqual({ project: { id: projectIdOf('demo', dir), name: 'demo' }, protocol: 1 });
+            expect(fs.existsSync(upath.join(dir, '.crossbind', 'build', 'snapshot'))).toBe(false);
+        } finally {
+            cloud.close();
+        }
+    });
+
+    test("with --cloud --remove stops with crossbind cloud's words where it refuses the removal, and with --remove alone asks for --cloud before anything", async () => {
+        projectWith('export default {};\n');
+        const cloud = await standInCloud({ refuseRemoval: [404, { error: 'No snapshot of this account has this id.' }] });
+        signIn(cloud);
+        try {
+            const refused = await previewWith(cloud, '--cloud', '--remove');
+            const calls = cloud.calls.length;
+            const alone = await previewWith(cloud, '--remove');
+
+            expect([refused.status, alone.status]).toEqual([1, 1]);
+            expect(refused.stderr).toContain('crossbind: No snapshot of this account has this id.');
+            expect(refused.stdout).not.toContain('removed');
+            expect(alone.stderr).toContain('crossbind: --remove removes this project\'s snapshot from crossbind cloud, with --cloud: crossbind app preview --cloud --remove.');
+            expect(cloud.calls.length).toBe(calls);
         } finally {
             cloud.close();
         }
