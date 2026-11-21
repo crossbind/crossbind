@@ -231,6 +231,17 @@ test('serves a snapshot\'s files from its host to the device that holds its key 
     assert.equal(missing.status, 404);
 });
 
+test('types a file by the table\'s own entries alone: an extension that names what Object.prototype holds is served as bytes', async () => {
+    const { host, signedIn, uploaded } = setup();
+    const owner = await signedIn(dev);
+    const names = ['constructor', 'made-up.constructor', 'made-up.__proto__'];
+    const { id, key } = await uploaded(owner, [['index.html', PAGE], ...names.map((name) => [name, 'made up'])]);
+
+    const types = await Promise.all(names.map(async (name) => (await host(`/${id}/${name}`, { key })).headers.get('content-type')));
+
+    assert.deepEqual(types, names.map(() => 'application/octet-stream'));
+});
+
 test('answers nothing without the gate\'s token of the snapshot\'s key, the session included, and the same 403 for a snapshot that is not there, or not yet', async () => {
     const {
         call, db, host, signedIn, uploaded,
