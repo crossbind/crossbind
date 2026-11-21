@@ -139,7 +139,7 @@ async function writeConfig(name, platform, key, value) {
 }
 
 // This machine's settings: crossbind's own by their names, as `crossbind config set` takes them, and by any other name
-// the extension's own, which ~/.crossbind.json keeps apart for each extension.
+// the extension's own, which ~/.crossbind/config.json keeps apart for each extension.
 function settingsOf(name) {
     const isCrossbinds = (key) => Object.hasOwn(systemKeys, key);
     return Object.freeze({

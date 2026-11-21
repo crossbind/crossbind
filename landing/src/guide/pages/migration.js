@@ -26,7 +26,7 @@ export default {
                 ['`cppjs.config.js`', '`crossbind.config.js`'],
                 ['`cppjs.build.js`, package authors only', '`crossbind.build.js`'],
                 ['`.cppjs/` cache directory', '`.crossbind/`'],
-                ['`~/.cppjs.json` system config', '`~/.crossbind.json`'],
+                ['`~/.cppjs.json` system config', '`~/.crossbind/config.json`'],
                 ['`initCppJs()`', '`initNative()`'],
                 ['`_CPPJS_DATA_PATH_` placeholder in `env`', '`_CROSSBIND_DATA_PATH_`'],
                 ['`org.js.cpp.<name>` iOS bundle and framework identifiers', '`dev.crossbind.<name>`'],

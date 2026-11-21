@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
+import cacheDir from './cacheDir.js';
 import getOsUserAndGroupId from './getOsUserAndGroupId.js';
 import makeTreeWritable from './makeTreeWritable.js';
 import pullDockerImage, { getDockerImage, getDockerContainerName, imageRoleFor } from './pullDockerImage.js';
@@ -64,7 +64,7 @@ export function sourceRunner(config, target) {
 // in one project must not throw them away. Containers write to the store and a tool runs the recipes
 // it keeps there, so a tool on the host never shares a store with them.
 export function sourceRoot(name, runner = 'DOCKER_RUN') {
-    return path.join(os.homedir(), '.crossbind', runner === 'LOCAL' ? `${name}-local` : name);
+    return cacheDir(runner === 'LOCAL' ? `${name}-local` : name);
 }
 
 // A directory under a source's root, with the store beside it. toolPath and storePath name a file of

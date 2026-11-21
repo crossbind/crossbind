@@ -9,10 +9,10 @@ const pkgDir = resolve(import.meta.dirname, '..');
 
 let sdk = process.env.CROSSBIND_WASI_SDK_PATH;
 if (!sdk) {
-    try { sdk = JSON.parse(readFileSync(join(homedir(), '.crossbind.json'), 'utf8')).WASI_SDK_PATH; } catch { /* unset */ }
+    try { sdk = JSON.parse(readFileSync(join(homedir(), '.crossbind', 'config.json'), 'utf8')).WASI_SDK_PATH; } catch { /* unset */ }
 }
 if (!sdk || !existsSync(sdk)) {
-    console.log('SKIP: wasi-sdk not configured (CROSSBIND_WASI_SDK_PATH or ~/.crossbind.json WASI_SDK_PATH).');
+    console.log('SKIP: wasi-sdk not configured (CROSSBIND_WASI_SDK_PATH or ~/.crossbind/config.json WASI_SDK_PATH).');
     process.exit(0);
 }
 if (!existsSync(join(sdk, 'share/wasi-sysroot/lib/wasm32-wasip3'))) {

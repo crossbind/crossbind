@@ -70,7 +70,7 @@ describe('the identity and key that sign and notarize a macOS app', () => {
             .toThrow('which is no file');
     });
 
-    test('notarize with the key ~/.crossbind.json names, as with the one the environment names', () => {
+    test('notarize with the key ~/.crossbind/config.json names, as with the one the environment names', () => {
         const signing = appleSigning({ CROSSBIND_APPLE_SIGNING_IDENTITY: DEVELOPER_ID }, { APPLE_API_KEY: key, APPLE_API_KEY_ID: 'ABC123', APPLE_API_ISSUER: 'issuer-uuid' });
         expect(signing).toMatchObject({ identity: HASH, notary: { keyId: 'ABC123', issuer: 'issuer-uuid' } });
         expect(upath.toUnix(signing.notary.key)).toBe(upath.toUnix(key));
@@ -103,7 +103,7 @@ describe('the App Store Connect API key', () => {
             .toThrow('CROSSBIND_APPLE_API_KEY_ID is not: an App Store Connect API key takes all three, the ID unless its file keeps the name App Store Connect gives it, AuthKey_<key id>.p8.');
     });
 
-    test('comes from ~/.crossbind.json by the names crossbind config set takes, each where the environment names none', () => {
+    test('comes from ~/.crossbind/config.json by the names crossbind config set takes, each where the environment names none', () => {
         const named = upath.join(dir, 'AuthKey_7K2M9P4Q1Z.p8');
         fs.writeFileSync(named, 'key');
         const system = { APPLE_API_KEY: named, APPLE_API_KEY_ID: '', APPLE_API_ISSUER: 'issuer-uuid' };
@@ -112,16 +112,16 @@ describe('the App Store Connect API key', () => {
         expect(appStoreKey({ CROSSBIND_APPLE_API_ISSUER: 'other-uuid' }, system).issuer).toBe('other-uuid');
         expect(appStoreKey({}, { APPLE_API_KEY: '', APPLE_API_KEY_ID: '', APPLE_API_ISSUER: '' })).toBeNull();
         expect(() => appStoreKey({}, { APPLE_API_KEY: named })).toThrow([
-            'crossbind: APPLE_API_KEY in ~/.crossbind.json is set, but CROSSBIND_APPLE_API_ISSUER is not: an App Store Connect API key takes all three.',
-            'crossbind config set keeps each in ~/.crossbind.json, under its name without CROSSBIND_.',
+            'crossbind: APPLE_API_KEY in ~/.crossbind/config.json is set, but CROSSBIND_APPLE_API_ISSUER is not: an App Store Connect API key takes all three.',
+            'crossbind config set keeps each in ~/.crossbind/config.json, under its name without CROSSBIND_.',
         ].join(' '));
     });
 
-    test("is no key's own text in ~/.crossbind.json, which its refusal does not repeat", () => {
+    test("is no key's own text in ~/.crossbind/config.json, which its refusal does not repeat", () => {
         const text = '-----BEGIN PRIVATE KEY-----\nMIGTAgEAMBMGByqGSM49\n-----END PRIVATE KEY-----';
         const refused = () => appStoreKey({}, { APPLE_API_KEY: text, APPLE_API_KEY_ID: '2X9R4HXF34', APPLE_API_ISSUER: 'issuer-uuid' });
         expect(refused).toThrow([
-            "crossbind: APPLE_API_KEY in ~/.crossbind.json is a key's own text, which crossbind keeps in no file:",
+            "crossbind: APPLE_API_KEY in ~/.crossbind/config.json is a key's own text, which crossbind keeps in no file:",
             "set it to the path of the key's .p8 file, as crossbind config set APPLE_API_KEY <path> does, or give the text as CROSSBIND_APPLE_API_KEY.",
         ].join(' '));
         expect(refused).not.toThrow('MIGTAgEAMBMGByqGSM49');

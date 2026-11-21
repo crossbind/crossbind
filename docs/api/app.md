@@ -433,7 +433,7 @@ signed: apt checks the signature of a repository, not of a package.
 Developer ID it signs the app and its framework with that identity instead, in the hardened runtime, and with an App
 Store Connect API key Apple also notarizes the app, whose ticket the build staples to it before it makes the disk
 image: the app then opens on any Mac, offline too. The disk image stays unsigned, so that Gatekeeper judges the app in
-it, which Apple has notarized. Both come from the environment, and the key from `~/.crossbind.json` too:
+it, which Apple has notarized. Both come from the environment, and the key from `~/.crossbind/config.json` too:
 
 - `CROSSBIND_APPLE_SIGNING_IDENTITY`: A code signing identity in the keychain, by name or hash, as
   `Developer ID Application: <name> (<team>)`.
@@ -443,7 +443,7 @@ it, which Apple has notarized. Both come from the environment, and the key from 
   it, `AuthKey_<key id>.p8`.
 - `CROSSBIND_APPLE_API_ISSUER`: The issuer ID of the key's team.
 
-On a Mac of your own, `~/.crossbind.json` keeps the key under the same names without `CROSSBIND_`, and each variable the
+On a Mac of your own, `~/.crossbind/config.json` keeps the key under the same names without `CROSSBIND_`, and each variable the
 environment sets wins: `crossbind config set APPLE_API_KEY <its .p8 file>` keeps the file's full path, and refuses the
 key's own text, which goes in no file; `crossbind config set APPLE_API_ISSUER <its issuer ID>` keeps the issuer, and
 `APPLE_API_KEY_ID` the ID where the file has another name. The key then serves `crossbind app store app-store --send`,
@@ -1348,7 +1348,7 @@ in it to edit: what would change it comes from `crossbind.config.js`.
 ```js
 app: {
     id: 'com.example.myapp', // the bundle id; dev.crossbind.<name> without it
-    team: 'ABCDE12345',      // the Apple team that signs the app; XCODE_DEVELOPMENT_TEAM of ~/.crossbind.json without it
+    team: 'ABCDE12345',      // the Apple team that signs the app; XCODE_DEVELOPMENT_TEAM of ~/.crossbind/config.json without it
     encryption: false,       // whether the app uses encryption that export rules do not exempt
     privacy: { fileTimestamp: ['C617.1'] }, // Apple's reasons for the required reason API the app calls
     ios: { multipleWindows: true, appGroup: 'group.com.example.myapp' }, // an iPad's windows, and the App Group
@@ -1451,7 +1451,7 @@ shows function names. Hermes and fbjni come stripped from their releases, so the
 
 `crossbind app key upload` makes one, so neither a JDK nor any knowledge of keystores is needed. It runs `keytool` in
 the android-app image, with no network, and writes `~/.crossbind/keys/android-upload.p12`, an RSA 2048 key valid for
-10,000 days, which `~/.crossbind.json` then names as `ANDROID_KEYSTORE` and `ANDROID_KEY_ALIAS`. Its password is one
+10,000 days, which `~/.crossbind/config.json` then names as `ANDROID_KEYSTORE` and `ANDROID_KEY_ALIAS`. Its password is one
 crossbind makes, 24 random characters shown once, or one you type. A typed one needs 15 characters or more, as NIST SP
 800-63B-4 asks of a password that alone guards what it locks, and must be no one part repeated, no run as 1234 or
 qwerty, and no well-known password; no mix of kinds of characters is asked for.
@@ -1483,7 +1483,7 @@ its alias and password stops the build, and so does an alias or a password witho
 The image carries a JDK, the Android SDK platform and build tools, Gradle and every Maven artifact the build takes,
 Hermes' `hermes-android` and androidx.webkit among them, each checked against its sha256, so a build needs no JDK or
 Android SDK on the machine and fetches nothing. An app whose extensions name `maven` libraries fetches those, beside the
-image's, and Gradle checks every file it resolves against the image's checksums and its extensions'. Gradle's caches and the debug key stay in `~/.crossbind/android/`: the
+image's, and Gradle checks every file it resolves against the image's checksums and its extensions'. Gradle's caches stay in `~/.crossbind/cache/android/` and the debug key in `~/.crossbind/android/`: the
 next build reuses them, and an app signed with the same debug key installs over the last. The host builds in the same
 image, as a package's Android libraries do in the android image it adds to, so it needs Docker (`RUNNER=DOCKER_RUN`
 or `DOCKER_EXEC`).
@@ -1630,7 +1630,7 @@ there. To sign out, remove crossbind in your Google account, under Security › 
 services; the next upload signs in again.
 
 A service account is for CI, where no one signs in, and wins over the sign-in where one is set, from the environment or
-from `~/.crossbind.json` under the same name without `CROSSBIND_` (`crossbind config set GOOGLE_PLAY_SERVICE_ACCOUNT …`):
+from `~/.crossbind/config.json` under the same name without `CROSSBIND_` (`crossbind config set GOOGLE_PLAY_SERVICE_ACCOUNT …`):
 
 - `CROSSBIND_GOOGLE_PLAY_SERVICE_ACCOUNT`: The service account's e-mail. Your own gcloud login buys an hour's token of
   it at each upload, so no key of it exists anywhere.
@@ -1750,7 +1750,7 @@ On a terminal, the upload asks for what is missing and sets it up:
   `crossbind.config.js` once you say yes; new reasons build the app again. One bundle id both stores take, letters and
   digits in dot-separated parts, serves both. The encryption answer is a legal statement, so it takes y or n alone, and
   a config that sets `app.privacy` already gets the whole of it named to set by hand.
-- the team: one of those the accounts Xcode is signed in to have, or one you type, which `~/.crossbind.json` keeps as
+- the team: one of those the accounts Xcode is signed in to have, or one you type, which `~/.crossbind/config.json` keeps as
   `XCODE_DEVELOPMENT_TEAM`.
 - what only Xcode or Apple's sites do: signing in to Xcode again, accepting a new Program License Agreement or creating
   the app. A failed upload names it, opens the page where crossbind knows it, and tries again when you press Enter,
@@ -1978,7 +1978,7 @@ Partner Center's API takes an Entra ID application its account has with the Mana
 settings › User management › Microsoft Entra applications adds one, shows its tenant and client ids and makes a key,
 which expires as it says. An upload takes them from `CROSSBIND_MICROSOFT_STORE_TENANT_ID`,
 `CROSSBIND_MICROSOFT_STORE_CLIENT_ID` and `CROSSBIND_MICROSOFT_STORE_CLIENT_SECRET`, else asks a terminal for them once,
-keeping the ids in `~/.crossbind.json` and the key in the system keychain.
+keeping the ids in `~/.crossbind/config.json` and the key in the system keychain.
 
 ### The Microsoft Store listing
 
@@ -2110,7 +2110,7 @@ jobs:
       - run: npm ci
       - uses: actions/cache@v6
         with:
-          path: ~/.crossbind/hermes
+          path: ~/.crossbind/cache/hermes
           key: hermes-${{ hashFiles('package-lock.json') }}
       - run: npx crossbind app upload -p ios
         env:
@@ -2129,7 +2129,7 @@ on any runner, with no upload key, Xcode or Docker.
 ## Hermes
 
 The host runs React Native's Hermes, release `250829098.0.17`, on every platform. For macOS and iOS the first build
-downloads the release for Apple platforms from Maven Central into `~/.crossbind/hermes/` and checks it against the
+downloads the release for Apple platforms from Maven Central into `~/.crossbind/cache/hermes/` and checks it against the
 sha256 crossbind pins. Android, Linux and Windows apps take it from the image they build in. The android-app image
 carries the same release's `hermes-android` AAR, whose headers the host compiles against and whose `libhermesvm.so`
 Gradle packages, and the release's `hermesc`, which compiles the host bundle.

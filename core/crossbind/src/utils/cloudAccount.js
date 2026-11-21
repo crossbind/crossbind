@@ -12,7 +12,7 @@ const URL_VARIABLE = 'CROSSBIND_CLOUD_URL';
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 export function cloudUrl(system, env = process.env) {
-    const from = env[URL_VARIABLE] ? `$${URL_VARIABLE}` : 'CLOUD_URL in ~/.crossbind.json';
+    const from = env[URL_VARIABLE] ? `$${URL_VARIABLE}` : 'CLOUD_URL in ~/.crossbind/config.json';
     const url = env[URL_VARIABLE] || system?.CLOUD_URL || DEFAULT_CLOUD_URL;
     const parsed = URL.parse(url);
     if (!['https:', 'http:'].includes(parsed?.protocol)) throw new Error(`crossbind: ${from} is ${JSON.stringify(url)}, not an https address.`);

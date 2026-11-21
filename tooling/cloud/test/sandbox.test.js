@@ -6,7 +6,7 @@ const spec = {
     workDir: '/srv/playground/work',
     readOnly: ['/usr', '/emsdk'],
     overlays: ['/emsdk/upstream/emscripten/cache'],
-    files: { '/tmp/home/.crossbind.json': '/opt/playground/home/.crossbind.json' },
+    files: { '/tmp/home/.crossbind/config.json': '/opt/playground/home/.crossbind/config.json' },
     masks: ['/proc/cmdline'],
     seccompFd: 3,
     env: { PATH: '/usr/bin', HOME: '/tmp/home' },
@@ -39,9 +39,9 @@ test('writes only to the workspace and its own size-limited /tmp, and reads only
     const argv = sandboxArgv(spec);
 
     assert.deepEqual(valuesOf(argv, '--bind'), ['/srv/playground/work']);
-    assert.deepEqual(valuesOf(argv, '--ro-bind'), ['/usr', '/emsdk', '/dev/null', '/opt/playground/home/.crossbind.json']);
+    assert.deepEqual(valuesOf(argv, '--ro-bind'), ['/usr', '/emsdk', '/dev/null', '/opt/playground/home/.crossbind/config.json']);
     assert.equal(argv[argv.indexOf('--tmpfs') - 2], '--size');
-    assert.ok(argv.indexOf('--tmpfs') < argv.indexOf('/opt/playground/home/.crossbind.json'), 'the config is mounted over the fresh /tmp');
+    assert.ok(argv.indexOf('--tmpfs') < argv.indexOf('/opt/playground/home/.crossbind/config.json'), 'the config is mounted over the fresh /tmp');
     assert.deepEqual(argv.slice(argv.lastIndexOf('--') + 1), ['node', 'build.js']);
 });
 

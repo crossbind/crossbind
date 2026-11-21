@@ -43,8 +43,8 @@ const TOOLCHAIN_ENV = Object.freeze({
 // The store's two halves where crossbind keeps them under HOME (runCargo.js cargoHome, runPackageSource.js sourceRoot under
 // LOCAL). Both are written to even when nothing new is built, so each compile gets a throwaway layer over them.
 const storesOf = (paths) => [
-    { from: `${paths.store}/cargo`, to: '/tmp/home/.crossbind/cargo' },
-    { from: `${paths.store}/conan`, to: '/tmp/home/.crossbind/conan-local' },
+    { from: `${paths.store}/cargo`, to: '/tmp/home/.crossbind/cache/cargo' },
+    { from: `${paths.store}/conan`, to: '/tmp/home/.crossbind/cache/conan-local' },
 ];
 
 // Kernel files of /proc a compile has no use for, such as the microVM's boot command line.
@@ -67,7 +67,7 @@ export function compileSandboxArgv(paths, command, limits = LIMITS) {
         readOnly: ['/usr', '/etc/alternatives', '/emsdk', '/opt/crossbind/rust', '/opt/conan', paths.cli],
         // emcc takes a lock in its cache even for files it already has.
         overlays: [EM_CACHE],
-        files: { '/tmp/home/.crossbind.json': `${paths.home}/.crossbind.json` },
+        files: { '/tmp/home/.crossbind/config.json': `${paths.home}/.crossbind/config.json` },
         stores: storesOf(paths),
         masks: PROC_MASKS.filter((file) => fs.existsSync(file)),
         seccompFd: SANDBOX_SECCOMP_FD,

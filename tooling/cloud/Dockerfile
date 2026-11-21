@@ -13,8 +13,8 @@ RUN apt-get update \
 # crossbind from this repository with the dependencies its lockfile pins (scripts/build-image.mjs), so the CLI and
 # the toolchain image it pins always match. Nothing is fetched or run.
 COPY crossbind /opt/playground/cli/node_modules/crossbind
-RUN mkdir -p /opt/playground/home /srv/playground \
-    && printf '{"RUNNER":"LOCAL"}' > /opt/playground/home/.crossbind.json \
+RUN mkdir -p /opt/playground/home/.crossbind /srv/playground \
+    && printf '{"RUNNER":"LOCAL"}' > /opt/playground/home/.crossbind/config.json \
     && chown crossbind:crossbind /srv/playground
 
 COPY compiler /opt/playground/compiler
@@ -28,15 +28,15 @@ COPY compiler /opt/playground/compiler
 RUN runuser -u crossbind -- sh -ec ' \
         cp -R /opt/playground/compiler/template /srv/playground/work; \
         node /opt/playground/compiler/warm.js /srv/playground/work; \
-        mkdir -p /tmp/home; \
-        cp /opt/playground/home/.crossbind.json /tmp/home/; \
+        mkdir -p /tmp/home/.crossbind; \
+        cp /opt/playground/home/.crossbind/config.json /tmp/home/.crossbind/; \
         cd /srv/playground/work; \
         HOME=/tmp/home node /opt/playground/cli/node_modules/crossbind/src/bin.js build -p wasm -a wasm32 -r st -e browser -b debug --bind-imports; \
         diff -u /opt/playground/compiler/template/conan.lock conan.lock; \
         diff -u /opt/playground/compiler/template/crossbind.cargo.lock crossbind.cargo.lock; \
         mkdir /srv/playground/store; \
-        mv /tmp/home/.crossbind/cargo /srv/playground/store/cargo; \
-        mv /tmp/home/.crossbind/conan-local /srv/playground/store/conan' \
+        mv /tmp/home/.crossbind/cache/cargo /srv/playground/store/cargo; \
+        mv /tmp/home/.crossbind/cache/conan-local /srv/playground/store/conan' \
     && rm -rf /srv/playground/template \
     && cp -dR --preserve=mode,timestamps /srv/playground/work /srv/playground/template \
     && find /srv/playground/template -perm /6000 -type f -exec chmod a-s {} + \

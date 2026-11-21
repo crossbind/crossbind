@@ -17,13 +17,13 @@ crossbind config set RUNNER REMOTE
 crossbind config set REMOTE_URL_WEB http://127.0.0.1:8787
 export CROSSBIND_TOKEN_WEB=<token>
 crossbind build -p wasm
-# crossbind: web steps run on the runner at http://127.0.0.1:8787 (RUNNER=REMOTE from ~/.crossbind.json, address from REMOTE_URL_WEB in ~/.crossbind.json).
+# crossbind: web steps run on the runner at http://127.0.0.1:8787 (RUNNER=REMOTE from ~/.crossbind/config.json, address from REMOTE_URL_WEB in ~/.crossbind/config.json).
 
 crossbind config set RUNNER DOCKER_RUN   # back to the local Docker
 crossbind runner delete
 ```
 
-For a single build, the environment does the same without changing `~/.crossbind.json`:
+For a single build, the environment does the same without changing `~/.crossbind/config.json`:
 
 ```bash
 CROSSBIND_RUNNER=REMOTE CROSSBIND_REMOTE_URL_WEB=http://127.0.0.1:8787 CROSSBIND_TOKEN_WEB=<token> crossbind build -p wasm
@@ -37,16 +37,16 @@ Without a runner of your own, sign in and build on crossbind cloud:
 crossbind login                       # shows a code to enter on crossbind cloud's device page
 crossbind config set RUNNER REMOTE
 crossbind build -p wasm
-# crossbind: web steps run on the runner at https://api.crossbind.dev/runner/web (RUNNER=REMOTE from ~/.crossbind.json, address from crossbind login as octocat).
+# crossbind: web steps run on the runner at https://api.crossbind.dev/runner/web (RUNNER=REMOTE from ~/.crossbind/config.json, address from crossbind login as octocat).
 crossbind usage                       # this month's build minutes, by image
 ```
 
-- Under `REMOTE`, a machine that names no runner address (no `REMOTE_URL` or `REMOTE_URL_<IMAGE>`, in `~/.crossbind.json` or the environment) builds every image on crossbind cloud once signed in. Naming any runner keeps every image off the cloud, so your sources go only where you send them. Every image has a cloud runner: web, android, linux and windows.
+- Under `REMOTE`, a machine that names no runner address (no `REMOTE_URL` or `REMOTE_URL_<IMAGE>`, in `~/.crossbind/config.json` or the environment) builds every image on crossbind cloud once signed in. Naming any runner keeps every image off the cloud, so your sources go only where you send them. Every image has a cloud runner: web, android, linux and windows.
 - A signed-in account has 60 build minutes a month, counted while your runner is up: from a build's first step until a minute after its last. An account with no GitHub account linked, one made by signing in with Apple, gets them 30 days after it was made, or as soon as it links a GitHub account on its page. `crossbind usage` shows them by image; they reset on the 1st (UTC). crossbind cloud also caps everyone's time together, per day and per month. When your minutes or a cap run out, steps stop with a message that says when time comes back; `CROSSBIND_RUNNER=DOCKER_RUN` builds in the local Docker meanwhile.
 - Each account's runner of each image is a Firecracker microVM of its own, stopped and wiped a minute after its last step: nothing passes between accounts, and the first step after a pause uploads its inputs again.
 - A cloud runner reaches crates.io, ConanCenter and GitHub, nothing else, and only to download: a Conan recipe whose sources live on another host fails there, and so does a build step that pushes or uploads.
 - crossbind cloud runs the toolchain images of the current crossbind release; a build from an older crossbind stops with `toolchain mismatch` until crossbind is upgraded.
-- `crossbind login` shows a code to enter on crossbind cloud's device page, [crossbind.dev/device](https://crossbind.dev/device/), where you sign in with GitHub or with Apple: the page says what asked and from which country, and once you approve, it shows a number that you type at the terminal, which gets one try. So it needs a terminal. Neither GitHub nor Apple is asked for a permission, and GitHub accounts younger than 30 days are turned away. Its token is kept for that cloud address in `~/.crossbind/credentials.json`, readable by you only, and stops working after 90 days unused. `crossbind logout` revokes it, `--all` the token of every machine signed in to the account, and signs every browser out of it. `CLOUD_URL` in `~/.crossbind.json`, or `CROSSBIND_CLOUD_URL`, names another cloud.
+- `crossbind login` shows a code to enter on crossbind cloud's device page, [crossbind.dev/device](https://crossbind.dev/device/), where you sign in with GitHub or with Apple: the page says what asked and from which country, and once you approve, it shows a number that you type at the terminal, which gets one try. So it needs a terminal. Neither GitHub nor Apple is asked for a permission, and GitHub accounts younger than 30 days are turned away. Its token is kept for that cloud address in `~/.crossbind/credentials.json`, readable by you only, and stops working after 90 days unused. `crossbind logout` revokes it, `--all` the token of every machine signed in to the account, and signs every browser out of it. `CLOUD_URL` in `~/.crossbind/config.json`, or `CROSSBIND_CLOUD_URL`, names another cloud.
 - crossbind cloud keeps your GitHub id and name, or Apple's id for you, when you signed in, your tokens' hashes and how long your runners were up; no email, and none of your sources once the runner stops. `crossbind account delete --yes` deletes the account and signs out every machine; [crossbind.dev/privacy](https://crossbind.dev/privacy/) says what stays and for how long. The account's page, [crossbind.dev/login](https://crossbind.dev/login/), signs in with GitHub or with Apple, links one to the other and unlinks either, lists the machines signed in, signs one out or every one at once, and deletes the account.
 
 `runner start` runs a runner in the local Docker: to try it out, or to make one machine the build machine of others (`--host 0.0.0.0`, `--port`, `--token`; the token defaults to `$CROSSBIND_RUNNER_TOKEN`, else a new one). `--role android|linux|windows` starts the other images, on ports 8788, 8789 and 8790, so the runners one build needs fit on one machine. Its container is `crossbind-local-runner-<role>`; `runner delete` removes it, and also one an older crossbind named `crossbind-runner-<role>`. To run a runner elsewhere, deploy it.
@@ -80,9 +80,9 @@ Fly app names are global, so the generated name carries a random part, which als
 
 ## Choosing the runner
 
-`RUNNER` in `~/.crossbind.json` decides where every toolchain step runs: `DOCKER_RUN` (the default), `DOCKER_EXEC`, `LOCAL` or `REMOTE`. The `CROSSBIND_RUNNER` environment variable overrides it, for CI and single builds. Only `REMOTE` sends steps to a runner; under the other three, runner addresses are ignored.
+`RUNNER` in `~/.crossbind/config.json` decides where every toolchain step runs: `DOCKER_RUN` (the default), `DOCKER_EXEC`, `LOCAL` or `REMOTE`. The `CROSSBIND_RUNNER` environment variable overrides it, for CI and single builds. Only `REMOTE` sends steps to a runner; under the other three, runner addresses are ignored.
 
-Under `REMOTE`, each image has its own address, and an image's own address wins over the shared one. Addresses are keys of `~/.crossbind.json` (`crossbind config set`), each overridden by the variable of the same name with a `CROSSBIND_` prefix (`CROSSBIND_REMOTE_URL_WEB`). Tokens are secrets and stay out of the file: each comes only from the variable paired with its address, so a shared token never reaches the runner of another image:
+Under `REMOTE`, each image has its own address, and an image's own address wins over the shared one. Addresses are keys of `~/.crossbind/config.json` (`crossbind config set`), each overridden by the variable of the same name with a `CROSSBIND_` prefix (`CROSSBIND_REMOTE_URL_WEB`). Tokens are secrets and stay out of the file: each comes only from the variable paired with its address, so a shared token never reaches the runner of another image:
 
 | Address | Token | Steps it sends |
 |---|---|---|
@@ -113,13 +113,11 @@ Each step is its own request, made only when crossbind runs the step; a step it 
 - **Up:** the folders the step reads below `paths.base`: native sources and headers, the build cache (`.crossbind`), the output folder, the dependencies' prebuilt and header folders, crossbind's assets, and any file the command line names (with the package that holds it). JavaScript and TypeScript files, credential files (`.env`, `.env.*`, `.npmrc`, `.yarnrc`, `.yarnrc.yml`, `.netrc`), `node_modules` and `.git` inside those folders stay behind, and so does a link that leads out of the base, which a local container would see dangle.
 - **Content-addressed:** the runner keeps every file it receives under its SHA-256 and asks only for what it lacks; an unchanged file never travels twice.
 - **Down:** what the step created or changed in the cache and output folders, checked against its hash; files the step deleted are deleted locally too. Nothing else is written: not outside the output folders the step declared, not into a cargo or Conan store unit the machine already holds, and not through a link that leads out of the project. Cargo `target` folders stay on the runner, and only the release static libraries come back; crate sources and built Conan packages come back into the local cargo home and Conan store, which crossbind reads on the host.
-- The client keeps a hash index per folder under `~/.crossbind/remote-index/`, so unchanged files are not rehashed. Deleting it costs one rehash.
+- The client keeps a hash index per folder under `~/.crossbind/cache/remote-index/`, so unchanged files are not rehashed. Deleting it costs one rehash.
 
 ## Versions
 
 A runner serves the image digest pinned by the crossbind that started or generated it. A build whose crossbind pins another digest stops with `toolchain mismatch: runner has <image>, build pins <image>`: after upgrading crossbind, `runner delete` and `runner start` again, or rerun `runner init` and redeploy. Images are compared by digest, so a runner pulled through a registry mirror serves builds that pin the release digest.
-
-Releases from before `RUNNER=REMOTE` read the same `~/.crossbind.json` and stop with `The runner REMOTE is invalid`. While the machine still builds projects with one of them, choose the runner per build with `CROSSBIND_RUNNER=REMOTE` and keep `RUNNER` out of the file.
 
 ## Security
 

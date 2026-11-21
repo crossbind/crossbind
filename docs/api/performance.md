@@ -62,7 +62,7 @@ therefore relies on that toolchain default instead of passing the deprecated `WA
 | Android API | 33 | CMake flag |
 | iOS deployment | 15.1 | CMake flag |
 | Bitcode | embedded (release) / marker (debug) | iOS only |
-| Emscripten cache | `~/.crossbind/emscripten/` | Docker volume |
+| Emscripten cache | `/emsdk/upstream/emscripten/cache` in the web image | Docker image pin |
 
 ## What's safe to override
 

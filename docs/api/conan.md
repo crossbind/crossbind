@@ -137,9 +137,9 @@ addons on x64 and arm64 Windows.
    Every package is a static library.
 2. ConanCenter publishes no binaries built with these toolchains, so each package builds from
    source the first time, slower in the android image, which runs emulated on Apple silicon. Built
-   packages stay in `~/.crossbind/conan/store`, shared by every project, and any build with the
+   packages stay in `~/.crossbind/cache/conan/store`, shared by every project, and any build with the
    same profile reuses them. Under `RUNNER=LOCAL`,
-   and for iOS and macOS, the store is `~/.crossbind/conan-local/store`, apart from the one
+   and for iOS and macOS, the store is `~/.crossbind/cache/conan-local/store`, apart from the one
    containers write to.
 3. crossbind copies each package to `.crossbind/conan/packages/<package>/dist/prebuilt/<target>/`,
    the layout a port ships, and links it like one. A debug build links the release archives. For
@@ -171,7 +171,7 @@ everything else:
   any other is left out, with a notice.
 - The store itself is shared and writable: a recipe built for one project can change what another
   project later takes from it, as a crate's build script can change cargo's registry cache. Delete
-  `~/.crossbind/conan/store` to build every package again.
+  `~/.crossbind/cache/conan/store` to build every package again.
 - With `RUNNER=DOCKER_EXEC`, conan runs in the long-lived container `crossbind docker create`
   made, which mounts your project for the other build steps.
 - With `RUNNER=REMOTE`, conan runs on the runner of the package's image: the work directory

@@ -29,7 +29,7 @@ describe('chosenRunner', () => {
         expect(chosenRunner(undefined, {})).toBe('DOCKER_RUN');
     });
 
-    test('takes RUNNER from ~/.crossbind.json', () => {
+    test('takes RUNNER from ~/.crossbind/config.json', () => {
         expect(chosenRunner({ RUNNER: 'REMOTE' }, {})).toBe('REMOTE');
     });
 
@@ -40,7 +40,7 @@ describe('chosenRunner', () => {
 
     test('refuses a value that is no runner, naming the setting it came from', () => {
         expect(() => chosenRunner({}, { CROSSBIND_RUNNER: 'docker' })).toThrow(/the runner docker is invalid; CROSSBIND_RUNNER is one of DOCKER_RUN, DOCKER_EXEC, LOCAL, REMOTE/);
-        expect(() => chosenRunner({ RUNNER: 'remote' }, {})).toThrow(/the runner remote is invalid; RUNNER in ~\/\.crossbind\.json is one of/);
+        expect(() => chosenRunner({ RUNNER: 'remote' }, {})).toThrow(/the runner remote is invalid; RUNNER in ~\/\.crossbind\/config\.json is one of/);
         expect(() => chosenRunner({ RUNNER: '' }, {})).toThrow(/the runner {2}is invalid/);
     });
 });
@@ -61,7 +61,7 @@ describe('runnerFor', () => {
         expect(runnerFor('web', system, { CROSSBIND_TOKEN_WEB: 'web-token', CROSSBIND_TOKEN: 'shared-token' })).toEqual({
             runner: 'REMOTE',
             remote: {
-                url: 'https://web.example', from: 'REMOTE_URL_WEB in ~/.crossbind.json', token: 'web-token', tokenVariable: 'CROSSBIND_TOKEN_WEB',
+                url: 'https://web.example', from: 'REMOTE_URL_WEB in ~/.crossbind/config.json', token: 'web-token', tokenVariable: 'CROSSBIND_TOKEN_WEB',
             },
         });
     });
@@ -103,7 +103,7 @@ describe('runnerFor', () => {
 
     test('refuses an address that is not http or https, naming the setting', () => {
         expect(() => runnerFor('web', { RUNNER: 'REMOTE', REMOTE_URL_WEB: 'runner.example:8787' }, {}))
-            .toThrow(/REMOTE_URL_WEB in ~\/\.crossbind\.json is "runner\.example:8787", not an http or https address/);
+            .toThrow(/REMOTE_URL_WEB in ~\/\.crossbind\/config\.json is "runner\.example:8787", not an http or https address/);
         expect(() => runnerFor('web', { RUNNER: 'REMOTE' }, { CROSSBIND_REMOTE_URL: 'not an address' }))
             .toThrow(/\$CROSSBIND_REMOTE_URL is "not an address"/);
     });
@@ -164,7 +164,7 @@ describe('crossbind cloud under REMOTE', () => {
 
         fresh('web', { RUNNER: 'REMOTE' }, {});
 
-        expect(info.mock.calls[0][0]).toBe('crossbind: web steps run on the runner at https://api.crossbind.dev/runner/web (RUNNER=REMOTE from ~/.crossbind.json, address from crossbind login as octocat).');
+        expect(info.mock.calls[0][0]).toBe('crossbind: web steps run on the runner at https://api.crossbind.dev/runner/web (RUNNER=REMOTE from ~/.crossbind/config.json, address from crossbind login as octocat).');
     });
 });
 
@@ -177,7 +177,7 @@ describe('what a REMOTE choice says', () => {
         fresh('web', system, { CROSSBIND_TOKEN_WEB: 't' });
 
         expect(info).toHaveBeenCalledTimes(1);
-        expect(info.mock.calls[0][0]).toBe('crossbind: web steps run on the runner at https://web.example (RUNNER=REMOTE from ~/.crossbind.json, address from REMOTE_URL_WEB in ~/.crossbind.json).');
+        expect(info.mock.calls[0][0]).toBe('crossbind: web steps run on the runner at https://web.example (RUNNER=REMOTE from ~/.crossbind/config.json, address from REMOTE_URL_WEB in ~/.crossbind/config.json).');
     });
 
     test('names $CROSSBIND_RUNNER when the environment chose REMOTE', async () => {

@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import state from '../state/index.js';
+import cacheDir from './cacheDir.js';
 import getOsUserAndGroupId from './getOsUserAndGroupId.js';
 import replaceBasePathForDockerUtil, { DOCKER_BASE } from './replaceBasePathForDocker.js';
 import pullDockerImage, { getDockerImage, getDockerContainerName, imageRoleFor } from './pullDockerImage.js';
@@ -89,7 +90,7 @@ function crateFolders(args) {
 // also the directory bind-mounted into the container, which is why it must not sit inside a
 // project - `pnpm run clear` would otherwise throw away every downloaded crate.
 export function cargoHome() {
-    return path.join(os.homedir(), '.crossbind', 'cargo');
+    return cacheDir('cargo');
 }
 
 // The inverse of the two bind mounts. cargo reports paths as the container sees them, and the
@@ -234,7 +235,7 @@ export default function runCargo(args, { cwd, rustflags = [], panic, capture = f
             mounts: [[DOCKER_BASE, base], [CONTAINER_CARGO_HOME, home]],
             workdir: CONTAINER_CWD,
             hint: createHint(name, base, home, getDockerImage(role, platform)),
-            mountNote: 'It predates the cargo mount, so recreate it.',
+            mountNote: `It was made before crossbind mounted this folder there: remove it with \`docker rm -f ${name}\` and create it again.`,
         });
         runnerArgs = ['exec', ...envArgs, '--user', getOsUserAndGroupId(), '--workdir', CONTAINER_CWD, name];
     } else {

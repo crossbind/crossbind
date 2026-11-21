@@ -176,7 +176,7 @@ export default {
         },
         {
             type: 'p',
-            text: 'Machine settings (runner, Xcode team, local wasi-sdk) live in `~/.crossbind.json`, never in the project config. When more than one layer can change a setting, use the highest one: see the [override hierarchy](/guide/architecture/#overrides).',
+            text: 'Machine settings (runner, Xcode team, local wasi-sdk) live in `~/.crossbind/config.json`, never in the project config. When more than one layer can change a setting, use the highest one: see the [override hierarchy](/guide/architecture/#overrides).',
         },
 
         { type: 'h2', id: 'runtime', text: 'Not in this file: runtime options' },

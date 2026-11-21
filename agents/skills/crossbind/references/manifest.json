@@ -24,17 +24,17 @@
     {
       "source": "docs/api/app.md",
       "output": "api/app.md",
-      "sha256": "91bb4bdf3a9dbb1cace01c18ed05220d6f2c1d06feae96e63a0d45d67dc31050"
+      "sha256": "0a4882d480feed9d1827c008484f13b6d83baa8380f279c1adf162ab93197218"
     },
     {
       "source": "docs/api/build-state.md",
       "output": "api/build-state.md",
-      "sha256": "2df463846a9efaf855ecaa8d0f7c19b9047c8ecbc1fed44fae97893e906d92a7"
+      "sha256": "8c953cea96a1727efc169e4705dac09759f3da922bf2e1961232cdf3ca30ed43"
     },
     {
       "source": "docs/api/conan.md",
       "output": "api/conan.md",
-      "sha256": "5748af490a5109a4cd6a794557c5bf05c80989bcec5a5a100a6322de5da4aaaa"
+      "sha256": "c59b09297efb34534c45c25376815df9180070bea9da55e3312b9305113e800a"
     },
     {
       "source": "docs/api/cpp-binding-rules.md",
@@ -49,12 +49,12 @@
     {
       "source": "docs/api/crossbind-config.md",
       "output": "api/crossbind-config.md",
-      "sha256": "47369dfb8e52bb57a4dbcd9b8b9898baaa97a37636b555eb9222b28a2732d1f7"
+      "sha256": "dc4ee2356c9b0cee7b644d9cca4b1586346e6005b17cfce8d5a0559aea169c9e"
     },
     {
       "source": "docs/api/extensions.md",
       "output": "api/extensions.md",
-      "sha256": "9d4eb04273d280221a06c34afd7282122b55b6062077a370ce6614fd3a29e623"
+      "sha256": "0b37dfe0ec863f43a26f9dc7b9e57e589855eb4a115a2aa2b9b3b7975007a917"
     },
     {
       "source": "docs/api/filesystem.md",
@@ -79,17 +79,17 @@
     {
       "source": "docs/api/overrides.md",
       "output": "api/overrides.md",
-      "sha256": "b0bda8d7aac6b22535062db4e12f8b8bbb0c3d12983bbaa3c6293704f3fc1e26"
+      "sha256": "d98651ee1ebe974cb9a25a387598be0d5c0a84ad7b12e6544d059ff5e8be670f"
     },
     {
       "source": "docs/api/performance.md",
       "output": "api/performance.md",
-      "sha256": "d4718187ea0e5ddf05adf085e534e6bde8d2e25d12cbb5a58f09f12c7c2d28d1"
+      "sha256": "62ec451f3f2b8a9a50f0c415ca52542fba90243e86ab658b12eb013506933063"
     },
     {
       "source": "docs/api/remote-runner.md",
       "output": "api/remote-runner.md",
-      "sha256": "dc89421beecfb0df6002f3f687b61e14a3386c7f6f0bfb479fe8fc71c08d8492"
+      "sha256": "5c74b05121bd83639edb81519e95bd76b73f3ee117afb94e6805ec9c474668b5"
     },
     {
       "source": "docs/api/rust.md",
@@ -114,7 +114,7 @@
     {
       "source": "docs/api/wasi.md",
       "output": "api/wasi.md",
-      "sha256": "e5461c6f3e20ea54947fc8f3da7f14e9fc1206f8c3bc4bd784db80f2a94db03e"
+      "sha256": "4ad093af70c42d11039420206d33c1ea2e326feff6ed18caccb78b33d5933767"
     },
     {
       "source": "docs/playbooks/integration/README.md",

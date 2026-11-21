@@ -4,6 +4,7 @@ import {
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import upath from 'upath';
 
 vi.mock('node:child_process', () => ({ spawnSync: vi.fn(), execFileSync: vi.fn() }));
 vi.mock('../src/utils/logger.js', () => ({ default: { info: vi.fn() } }));
@@ -20,7 +21,7 @@ const remoteConfig = () => ({ paths: { base: '/repo' }, system: { RUNNER: 'REMOT
 const XCODE = '/Applications/Xcode.app/Contents/Developer';
 
 let scratch;
-const crossbindDir = () => path.join(scratch, 'home', '.crossbind');
+const cacheDir = () => upath.join(scratch, 'home', '.crossbind', 'cache');
 
 async function importFresh() {
     vi.resetModules();
@@ -106,10 +107,9 @@ describe("a package source's work directory", () => {
         const work = mod.createSourceWork('conan', 'DOCKER_RUN');
 
         const seen = `/var/cache/crossbind/conan/work/${path.basename(work.dir)}`;
-        expect(path.dirname(work.dir)).toBe(path.join(crossbindDir(), 'conan', 'work'));
-        expect(work).toMatchObject({
-            name: 'conan', runner: 'DOCKER_RUN', root: path.join(crossbindDir(), 'conan'), store: path.join(crossbindDir(), 'conan', 'store'), toolDir: seen,
-        });
+        expect(upath.dirname(work.dir)).toBe(upath.join(cacheDir(), 'conan', 'work'));
+        expect(work).toMatchObject({ name: 'conan', runner: 'DOCKER_RUN', toolDir: seen });
+        expect([work.root, work.store].map(upath.toUnix)).toEqual([upath.join(cacheDir(), 'conan'), upath.join(cacheDir(), 'conan', 'store')]);
         expect(work.toolPath()).toBe(seen);
         expect(work.toolPath('host.profile')).toBe(`${seen}/host.profile`);
         expect(work.toolPath('home', 'global.conf')).toBe(`${seen}/home/global.conf`);
@@ -172,7 +172,7 @@ describe("a package source's work directory", () => {
 
         const work = mod.createSourceWork('conan', 'LOCAL');
 
-        expect(work.store).toBe(path.join(crossbindDir(), 'conan-local', 'store'));
+        expect(upath.toUnix(work.store)).toBe(upath.join(cacheDir(), 'conan-local', 'store'));
         expect(work.store).not.toBe(mod.createSourceWork('conan', 'DOCKER_RUN').store);
         expect(work.storePath()).toBe(work.store);
         expect(work.storePath('p', 'zlib1')).toBe(path.join(work.store, 'p', 'zlib1'));
@@ -185,13 +185,13 @@ describe("a package source's work directory", () => {
 
         const work = mod.createSourceWork('vcpkg', 'DOCKER_RUN');
 
-        expect(mod.sourceRoot('vcpkg')).toBe(path.join(crossbindDir(), 'vcpkg'));
-        expect(mod.sourceRoot('vcpkg', 'LOCAL')).toBe(path.join(crossbindDir(), 'vcpkg-local'));
+        expect(upath.toUnix(mod.sourceRoot('vcpkg'))).toBe(upath.join(cacheDir(), 'vcpkg'));
+        expect(upath.toUnix(mod.sourceRoot('vcpkg', 'LOCAL'))).toBe(upath.join(cacheDir(), 'vcpkg-local'));
         expect(mod.containerRootOf('vcpkg')).toBe('/var/cache/crossbind/vcpkg');
-        expect(work.root).toBe(path.join(crossbindDir(), 'vcpkg'));
+        expect(upath.toUnix(work.root)).toBe(upath.join(cacheDir(), 'vcpkg'));
         expect(work.toolDir).toBe(`/var/cache/crossbind/vcpkg/work/${path.basename(work.dir)}`);
         expect(work.storePath()).toBe('/var/cache/crossbind/vcpkg/store');
-        expect(fs.existsSync(path.join(crossbindDir(), 'conan'))).toBe(false);
+        expect(fs.existsSync(upath.join(cacheDir(), 'conan'))).toBe(false);
     });
 });
 
@@ -203,7 +203,7 @@ describe("a package source's probe directory", () => {
         fs.writeFileSync(path.join(probe.dir, '.conanrc'), 'conan_home=./home\n');
         mod.clearSourceWork('conan', 'LOCAL');
 
-        expect(probe.dir).toBe(path.join(crossbindDir(), 'conan-local', 'probe'));
+        expect(upath.toUnix(probe.dir)).toBe(upath.join(cacheDir(), 'conan-local', 'probe'));
         expect(probe).toMatchObject({ name: 'conan', runner: 'LOCAL', toolDir: probe.dir });
         expect(probe.toolPath('home')).toBe(path.join(probe.dir, 'home'));
         expect(mod.createSourceProbe('conan', 'LOCAL').dir).toBe(probe.dir);
@@ -216,8 +216,8 @@ describe("a package source's probe directory", () => {
 
         const probe = mod.createSourceProbe('conan', 'DOCKER_RUN');
 
-        expect(probe.dir).toBe(path.join(crossbindDir(), 'conan', 'probe'));
-        expect(fs.existsSync(path.join(crossbindDir(), 'conan'))).toBe(false);
+        expect(upath.toUnix(probe.dir)).toBe(upath.join(cacheDir(), 'conan', 'probe'));
+        expect(fs.existsSync(upath.join(cacheDir(), 'conan'))).toBe(false);
     });
 
     test("a tool asked there gets the host's allowlisted environment and no target's tools on its PATH", async () => {
@@ -597,7 +597,7 @@ describe("a package source's tool in docker", () => {
 
     test("DOCKER_EXEC asks the container for the root of the source it runs, by that source's name", async () => {
         const { mod, execFileSync } = await importFresh();
-        inspectReturning(execFileSync, [{ Destination: '/var/cache/crossbind/conan', Source: path.join(crossbindDir(), 'conan') }]);
+        inspectReturning(execFileSync, [{ Destination: '/var/cache/crossbind/conan', Source: upath.join(cacheDir(), 'conan') }]);
         const work = mod.createSourceWork('vcpkg', 'DOCKER_EXEC');
 
         expect(() => mod.default(['vcpkg', 'install'], {

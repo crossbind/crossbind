@@ -1,17 +1,17 @@
 // One toolchain step on the remote runner: send what changed below each mount's input roots, stream the
 // step's output, write the files it produced back through the mounts, exit with its exit code.
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { walk, hashIndex, presentUnits } from '../runner/files.js';
 import { isHash } from '../runner/blobs.js';
+import cacheDir from './cacheDir.js';
 import { getContentHash } from './hash.js';
 import { outputTarget, writeOutputFile, removeOutputFile } from './remoteOutputs.js';
 import { request, expectOk, uploadMissing } from './remoteUpload.js';
 
-const INDEX_DIR = path.join(os.homedir(), '.crossbind', 'remote-index');
+const indexDir = () => cacheDir('remote-index');
 
-const indexFileOf = (mount) => path.join(INDEX_DIR, `${getContentHash(`${mount.host}\n${mount.container}`).slice(0, 16)}.json`);
+const indexFileOf = (mount) => path.join(indexDir(), `${getContentHash(`${mount.host}\n${mount.container}`).slice(0, 16)}.json`);
 
 function loadIndex(mount) {
     try {
@@ -22,7 +22,7 @@ function loadIndex(mount) {
 }
 
 function saveIndex(mount, index) {
-    fs.mkdirSync(INDEX_DIR, { recursive: true });
+    fs.mkdirSync(indexDir(), { recursive: true });
     fs.writeFileSync(indexFileOf(mount), JSON.stringify(Object.fromEntries(index)));
 }
 

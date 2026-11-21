@@ -34,7 +34,7 @@ jobs:
       - run: npm ci
       - uses: actions/cache@v6
         with:
-          path: ~/.crossbind/hermes
+          path: ~/.crossbind/cache/hermes
           key: hermes-\${{ hashFiles('package-lock.json') }}
       - run: npx crossbind app upload -p ios
         env:
@@ -80,7 +80,7 @@ export default {
         },
         {
             type: 'p',
-            text: "In a terminal, the upload asks for whatever is missing: the bundle id, the icon, `app.encryption` and the reasons of `app.privacy`, which it writes into `crossbind.config.js` once you agree, and the team, which `~/.crossbind.json` keeps. When a step needs Xcode or Apple's website, such as signing in to Xcode again, accepting a new agreement or creating the app, the upload opens that page and retries the upload when you press Enter, without building again. In CI it asks nothing: it lists everything missing and stops.",
+            text: "In a terminal, the upload asks for whatever is missing: the bundle id, the icon, `app.encryption` and the reasons of `app.privacy`, which it writes into `crossbind.config.js` once you agree, and the team, which `~/.crossbind/config.json` keeps. When a step needs Xcode or Apple's website, such as signing in to Xcode again, accepting a new agreement or creating the app, the upload opens that page and retries the upload when you press Enter, without building again. In CI it asks nothing: it lists everything missing and stops.",
         },
 
         { type: 'h2', id: 'encryption-privacy', text: 'Encryption and privacy' },
@@ -162,7 +162,7 @@ export default {
         { type: 'h2', id: 'ci', text: 'From CI' },
         {
             type: 'p',
-            text: "CI asks nothing, so upload once on your own machine first: it writes the app's settings into `crossbind.config.js`, which you commit. Set `app.team` there yourself too, as the team the upload asked for stays in this machine's `~/.crossbind.json`.",
+            text: "CI asks nothing, so upload once on your own machine first: it writes the app's settings into `crossbind.config.js`, which you commit. Set `app.team` there yourself too, as the team the upload asked for stays in this machine's `~/.crossbind/config.json`.",
         },
         {
             type: 'p',

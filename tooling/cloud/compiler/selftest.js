@@ -43,9 +43,9 @@ const PROBES = [
     {
         name: 'the package store and the Rust toolchain are there, and writes to the store vanish with the sandbox',
         script: [
-            'test -d /tmp/home/.crossbind/cargo/registry/src && test -d /tmp/home/.crossbind/conan-local/store',
+            'test -d /tmp/home/.crossbind/cache/cargo/registry/src && test -d /tmp/home/.crossbind/cache/conan-local/store',
             'test -x /usr/local/cargo/bin/cargo && test -d /opt/crossbind/rust/current',
-            'touch /tmp/home/.crossbind/cargo/selftest-probe && printf x >> /tmp/home/.crossbind/conan-local/store/cache.sqlite3',
+            'touch /tmp/home/.crossbind/cache/cargo/selftest-probe && printf x >> /tmp/home/.crossbind/cache/conan-local/store/cache.sqlite3',
         ].join(' && '),
         succeeds: true,
         before: () => { storeDb.size = storeDbSize(); },

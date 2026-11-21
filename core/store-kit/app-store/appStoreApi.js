@@ -32,7 +32,7 @@ function apiError(status, method, route, body, { keyId }) {
     const said = saidIn(errors);
     let text = `crossbind: App Store Connect answered ${method} ${route} with ${status}${said ? `: ${said}` : '.'}`;
     if (status === 401) {
-        text = `crossbind: App Store Connect refused the API key ${keyId}${said ? ` (${said})` : ''}: the .p8 file that CROSSBIND_APPLE_API_KEY or ~/.crossbind.json's APPLE_API_KEY names is not that key's, the key ID or the issuer ID is not its own, it was revoked, or this machine's clock is off.`;
+        text = `crossbind: App Store Connect refused the API key ${keyId}${said ? ` (${said})` : ''}: the .p8 file that CROSSBIND_APPLE_API_KEY or ~/.crossbind/config.json's APPLE_API_KEY names is not that key's, the key ID or the issuer ID is not its own, it was revoked, or this machine's clock is off.`;
     } else if (status === 403 && errors.some(({ code }) => /AGREEMENT/i.test(code ?? ''))) {
         text += "\ncrossbind: the team's Account Holder accepts Apple's latest agreements in App Store Connect, under Business.";
     } else if (status === 403) {

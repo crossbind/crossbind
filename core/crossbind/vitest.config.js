@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
@@ -20,6 +23,9 @@ export default defineConfig({
         // A developer's own runner settings must not decide where the tested steps run, and neither must their
         // crossbind login: no one signs in to a cloud at this address.
         env: {
+            // Nor their home: crossbind keeps this machine's files in ~/.crossbind and deletes the caches earlier releases
+            // left there, so the suite gets a home of its own.
+            HOME: fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-test-home-')),
             CROSSBIND_RUNNER: '',
             CROSSBIND_REMOTE_URL: '',
             CROSSBIND_REMOTE_URL_WEB: '',

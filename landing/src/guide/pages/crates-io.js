@@ -90,7 +90,7 @@ const digest = xxh364(new TextEncoder().encode('crossbind'));`,
         { type: 'h2', id: 'platforms', text: 'Where it builds' },
         {
             type: 'p',
-            text: 'Crates download into `~/.crossbind/cargo`, which every project shares, and build for:',
+            text: 'Crates download into `~/.crossbind/cache/cargo`, which every project shares, and build for:',
         },
         {
             type: 'ul',

@@ -21,7 +21,7 @@ const NO_APP_ID = 'crossbind: App Store Connect knows an app by its bundle id, a
 const NO_TEAM = "crossbind: App Store Connect takes uploads from an Apple Developer Program team, which neither app.team in crossbind.config.js nor this machine's XCODE_DEVELOPMENT_TEAM names: set either to its id, which developer.apple.com/account shows under Membership details.";
 const NO_CATEGORY = 'crossbind: the Mac App Store takes no app without its category: set app.category in crossbind.config.js.';
 const NO_ENCRYPTION = 'crossbind: app.encryption is not set, so App Store Connect asks whether this build uses encryption before TestFlight hands it out; set it in crossbind.config.js to answer for every build.';
-// Where an App Store Connect API key comes from: this machine's ~/.crossbind.json, or the environment, as in CI.
+// Where an App Store Connect API key comes from: this machine's ~/.crossbind/config.json, or the environment, as in CI.
 const KEY_SETTINGS = 'crossbind config set APPLE_API_KEY <its .p8 file> and APPLE_API_ISSUER <its issuer ID>, or CROSSBIND_APPLE_API_KEY, CROSSBIND_APPLE_API_KEY_ID and CROSSBIND_APPLE_API_ISSUER, as in CI';
 const NO_KEY_TO_RELEASE = `crossbind: crossbind app release hands the version to App Review through App Store Connect's API, which takes an API key: set one with ${KEY_SETTINGS}, as app.md's Publishing says.`;
 const NO_KEY_TO_SEND = `crossbind: crossbind app store --send sends the page through App Store Connect's API, which takes an API key: set one with ${KEY_SETTINGS}, as app.md's Publishing says.`;
@@ -71,8 +71,8 @@ async function askTeam(api) {
         }
     }
     api.settings.set({ XCODE_DEVELOPMENT_TEAM: id });
-    if (api.app.team !== id) throw new Error(`crossbind: ~/.crossbind.json did not take XCODE_DEVELOPMENT_TEAM: set app.team: '${id}' in crossbind.config.js.`);
-    api.log(`crossbind: ~/.crossbind.json keeps ${id} as XCODE_DEVELOPMENT_TEAM.`);
+    if (api.app.team !== id) throw new Error(`crossbind: ~/.crossbind/config.json did not take XCODE_DEVELOPMENT_TEAM: set app.team: '${id}' in crossbind.config.js.`);
+    api.log(`crossbind: ~/.crossbind/config.json keeps ${id} as XCODE_DEVELOPMENT_TEAM.`);
 }
 
 // The minimum macOS release of the store's build: the app's own where it is later.

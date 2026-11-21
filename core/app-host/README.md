@@ -85,7 +85,7 @@ defaults and current limits (macOS, Linux, Windows, iOS and Android for now).
 - `third_party/webview2/` — the license of the WebView2 SDK (BSD-3-Clause), whose headers crossbind's windows image
   carries for a Windows host.
 
-Hermes itself (MIT) is React Native's published build: on macOS and iOS downloaded once into `~/.crossbind/hermes/`
+Hermes itself (MIT) is React Native's published build: on macOS and iOS downloaded once into `~/.crossbind/cache/hermes/`
 and checked against the sha256 crossbind pins, and on Android carried by crossbind's android-app image. Linux and
 Windows have no published build, so crossbind's linux and windows images carry the same release built from its pinned
 source.

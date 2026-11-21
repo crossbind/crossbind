@@ -44,7 +44,7 @@ export function wasiCxxFlags() {
     return [...WASI_TARGET_FLAGS, ...WASI_COMPILE_DEFINES, '-fwasm-exceptions', ...WASI_EH_CFLAGS];
 }
 
-// The host sdk of a RUNNER=LOCAL build: env override first, then persistent ~/.crossbind.json; null when
+// The host sdk of a RUNNER=LOCAL build: env override first, then persistent ~/.crossbind/config.json; null when
 // unset, and under the other runners, whose builds use the sdk in the image.
 export function resolveWasiSdkPath(system, env = process.env) {
     if (!isLocalRunner(system, env)) return null;

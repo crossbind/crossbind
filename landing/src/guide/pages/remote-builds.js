@@ -12,7 +12,7 @@ export default {
             items: [
                 '**A machine without Docker.** The build runs as usual; only its toolchain steps run elsewhere.',
                 '**One build machine for several people.** `crossbind runner start --host 0.0.0.0` serves the other machines on a network you trust.',
-                '**CI.** Environment variables choose the runner per job, with nothing written to `~/.crossbind.json`.',
+                '**CI.** Environment variables choose the runner per job, with nothing written to `~/.crossbind/config.json`.',
             ],
         },
         {
@@ -101,7 +101,7 @@ crossbind build -p wasm`,
         { type: 'h2', id: 'choosing', text: 'How a build picks its runner' },
         {
             type: 'p',
-            text: '`RUNNER` in `~/.crossbind.json` decides where every toolchain step runs, and the `CROSSBIND_RUNNER` environment variable overrides it for one shell or CI job. `crossbind.config.js` has no runner setting; a project that should always build remotely sets the variables in the script that runs the build.',
+            text: '`RUNNER` in `~/.crossbind/config.json` decides where every toolchain step runs, and the `CROSSBIND_RUNNER` environment variable overrides it for one shell or CI job. `crossbind.config.js` has no runner setting; a project that should always build remotely sets the variables in the script that runs the build.',
         },
         {
             type: 'entries',
@@ -114,7 +114,7 @@ crossbind build -p wasm`,
         },
         {
             type: 'p',
-            text: 'Under `REMOTE` each toolchain image has its own address: a key of `~/.crossbind.json`, overridden by the environment variable of the same name with a `CROSSBIND_` prefix (`CROSSBIND_REMOTE_URL_WEB`). Tokens are secrets and never live in the file: each comes only from the variable paired with its address, so one image\'s token never reaches another image\'s runner.',
+            text: 'Under `REMOTE` each toolchain image has its own address: a key of `~/.crossbind/config.json`, overridden by the environment variable of the same name with a `CROSSBIND_` prefix (`CROSSBIND_REMOTE_URL_WEB`). Tokens are secrets and never live in the file: each comes only from the variable paired with its address, so one image\'s token never reaches another image\'s runner.',
         },
         {
             type: 'table',
@@ -137,7 +137,7 @@ crossbind build -p wasm`,
         },
         {
             type: 'p',
-            text: 'For a single build, the environment does the same without touching `~/.crossbind.json`:',
+            text: 'For a single build, the environment does the same without touching `~/.crossbind/config.json`:',
         },
         {
             type: 'code',

@@ -15,7 +15,7 @@ wasmtime 47+. With `-e http` it builds an **HTTP component** instead, which Spin
 # fastest: build on the host with RUNNER=LOCAL and a local wasi-sdk
 # (>= 34 - the wasm32-wasip3 sysroot is required)
 #   per-run:            CROSSBIND_RUNNER=LOCAL CROSSBIND_WASI_SDK_PATH=/opt/wasi-sdk crossbind build -p wasi -e wasi
-#   ~/.crossbind.json → { "RUNNER": "LOCAL", "WASI_SDK_PATH": "/opt/wasi-sdk" }  (every platform builds on the host then)
+#   ~/.crossbind/config.json → { "RUNNER": "LOCAL", "WASI_SDK_PATH": "/opt/wasi-sdk" }  (every platform builds on the host then)
 
 crossbind build -p wasi -e wasi -b release
 wasmtime run --dir=. .crossbind/build/<name>-wasi-wasm32-st-release.wasm arg1

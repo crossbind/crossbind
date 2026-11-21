@@ -64,11 +64,11 @@ describe('flattenConfigForTable', () => {
 
     test('relativizes absolute paths under base, leaving outside paths absolute', () => {
         const out = flattenConfigForTable(
-            { paths: { native: '/repo/packages/core/native', systemConfig: '/home/u/.crossbind.json' } },
+            { paths: { native: '/repo/packages/core/native', systemConfig: '/home/u/.crossbind/config.json' } },
             { base: '/repo' },
         );
         expect(out['paths.native']).toBe('packages/core/native');
-        expect(out['paths.systemConfig']).toBe('/home/u/.crossbind.json');
+        expect(out['paths.systemConfig']).toBe('/home/u/.crossbind/config.json');
     });
 
     test('relativizes each entry of an absolute-path array (globs)', () => {

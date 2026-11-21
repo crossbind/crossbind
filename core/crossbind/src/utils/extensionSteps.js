@@ -133,7 +133,7 @@ const PACKAGE_SOURCE_KEYS = ['storeUnits', ...PACKAGE_SOURCE_STEPS];
 const SOURCE_NAME = /^[a-z][a-z0-9]*$/;
 const KEPT_SOURCE_NAMES = [
     'cargo', 'node', 'file', 'data', 'http', 'https', 'npm', 'virtual', 'blob', 'bun', 'deno', 'jsr', 'cloudflare', 'workerd',
-    'all', 'android', 'build', 'config', 'deps', 'hermes', 'keys', 'secrets', 'sysroots', 'types',
+    'all', 'android', 'build', 'cache', 'config', 'deps', 'hermes', 'keys', 'secrets', 'sysroots', 'types',
     'con', 'prn', 'aux', 'nul',
 ];
 const STORE_SEGMENT = /^[A-Za-z0-9_-][A-Za-z0-9_.-]*$/;

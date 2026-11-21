@@ -19,7 +19,7 @@ export default {
                 ['`docker`', 'manages the toolchain containers'],
                 ['`runner`', 'starts, removes or scaffolds build runners'],
                 ['`login`, `logout`, `usage`, `account delete`', 'your crossbind cloud account'],
-                ['`config`', 'the machine settings in `~/.crossbind.json`'],
+                ['`config`', 'the machine settings in `~/.crossbind/config.json`'],
             ],
         },
         {
@@ -85,7 +85,7 @@ export default {
             type: 'ul',
             items: [
                 'Each step runs in a container of the pinned toolchain image, or where [Remote builds](/guide/remote-builds/) sends it. `ios` and `darwin` compile with Xcode on the Mac.',
-                'It writes the cache in `.crossbind/`, the output folder (`paths.output`, by default `.crossbind/build`) and shared caches in `~/.crossbind/`.',
+                'It writes the cache in `.crossbind/`, the output folder (`paths.output`, by default `.crossbind/build`) and shared caches in `~/.crossbind/cache/`, which can be deleted whenever no build runs; a `DOCKER_EXEC` container is made again after.',
                 'A project with Conan packages or crates gets `conan.lock` and `crossbind.cargo.lock` next to its config.',
                 'It downloads the crates, Conan packages and sources a build needs.',
             ],
@@ -120,7 +120,7 @@ crossbind app build -p android`,
         },
         {
             type: 'p',
-            text: "**What it touches:** Linux, Windows and Android apps build in the pinned Docker images, so they need `RUNNER=DOCKER_RUN` or `DOCKER_EXEC`. Android's Gradle caches and debug key stay in `~/.crossbind/android/`. An Android app opens through this machine's `adb`, which crossbind does not install. With `--device`, Xcode signs the app for its team with an account Xcode is signed in to, and registers the device with that team.",
+            text: "**What it touches:** Linux, Windows and Android apps build in the pinned Docker images, so they need `RUNNER=DOCKER_RUN` or `DOCKER_EXEC`. Android's Gradle caches stay in `~/.crossbind/cache/android/` and its debug key in `~/.crossbind/android/`. An Android app opens through this machine's `adb`, which crossbind does not install. With `--device`, Xcode signs the app for its team with an account Xcode is signed in to, and registers the device with that team.",
         },
 
         { type: 'h2', id: 'add', text: 'add' },
@@ -234,7 +234,7 @@ crossbind build -p wasm`,
         },
         {
             type: 'p',
-            text: 'They talk to `CLOUD_URL`: `https://api.crossbind.dev` unless `~/.crossbind.json` or `CROSSBIND_CLOUD_URL` names another. Limits, and what the cloud keeps: [Remote builds](/guide/remote-builds/#cloud).',
+            text: 'They talk to `CLOUD_URL`: `https://api.crossbind.dev` unless `~/.crossbind/config.json` or `CROSSBIND_CLOUD_URL` names another. Limits, and what the cloud keeps: [Remote builds](/guide/remote-builds/#cloud).',
         },
 
         { type: 'h2', id: 'config', text: 'config' },
@@ -242,7 +242,7 @@ crossbind build -p wasm`,
             type: 'entries',
             items: [
                 { name: '`config get <key>`', text: 'Prints the value and default of `<key>` and of every key whose name contains it.' },
-                { name: '`config set <key> <value>`', text: 'Sets a key in `~/.crossbind.json`. An unknown key is refused.' },
+                { name: '`config set <key> <value>`', text: 'Sets a key in `~/.crossbind/config.json`. An unknown key is refused.' },
                 { name: '`config delete <key>`', text: 'Removes a key, so its default applies again.' },
                 {
                     name: '`config list [-t all|system|project]`',

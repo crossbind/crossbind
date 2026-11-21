@@ -32,7 +32,7 @@ let scratch;
 let project;
 // crossbind's own sources, loaded again for each test: the conan source keeps what it asked its tool.
 let sources;
-const storeOf = (source) => upath.join(scratch, 'home', '.crossbind', `${source}-local`, 'store');
+const storeOf = (source) => upath.join(scratch, 'home', '.crossbind', 'cache', `${source}-local`, 'store');
 const stageOf = (source) => upath.join(project, '.crossbind', source);
 const stageDir = () => stageOf('conan');
 const pathsOf = () => ({
@@ -319,7 +319,7 @@ describe('installing the declared Conan packages', () => {
     });
 
     test('what a killed run left is cleared by the next install', async () => {
-        const leftover = upath.join(scratch, 'home', '.crossbind', 'conan-local', 'work', 'run-killed');
+        const leftover = upath.join(scratch, 'home', '.crossbind', 'cache', 'conan-local', 'work', 'run-killed');
         fs.mkdirSync(upath.join(leftover, 'output'), { recursive: true });
         const { installPackageSources } = await importFresh();
 

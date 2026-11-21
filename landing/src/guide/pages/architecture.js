@@ -10,7 +10,7 @@ export default {
         {
             type: 'ol',
             items: [
-                '**Config.** `crossbind.config.js` is read and merged with `crossbind.build.js` (packages only) and the machine settings in `~/.crossbind.json`. Dependencies of dependencies come along; if any is multithreaded, the project builds `mt`.',
+                '**Config.** `crossbind.config.js` is read and merged with `crossbind.build.js` (packages only) and the machine settings in `~/.crossbind/config.json`. Dependencies of dependencies come along; if any is multithreaded, the project builds `mt`.',
                 '**Targets.** CLI options narrow the target matrix to the `{platform, arch, runtime, runtimeEnv, buildType}` combinations this machine can build.',
                 '**Library.** Per target, your C++ compiles to a static library with CMake or configure: in Docker for wasm, Android and WASI, through Xcode for iOS.',
                 '**Bridges.** Each imported header becomes a bridge source that registers its bindings; that is what makes classes and functions appear in JavaScript.',
@@ -91,7 +91,7 @@ export default {
                 'Per-target flags and data, declaratively: `targetSpecs[].specs.{cmake.compileOptions, binary.emccFlags, env, data, ignoreLibName, binary.wasiFlags}`.',
                 'Project-wide: `dependencies`, `functions.isEnabled`, `paths.cmake`.',
                 'Package authoring: `crossbind.build.js` hooks - source fetch, patches, build parameters, extra libs.',
-                'Machine-wide: `~/.crossbind.json` (runner, Xcode team, local wasi-sdk).',
+                'Machine-wide: `~/.crossbind/config.json` (runner, Xcode team, local wasi-sdk).',
             ],
         },
         {

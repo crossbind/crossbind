@@ -7,8 +7,8 @@ import {
     PLAY_LISTING, isListed, lackedForNewListing, releaseNotesOf,
 } from './playListing.js';
 
-// Google Play's credentials, which the environment or ~/.crossbind.json names: a service account's e-mail, whose token
-// the user's gcloud login buys with no key, or its JSON key; or, from the environment alone, an access token made
+// Google Play's credentials, which the environment or ~/.crossbind/config.json names: a service account's e-mail, whose
+// token the user's gcloud login buys with no key, or its JSON key; or, from the environment alone, an access token made
 // elsewhere, as CI makes one with no key.
 export const PLAY = { key: 'CROSSBIND_GOOGLE_PLAY_KEY', serviceAccount: 'CROSSBIND_GOOGLE_PLAY_SERVICE_ACCOUNT', token: 'CROSSBIND_GOOGLE_PLAY_TOKEN' };
 export const PLAY_SCOPE = 'https://www.googleapis.com/auth/androidpublisher';
@@ -58,10 +58,10 @@ export function playCredentials(env = process.env, settings = { get: () => undef
     const account = env[PLAY.serviceAccount] || settings.get('GOOGLE_PLAY_SERVICE_ACCOUNT');
     const token = env[PLAY.token];
     if (file && account) {
-        throw new Error(`crossbind: both ${PLAY.key} and ${PLAY.serviceAccount} are set, or their keys in ~/.crossbind.json: set one, the service account's e-mail to use your gcloud login, or its JSON key.`);
+        throw new Error(`crossbind: both ${PLAY.key} and ${PLAY.serviceAccount} are set, or their keys in ~/.crossbind/config.json: set one, the service account's e-mail to use your gcloud login, or its JSON key.`);
     }
     if (token && (file || account)) {
-        throw new Error(`crossbind: ${PLAY.token} is set, and so is ${file ? PLAY.key : PLAY.serviceAccount} or its key in ~/.crossbind.json: set one.`);
+        throw new Error(`crossbind: ${PLAY.token} is set, and so is ${file ? PLAY.key : PLAY.serviceAccount} or its key in ~/.crossbind/config.json: set one.`);
     }
     if (token) return { token };
     if (account) return { account };

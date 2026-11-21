@@ -102,7 +102,7 @@ export default {
         },
         {
             type: 'p',
-            text: 'A service account is for CI, where no one signs in, and wins over the sign-in when set: in the environment, or in `~/.crossbind.json` under the same name without `CROSSBIND_` (`crossbind config set GOOGLE_PLAY_SERVICE_ACCOUNT …`). Set only one of these:',
+            text: 'A service account is for CI, where no one signs in, and wins over the sign-in when set: in the environment, or in `~/.crossbind/config.json` under the same name without `CROSSBIND_` (`crossbind config set GOOGLE_PLAY_SERVICE_ACCOUNT …`). Set only one of these:',
         },
         {
             type: 'entries',

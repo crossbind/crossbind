@@ -18,7 +18,7 @@ const loaded = (exported, config = state.config) => {
     state.config = { ...config, app: exported.app ?? {} };
     exports.set(state.config, exported);
 };
-// ~/.crossbind.json, as this machine keeps it.
+// ~/.crossbind/config.json, as this machine keeps it.
 const saved = {};
 vi.mock('../src/utils/systemConfig.js', async (importOriginal) => ({
     ...await importOriginal(),
@@ -190,7 +190,7 @@ describe("an extension's api", () => {
         expect(terminal.asked).toEqual([]);
     });
 
-    test("keeps this machine's settings in ~/.crossbind.json, its own apart from crossbind's and every other extension's, and its secrets in the keychain under its name", () => {
+    test("keeps this machine's settings in ~/.crossbind/config.json, its own apart from crossbind's and every other extension's, and its secrets in the keychain under its name", () => {
         const api = extensionApi('demo-store', { platform: 'ios' });
         api.settings.set({ ACCOUNT: 'ada' });
         expect(saved).toEqual({ extensions: { 'demo-store': { ACCOUNT: 'ada' } } });
@@ -254,7 +254,7 @@ describe("an extension's api", () => {
         expect(Object.isFrozen(api.apple.privacyCategories.fileTimestamp.reasons)).toBe(true);
     });
 
-    test("gives the App Store Connect API key this machine's ~/.crossbind.json names, where the environment names none", () => {
+    test("gives the App Store Connect API key this machine's ~/.crossbind/config.json names, where the environment names none", () => {
         const api = extensionApi('demo-store', { platform: 'ios' });
         const file = upath.join(base, 'AuthKey_7K2M9P4Q1Z.p8');
         fs.writeFileSync(file, 'key');

@@ -130,6 +130,10 @@ describe('an Android release packaged in the android-app image', () => {
         expect(fs.existsSync(`${project}.apk`)).toBe(true);
         expect(fs.existsSync(`${project}.aab`)).toBe(true);
         expect(fs.existsSync(path.join(home, '.crossbind', 'android', 'home'))).toBe(true);
+        expect(args.map(upath.toUnix)).toEqual(expect.arrayContaining([
+            `${upath.join(home, '.crossbind', 'cache', 'android', 'gradle')}:/var/cache/crossbind/gradle`,
+            `${upath.join(home, '.crossbind', 'android', 'home')}:/var/cache/crossbind/android`,
+        ]));
     });
 
     test('without one is an APK signed with the debug key, a warning, and no bundle', () => {

@@ -3,7 +3,7 @@ import logger from './logger.js';
 import systemKeys, { assertRunner } from './systemKeys.js';
 
 const RUNNER_VARIABLE = 'CROSSBIND_RUNNER';
-const SYSTEM_CONFIG = '~/.crossbind.json';
+const SYSTEM_CONFIG = '~/.crossbind/config.json';
 const SHARED = { key: 'REMOTE_URL', url: 'CROSSBIND_REMOTE_URL', token: 'CROSSBIND_TOKEN' };
 
 export const remoteVariables = (role) => {

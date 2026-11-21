@@ -11,7 +11,7 @@ state = {
     targets:               Target[],            // 32 built-in build targets (see § Target inventory)
     config:                ResolvedConfig,      // merged crossbind.config.js + crossbind.build.js + system
     cache:                 BuildCache,          // persisted to .crossbind/cache.json
-    system:                SystemConfig,        // ~/.crossbind.json + defaults from systemKeys
+    system:                SystemConfig,        // ~/.crossbind/config.json + defaults from systemKeys
 }
 ```
 
@@ -41,7 +41,7 @@ state.config = {
         cmakeDir:            string,            // dirname of cmake
         cli:                 string,            // path to crossbind CLI install
         cliCMakeListsTxt:    string,            // bundled fallback CMakeLists.txt
-        systemConfig:        string,            // = ~/.crossbind.json
+        systemConfig:        string,            // = ~/.crossbind/config.json
     },
 
     ext: {
@@ -138,7 +138,7 @@ fresh link. Clear `.crossbind` only when the toolchain itself changes (the Docke
 
 ### `state.system`
 
-Loaded from `~/.crossbind.json`, merged with defaults from `core/crossbind/src/utils/systemKeys.js`:
+Loaded from `~/.crossbind/config.json`, merged with defaults from `core/crossbind/src/utils/systemKeys.js`:
 
 ```ts
 state.system = {

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import cacheDir from './cacheDir.js';
 import withDirLock from './dirLock.js';
 import fetchOciLayer from './ociArtifact.js';
 import { cargoRunner } from './runCargo.js';
@@ -19,7 +19,7 @@ import PIN from './rustSysrootPin.js';
 const SCHEMA = 1;
 
 export function sysrootRoot() {
-    return path.join(os.homedir(), '.crossbind', 'rust-sysroot');
+    return cacheDir('rust-sysroot');
 }
 
 // The rlibs carry the producing compiler's metadata hash: a sysroot is only consumable by the
