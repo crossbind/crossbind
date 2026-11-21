@@ -3,8 +3,8 @@ import { webcrypto } from 'node:crypto';
 import http from 'node:http';
 import net from 'node:net';
 import {
-    GATE_HEADER, PREVIEW_PROTOCOL, answerSession, gateToken, guardServer, isBase64url32, isSameSecret, newPreviewKey, previewGate,
-    previewOf, previewSocketGate, protocolsLine,
+    GATE_HEADER, PREVIEW_PROTOCOL, answerSession, gateToken, guardServer, isBase64url32, isSameSecret, listedNameProblem, newPreviewKey,
+    previewGate, previewOf, previewSocketGate, protocolsLine,
 } from '../src/utils/previewSession.js';
 
 const key = newPreviewKey();
@@ -216,6 +216,16 @@ describe('the gate in front of the server', () => {
         } finally {
             await new Promise((done) => { server.close(done); });
         }
+    });
+});
+
+describe("the project's name on the account's list", () => {
+    test('takes 1 to 64 letters, digits, spaces and ._@/- of any script, and names what to set for anything else', () => {
+        const names = ['demo', '@made-up/app 2.0_x', 'ünlü-uygulama', '例え', 'a'.repeat(64)];
+        const refused = ['', 'a'.repeat(65), 'made-up#app', 'tab\tname', 'line\nname', 'emoji🙂', 123, undefined];
+
+        expect(names.map(listedNameProblem)).toEqual(names.map(() => null));
+        expect(refused.map(listedNameProblem)).toEqual(refused.map((name) => `crossbind: crossbind app preview lists this project on your account by its name, ${JSON.stringify(name)}, which crossbind cloud takes as 1 to 64 letters, digits, spaces and ._@/- alone: set general.name in crossbind.config.js to such a name.`));
     });
 });
 

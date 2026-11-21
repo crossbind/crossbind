@@ -14,7 +14,7 @@ import findFiles from '../utils/findFiles.js';
 import { resolveAppPageApi } from '../utils/resolveAppHost.js';
 import { identityLine, previewBlockers } from '../utils/previewBlockers.js';
 import { previewModuleSource } from '../utils/previewModule.js';
-import { PREVIEW_PROTOCOL, newPreviewKey } from '../utils/previewSession.js';
+import { PREVIEW_PROTOCOL, listedNameProblem, newPreviewKey } from '../utils/previewSession.js';
 import {
     defaultRouteAddress, listedAddress, previewHost, previewPort, urlHost,
 } from '../utils/previewAddress.js';
@@ -119,6 +119,8 @@ export default async function appPreview({
     const targets = webTargets();
     const blockers = previewBlockers(state.config, targets.debug);
     if (blockers.length > 0) throw new Error(blockers.join('\n'));
+    const named = listedNameProblem(state.config.general.name);
+    if (named) throw new Error(named);
     const cloud = cloudUrl(loadSystemConfig());
     const account = await previewAccount({ url: cloud });
     const where = previewHost(host, host === undefined || ['0.0.0.0', '::'].includes(host) ? await defaultRouteAddress() : null);
