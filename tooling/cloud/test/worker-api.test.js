@@ -375,3 +375,22 @@ test('answers anything else with 404, sign-in with another provider included', a
     assert.deepEqual(responses.map((response) => response.status), [404, 404, 404]);
     assert.equal(responses[0].headers.get('x-content-type-options'), 'nosniff');
 });
+
+test('refuses a request that came over plain http before anything else, the local run\'s loopback hosts apart', async () => {
+    const { deps, calls } = setup();
+    const withSnapshots = { ...env, SNAPSHOTS_ENABLED: 'true', SNAPSHOTS_HOST: 'snapshots.crossbind.dev' };
+    const ask = (url, init = {}) => handleRequest(new Request(url, { ...init, headers: { 'cf-connecting-ip': '203.0.113.7', ...init.headers } }), withSnapshots, deps);
+
+    const refused = [
+        await ask('http://api.crossbind.dev/v1/account', { headers: { authorization: 'Bearer cbt_made_up' } }),
+        await ask('http://snapshots.crossbind.dev/IRVUB8Fpwuh0lT_7NkiJ8Q/index.html', { headers: { 'x-crossbind-preview': 'made-up' } }),
+        await ask('http://api.crossbind.dev/playground/compile', { method: 'POST', headers: { origin: PAGE }, body: '{}' }),
+    ];
+    const limitedBefore = calls.limited.length;
+    const loopback = [await ask('http://localhost:8787/nowhere'), await ask('http://127.0.0.1:8787/nowhere'), await ask('http://[::1]:8787/nowhere')];
+
+    assert.deepEqual(await Promise.all(refused.map(async (answer) => [answer.status, await answer.json()])), refused.map(() => [403, { error: 'crossbind cloud answers over https alone.' }]));
+    assert.equal(limitedBefore, 0);
+    assert.deepEqual(loopback.map(({ status }) => status), [404, 404, 404]);
+    assert.equal(calls.limited.length, 3);
+});
