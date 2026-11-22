@@ -566,6 +566,18 @@ describe("the iOS version's creative assets", () => {
 });
 
 describe("a version's settings on App Store Connect", () => {
+    test('clears an existing sign-in requirement and skips an identical review flag', async () => {
+        const key = 'GET /appStoreVersions/V1/appStoreReviewDetail';
+        const settings = { review: { demoAccountRequired: false } };
+        answers[key] = { data: { id: 'R1', attributes: { demoAccountRequired: true } } };
+        await release({ settings });
+        expect(bodyOf('PATCH /appStoreReviewDetails/R1').data.attributes).toEqual({ demoAccountRequired: false });
+        calls = [];
+        answers[key].data.attributes.demoAccountRequired = false;
+        await release({ settings });
+        expect(keys()).not.toContain('PATCH /appStoreReviewDetails/R1');
+    });
+
     const SETTINGS = {
         copyright: '2026 Example Ltd.',
         categories: { primaryCategory: 'UTILITIES', secondaryCategory: 'PRODUCTIVITY' },
@@ -583,7 +595,7 @@ describe("a version's settings on App Store Connect", () => {
         answers['GET /appInfos/I1/ageRatingDeclaration'] = { data: { id: 'R1', attributes: { violenceCartoonOrFantasy: 'NONE', gambling: true } } };
         answers['GET /appStoreVersions/V1/appStoreReviewDetail'] = notFound;
 
-        expect((await release({ settings: SETTINGS })).settled).toEqual(['copyright', 'categories', 'age rating', "App Review's contact"]);
+        expect((await release({ settings: SETTINGS })).settled).toEqual(['copyright', 'categories', 'age rating', 'App Review information']);
 
         expect(bodyOf('PATCH /appStoreVersions/V1')).toEqual({ data: { type: 'appStoreVersions', id: 'V1', attributes: { copyright: '2026 Example Ltd.' } } });
         expect(bodyOf('PATCH /appInfos/I1')).toEqual({
@@ -616,7 +628,7 @@ describe("a version's settings on App Store Connect", () => {
         answers['GET /appInfos/I1/ageRatingDeclaration'] = { data: { id: 'R1', attributes: { violenceCartoonOrFantasy: 'NONE', gambling: false } } };
         answers['GET /appStoreVersions/V1/appStoreReviewDetail'] = { data: { id: 'D1', attributes: { contactEmail: 'review@example.com', notes: 'Old notes.' } } };
 
-        expect((await release({ settings: SETTINGS })).settled).toEqual(["App Review's contact"]);
+        expect((await release({ settings: SETTINGS })).settled).toEqual(['App Review information']);
         expect(keys().filter((key) => /^(PATCH|POST) \/(appStoreVersions\/V1$|appInfos|ageRatingDeclarations|appStoreReviewDetails)/.test(key))).toEqual(['PATCH /appStoreReviewDetails/D1']);
         expect(bodyOf('PATCH /appStoreReviewDetails/D1')).toEqual({ data: { type: 'appStoreReviewDetails', id: 'D1', attributes: { notes: 'No sign-in.' } } });
     });

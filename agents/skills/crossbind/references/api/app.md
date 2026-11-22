@@ -1600,6 +1600,52 @@ Google sign-in the keychain keeps, and else how to see it. `crossbind app store 
 --send`, sends the page with no build: on a terminal it asks for what is missing, as an upload does, and without one it
 names every missing piece at once. `-p` sends one platform's page, as `-p ios` App Store Connect's iOS one.
 
+### Store metadata files
+
+Put settings in `store/<store>/store.json` and localized short fields in
+`store/<store>/<locale>/listing.json`. Keep long descriptions, release notes, screenshots and artwork in the files
+listed in each store's section below. Both JSON files are optional. Each field has one source. To migrate a field,
+move its value into JSON and remove its old file in the same change. Existing per-field listings keep working.
+Crossbind reports unknown keys, wrong types, duplicate sources and store limits before sending the affected listing.
+An omitted field preserves the store's value. An explicit `false` updates a boolean.
+
+| Store | Keys in `store.json` | Keys in each locale's `listing.json` |
+|---|---|---|
+| `app-store` | `copyright`, `primaryCategory`, `secondaryCategory`, `ageRating`, `review`, `platforms` | `name`, `subtitle`, `keywords`, `promotionalText`, `privacyPolicyUrl`, `supportUrl`, `marketingUrl`, `creativeAssets` |
+| `google-play` | `contactEmail`, `contactPhone`, `contactWebsite`, `privacyUrl`, `category` | `title`, `shortDescription`, `video` |
+| `microsoft-store` | `category`, `privacyUrl`, `websiteUrl`, `supportContact` | `title`, `shortDescription`, `devStudio`, `copyrightAndTrademarkInfo`, `keywords`, `features` |
+
+Use arrays of strings for keywords and features. Keep Google's Data safety CSV and Microsoft's certification notes,
+license terms and screenshot captions in their existing files. The store sections below describe which fields are
+uploaded and which appear as instructions for the store console.
+
+For example, an Apple `store.json` can disable review sign-in on both platforms and set a copyright only for iOS.
+
+```json
+{
+  "primaryCategory": "UTILITIES",
+  "review": { "signInRequired": false },
+  "platforms": { "ios": { "copyright": "2026 Example Ltd." } }
+}
+```
+
+`platforms.ios` and `platforms.macos` can override `copyright` and individual `review` fields.
+Categories and age rating apply to the app. `ageRating` accepts the same object as the earlier `age_rating.json`.
+`review` accepts `signInRequired` (boolean) and the optional strings `contactFirstName`, `contactLastName`,
+`contactEmail` and `contactPhone`. Keep private contacts, reviewer notes and demo credentials in a Git-ignored
+`review_information/` directory or supply those files from CI. A demo username and password imply required sign-in.
+Remove both credentials before setting `signInRequired` to `false`.
+
+An Apple locale can use `"creativeAssets": { "header": { "assetId": "<image UUID>" } }` in `listing.json` to
+reuse a library image. Supported roles are `header`, `searchResults` and `universal`.
+Crossbind discovers local artwork by filename in `creative-assets/`.
+
+Extension authors can read the same normalized listings used by the publishers. Import
+`readAppStoreListing(project)` and `readAppStoreSettings(project, platform)` from `@crossbind/core-store-kit`
+(`platform` is `ios` or `macos`, default `ios`), `readPlayListing` and `readPlaySettings` from
+`@crossbind/extension-google-play/listing`, or `readStoreListing` and `readStoreSettings` from
+`@crossbind/extension-microsoft-store/listing`. Reading these files requires no store credentials or network access.
+
 ### Google Play
 
 `crossbind app upload google-play` builds the Android app and puts its bundle out to the testers of a Google Play
@@ -1667,7 +1713,7 @@ Without a terminal, as in CI, nothing is asked, and the upload names every missi
 
 ### Google Play's listing
 
-A project's `store/google-play` folder holds its Google Play listing: a folder per language, named as Play names it
+A project's `store/google-play` folder accepts [store metadata files](#store-metadata-files) and the following layout: a folder per language, named as Play names it
 (`en-US`, `tr-TR`), with the files fastlane's supply reads:
 
 ```text
@@ -1788,7 +1834,7 @@ App Store Connect busy or out of reach for a moment tries again.
 
 ### The App Store listing
 
-A project's `store/app-store` folder holds its App Store listing, which goes with `--send` and with a release: a folder per locale, named
+A project's `store/app-store` folder accepts [store metadata files](#store-metadata-files) and the following layout, which goes with `--send` and with a release: a folder per locale, named
 as App Store Connect names it (`en-US`, `tr`, `zh-Hans`), with the texts' files fastlane's deliver reads and a folder of
 screenshots per display type:
 
@@ -2016,6 +2062,8 @@ which expires as it says. An upload takes them from `CROSSBIND_MICROSOFT_STORE_T
 keeping the ids in `~/.crossbind/config.json` and the key in the system keychain.
 
 ### The Microsoft Store listing
+
+Use [store metadata files](#store-metadata-files) for settings and short localized fields. The previous layout below is also supported.
 
 A project's `store/microsoft-store` folder holds its Microsoft Store listing: a folder per language, named as BCP 47
 names it (`en-US`, `tr-TR`), with a file per field:

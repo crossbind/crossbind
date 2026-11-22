@@ -88,10 +88,15 @@ export function assertImage(project, file) {
 
 // The text of a listing's file, with its line ends as stores take them; only an optional text's file may be empty.
 export function readText(store, project, file, { most, canBeEmpty = false }) {
-    const text = fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n').trim();
+    return checkedText(store, path.relative(project, file), fs.readFileSync(file, 'utf8'), { most, canBeEmpty });
+}
+
+export function checkedText(store, source, value, { most = Infinity, canBeEmpty = false } = {}) {
+    if (typeof value !== 'string') throw new Error(`crossbind: ${source} must be a string.`);
+    const text = value.replace(/\r\n/g, '\n').trim();
     const length = [...text].length;
-    if (length === 0 && !canBeEmpty) throw new Error(`crossbind: ${path.relative(project, file)} is empty: write its text, or remove the file.`);
-    if (length > most) throw new Error(`crossbind: ${path.relative(project, file)} has ${length} characters, and ${store.name} takes ${most} at most.`);
+    if (length === 0 && !canBeEmpty) throw new Error(`crossbind: ${source} is empty: write its text, or remove the file.`);
+    if (length > most) throw new Error(`crossbind: ${source} has ${length} characters, and ${store.name} takes ${most} at most.`);
     return text;
 }
 
@@ -101,7 +106,7 @@ export function languageFolders(store, project) {
     const root = path.join(project, store.folder);
     if (!fs.existsSync(root)) return [];
     const settings = store.settings ?? [];
-    return namesIn(root).filter((name) => !settings.includes(name)).map((language) => {
+    return namesIn(root).filter((name) => name !== 'store.json' && !settings.includes(name)).map((language) => {
         const folder = path.join(root, language);
         if (!store.language.test(language) || !isFolder(folder)) {
             const beside = settings.length > 0 ? ` Beside the languages' folders it takes ${settings.join(', ')} alone.` : '';
@@ -144,3 +149,4 @@ export {
     APP_STORE_CONNECT, appStoreApp, appStoreState, releaseVersion, sendListing,
 } from './app-store/appStoreRelease.js';
 export { untilDone, uploadArchive } from './app-store/appStoreExport.js';
+export { metadataObject, readMetadata, metadataTexts, singleSource, stringList } from './metadata.js';

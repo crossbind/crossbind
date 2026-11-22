@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-    imageOf, isFolder, languageFolders, readSetting, readText, sizeOf, takenNames,
+    imageOf, isFolder, languageFolders, metadataTexts, readMetadata, readSetting, readText, sizeOf, takenNames,
 } from '@crossbind/core-store-kit';
 
 // The app's contact details on Google Play, by their files beside the languages' folders, which an upload sends.
@@ -31,9 +31,9 @@ const STORE = {
 export const PLAY_LISTING = STORE.folder;
 // A listing's texts by their files, and the most characters Play takes of each; a video's alone may be empty.
 const TEXTS = {
-    'title.txt': { field: 'title', most: 30 },
-    'short_description.txt': { field: 'shortDescription', most: 80 },
     'full_description.txt': { field: 'fullDescription', most: 4000 },
+    'short_description.txt': { field: 'shortDescription', most: 80 },
+    'title.txt': { field: 'title', most: 30 },
     'video.txt': { field: 'video', most: Infinity, canBeEmpty: true },
 };
 // The texts Play makes a new listing of.
@@ -67,11 +67,13 @@ function readImages(project, folder) {
 }
 
 function readLanguage(project, { language, folder }) {
-    const names = takenNames(STORE, project, folder, (name, isDir) => (isDir ? ['changelogs', 'images'].includes(name) : Object.hasOwn(TEXTS, name)));
-    const texts = names.filter((name) => Object.hasOwn(TEXTS, name)).map((name) => [TEXTS[name].field, readText(STORE, project, path.join(folder, name), TEXTS[name])]);
+    takenNames(STORE, project, folder, (name, isDir) => (isDir ? ['changelogs', 'images'].includes(name) : name === 'listing.json' || Object.hasOwn(TEXTS, name)));
+    const file = path.join(folder, 'listing.json');
+    const json = readMetadata(project, file, ['title', 'shortDescription', 'video']);
+    const texts = metadataTexts(STORE, project, folder, path.relative(project, file), json, TEXTS);
     return {
         language,
-        texts: Object.fromEntries(texts),
+        texts,
         notes: readNotes(project, path.join(folder, 'changelogs')),
         images: readImages(project, path.join(folder, 'images')),
     };
@@ -102,9 +104,10 @@ export const releaseNotesOf = (listings, versionCode) => listings
 // The app's settings beside the listing's languages: the contact details and the Data safety declaration an upload
 // sends, and what only Play Console takes, each left out without its file.
 export function readPlaySettings(project) {
-    const textsOf = (files) => Object.fromEntries(Object.entries(files)
-        .map(([file, limits]) => [limits.field, readSetting(STORE, project, file, limits)])
-        .filter(([, text]) => text !== undefined));
+    const folder = path.join(project, STORE.folder);
+    const file = path.join(folder, 'store.json');
+    const json = readMetadata(project, file, Object.values({ ...DETAILS, ...BY_HAND }).map(({ field }) => field));
+    const textsOf = (fields) => metadataTexts(STORE, project, folder, path.relative(project, file), json, fields);
     const dataSafety = readSetting(STORE, project, DATA_SAFETY, { most: Infinity });
     return { details: textsOf(DETAILS), ...(dataSafety === undefined ? {} : { dataSafety }), ...textsOf(BY_HAND) };
 }

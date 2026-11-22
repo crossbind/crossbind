@@ -28,6 +28,41 @@ afterEach(() => {
 });
 
 describe("a project's App Store listing", () => {
+    test('reads store and locale JSON, preserving an explicit false and applying version overrides per platform', () => {
+        const id = '6e4f57c4-447c-464f-9525-ca3856ea8afc';
+        write('store.json', JSON.stringify({
+            primaryCategory: 'UTILITIES', ageRating: { advertising: false },
+            review: { signInRequired: false }, platforms: { ios: { copyright: '2026 Demo' }, macos: { review: { signInRequired: true } } },
+        }));
+        write('review_information/email_address.txt', 'review@example.com');
+        write('en-US/listing.json', JSON.stringify({ name: 'Demo', subtitle: '', keywords: ['convert', 'maps'], creativeAssets: { header: { assetId: id } } }));
+        write('en-US/description.txt', 'Multi-line\ndescription.');
+        const ios = readAppStoreSettings(project, 'ios');
+        const mac = readAppStoreSettings(project, 'macos');
+        expect(ios).toEqual({ copyright: '2026 Demo', categories: { primaryCategory: 'UTILITIES' }, ageRating: { advertising: false }, review: { contactEmail: 'review@example.com', demoAccountRequired: false } });
+        expect(mac.copyright).toBeUndefined();
+        expect(mac.review.demoAccountRequired).toBe(true);
+        expect(readAppStoreListing(project)[0]).toMatchObject({ info: { name: 'Demo', subtitle: '' }, version: { keywords: 'convert,maps', description: 'Multi-line\ndescription.' }, creativeAssets: { header: { id } } });
+        write('store.json', '{}');
+        expect(readAppStoreSettings(project).review).not.toHaveProperty('demoAccountRequired');
+    });
+
+    test('rejects conflicts, unknown fields and invalid JSON types before sending', () => {
+        write('store.json', JSON.stringify({ review: { signInRequired: 'false' } }));
+        expect(() => readAppStoreSettings(project)).toThrow('signInRequired must be true or false');
+        write('store.json', JSON.stringify({ review: { signInRequired: false } }));
+        write('review_information/demo_user.txt', 'demo');
+        write('review_information/demo_password.txt', 'secret');
+        expect(() => readAppStoreSettings(project)).toThrow('supplies demo credentials');
+        write('store.json', JSON.stringify({ platforms: { ios: { primaryCategory: 'GAMES' } } }));
+        expect(() => readAppStoreSettings(project)).toThrow('unknown field primaryCategory');
+        write('en-US/listing.json', JSON.stringify({ keywords: 'demo' }));
+        expect(() => readAppStoreListing(project)).toThrow('array');
+        write('en-US/listing.json', JSON.stringify({ name: 'Demo' }));
+        write('en-US/name.txt', 'Demo');
+        expect(() => readAppStoreListing(project)).toThrow(/listing.json.name.*name.txt/);
+    });
+
     test('previews shared and localized creative artwork and only includes it for iOS', () => {
         write('en-US/creative-assets/universal.png', pngOf(5244, 2950));
         write('en-US/creative-assets/search-results.jpg', jpegOf(3000, 2000));

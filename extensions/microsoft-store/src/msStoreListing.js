@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-    imageOf, languageFolders, readSetting, readText, sizeOf, takenNames,
+    imageOf, languageFolders, metadataTexts, readMetadata, readText, singleSource, sizeOf, stringList, takenNames,
 } from '@crossbind/core-store-kit';
 
 // The settings beside the languages' folders: those Partner Center's submission API takes, which an upload sends, and
@@ -53,9 +53,7 @@ const CAPTION_MOST = 200;
 const PNG_FILE = /^(.+)\.png$/i;
 
 // The lines of a list's file, each an entry.
-function readList(project, file, { entries, most }) {
-    const shown = path.relative(project, file);
-    const lines = readText(STORE, project, file, { most: Infinity }).split('\n').map((line) => line.trim()).filter(Boolean);
+function checkedList(lines, shown, { entries, most }) {
     if (lines.length > entries) throw new Error(`crossbind: ${shown} has ${lines.length} lines, and the Microsoft Store takes ${entries} at most, one a line.`);
     const long = lines.find((line) => [...line].length > most);
     if (long !== undefined) throw new Error(`crossbind: ${shown} has a line of ${[...long].length} characters, and the Microsoft Store takes ${most} at most: ${long}`);
@@ -86,13 +84,29 @@ function readImages(project, folder) {
 }
 
 function readLanguage(project, { language, folder }) {
-    const names = takenNames(STORE, project, folder, (name, isDir) => (isDir ? name === 'images' : Object.hasOwn(TEXTS, name) || Object.hasOwn(LISTS, name)));
-    const texts = Object.fromEntries(names.filter((name) => Object.hasOwn(TEXTS, name))
-        .map((name) => [TEXTS[name].field, readText(STORE, project, path.join(folder, name), TEXTS[name])]));
-    const lists = Object.fromEntries(names.filter((name) => Object.hasOwn(LISTS, name))
-        .map((name) => [LISTS[name].field, readList(project, path.join(folder, name), LISTS[name])]));
+    takenNames(STORE, project, folder, (name, isDir) => (isDir ? name === 'images' : name === 'listing.json' || Object.hasOwn(TEXTS, name) || Object.hasOwn(LISTS, name)));
+    const file = path.join(folder, 'listing.json');
+    const source = path.relative(project, file);
+    const json = readMetadata(project, file, ['title', 'shortDescription', 'copyrightAndTrademarkInfo', 'devStudio', 'features', 'keywords']);
+    const texts = metadataTexts(STORE, project, folder, source, json, TEXTS);
+    const lists = {};
+    for (const [name, limits] of Object.entries(LISTS)) {
+        const legacy = path.join(folder, name);
+        const { field } = limits;
+        if (Object.hasOwn(json, field)) {
+            const label = `${source}.${field}`;
+            singleSource(project, legacy, label);
+            lists[field] = checkedList(stringList(json[field], label), label, limits);
+        } else if (fs.existsSync(legacy)) {
+            const lines = readText(STORE, project, legacy, { most: Infinity }).split('\n').map((line) => line.trim()).filter(Boolean);
+            lists[field] = checkedList(lines, path.relative(project, legacy), limits);
+        }
+    }
     const words = (lists.keywords ?? []).join(' ').split(/\s+/).filter(Boolean).length;
-    if (words > KEYWORD_WORDS) throw new Error(`crossbind: ${path.relative(project, path.join(folder, 'keywords.txt'))} has ${words} words, and the Microsoft Store takes ${KEYWORD_WORDS} at most in all its search terms.`);
+    if (words > KEYWORD_WORDS) {
+        const shown = json.keywords ? `${source}.keywords` : path.relative(project, path.join(folder, 'keywords.txt'));
+        throw new Error(`crossbind: ${shown} has ${words} words, and the Microsoft Store takes ${KEYWORD_WORDS} at most in all its search terms.`);
+    }
     return { language, texts: { ...texts, ...lists }, images: readImages(project, path.join(folder, 'images')) };
 }
 
@@ -103,14 +117,16 @@ export const readStoreListing = (project) => languageFolders(STORE, project).map
 
 // The app's settings beside the listing's languages, each left out without its file.
 export function readStoreSettings(project) {
-    const textsOf = (files) => Object.fromEntries(Object.entries(files)
-        .map(([file, limits]) => [limits.field, readSetting(STORE, project, file, limits)])
-        .filter(([, text]) => text !== undefined));
-    const sent = textsOf(SENT);
-    if (sent.category !== undefined && !/^[A-Za-z]+(_[A-Za-z]+)?$/.test(sent.category)) {
-        throw new Error(`crossbind: ${path.join(STORE.folder, 'category.txt')} names ${JSON.stringify(sent.category)}, which is no category as Partner Center's API names one, as UtilitiesAndTools or Productivity.`);
+    const fields = { ...SENT, ...BY_HAND };
+    const folder = path.join(project, STORE.folder);
+    const file = path.join(folder, 'store.json');
+    const json = readMetadata(project, file, ['category', 'privacyUrl', 'websiteUrl', 'supportContact']);
+    const settings = metadataTexts(STORE, project, folder, path.relative(project, file), json, fields);
+    if (settings.category !== undefined && !/^[A-Za-z]+(_[A-Za-z]+)?$/.test(settings.category)) {
+        const source = json.category ? path.relative(project, file) : path.join(STORE.folder, 'category.txt');
+        throw new Error(`crossbind: ${source} names ${JSON.stringify(settings.category)}, which is no category as Partner Center's API names one, as UtilitiesAndTools or Productivity.`);
     }
-    return { ...sent, ...textsOf(BY_HAND) };
+    return settings;
 }
 
 // What the Microsoft Store takes of each image: the desktop's screenshots, landscape or portrait, at least 1366 × 768 and

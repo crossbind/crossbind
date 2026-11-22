@@ -112,7 +112,7 @@ async function releaseToReview(api) {
     const platform = PLATFORMS[api.platform];
     const root = api.project.root;
     const listings = listingOf(readAppStoreListing(root), platform.api);
-    const settings = readAppStoreSettings(root);
+    const settings = readAppStoreSettings(root, api.platform);
     const missing = appStoreListingProblems(root, listings);
     const key = api.apple.key();
     if (!key) missing.push(NO_KEY_TO_RELEASE);
@@ -213,7 +213,7 @@ async function sendPage(api) {
     const platform = PLATFORMS[api.platform];
     const root = api.project.root;
     const listings = listingOf(readAppStoreListing(root), platform.api);
-    const settings = readAppStoreSettings(root);
+    const settings = readAppStoreSettings(root, api.platform);
     if (listings.length === 0 && !hasSettings(settings)) {
         api.log(`crossbind: ${APP_STORE_LISTING} holds no page of the app, so nothing went to App Store Connect for ${platform.name}.`);
         return {};
