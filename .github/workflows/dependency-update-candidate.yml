@@ -257,7 +257,7 @@ jobs:
                   test -n "$PRIVATE_KEY" || { echo "DEPENDENCY_BOT_PRIVATE_KEY is not configured."; exit 1; }
             - id: app-token
               if: ${{ !inputs.dry_run }}
-              uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+              uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
               with:
                   client-id: ${{ vars.DEPENDENCY_BOT_CLIENT_ID }}
                   private-key: ${{ secrets.DEPENDENCY_BOT_PRIVATE_KEY }}
