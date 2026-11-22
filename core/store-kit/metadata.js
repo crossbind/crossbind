@@ -22,10 +22,6 @@ export function readMetadata(project, file, keys) {
     return metadataObject(value, source, keys);
 }
 
-export function singleSource(project, file, source) {
-    if (fs.existsSync(file)) throw new Error(`crossbind: both ${source} and ${path.relative(project, file)} define the same field. Keep one source.`);
-}
-
 export function stringList(value, source) {
     if (!Array.isArray(value) || !value.length || value.some((item) => typeof item !== 'string' || !item.trim() || /[\r\n]/.test(item))) {
         throw new Error(`crossbind: ${source} must be a nonempty array of single-line strings.`);
@@ -33,18 +29,15 @@ export function stringList(value, source) {
     return value.map((item) => item.trim());
 }
 
-// A field has the same limits and normalized publisher value through either authoring format.
-export function metadataTexts(store, project, folder, source, json, definitions) {
+// Each field is either a JSON property or a dedicated long-text file.
+export function metadataTexts(store, project, file, json, fields) {
     const texts = {};
-    for (const [name, limits] of Object.entries(definitions)) {
-        const file = path.join(folder, name);
-        const { field } = limits;
-        if (Object.hasOwn(json, field)) {
-            const label = `${source}.${field}`;
-            singleSource(project, file, label);
-            texts[field] = checkedText(store, label, json[field], limits);
-        } else if (fs.existsSync(file)) {
-            texts[field] = readText(store, project, file, limits);
+    for (const [field, limits] of Object.entries(fields)) {
+        if (limits.file) {
+            const text = path.join(path.dirname(file), limits.file);
+            if (fs.existsSync(text)) texts[field] = readText(store, project, text, limits);
+        } else if (Object.hasOwn(json, field)) {
+            texts[field] = checkedText(store, `${path.relative(project, file)}.${field}`, json[field], limits);
         }
     }
     return texts;

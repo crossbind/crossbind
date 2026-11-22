@@ -247,7 +247,7 @@ describe("a version's submission to App Review", () => {
     test("makes a locale's information of its name alone, before it changes anything", async () => {
         const listings = [{ locale: 'tr', info: { subtitle: 'Bir deneme' }, version: {}, screenshots: {} }];
         await expect(release({ listings })).rejects
-            .toThrow(`crossbind: App Store Connect has no tr information of the app yet, which it makes of its name: add name.txt to ${path.join('store', 'app-store', 'tr')}.`);
+            .toThrow(`crossbind: App Store Connect has no tr information of the app yet, which it makes of its name: add listing.json.name to ${path.join('store', 'app-store', 'tr')}.`);
         expect(keys().filter((key) => !key.startsWith('GET'))).toEqual(['POST /appStoreVersions']);
     });
 
@@ -533,7 +533,7 @@ describe("the iOS version's creative assets", () => {
         current = [placed(header, existing), placed(search, existing)];
         const id = '81542bc4-29de-4319-89f6-4859b954b5b3';
         answers[`${lookup}[id]=${id}`] = { data: [approved(id, { imageAsset: { width: 1920, height: 1280 }, fileName: 'search.jpg' })] };
-        const assets = { universal: { file: 'universal.id', id: existing }, 'search-results': { file: 'search-results.id', id } };
+        const assets = { universal: { file: 'listing.json', id: existing }, 'search-results': { file: 'listing.json', id } };
         expect((await release({ listings: listings(assets) })).listed).toEqual(['en-US']);
         expect(current).toEqual([placed(header, existing), placed(search, id)]);
         expect(parts).toEqual([]);
@@ -548,7 +548,7 @@ describe("the iOS version's creative assets", () => {
             [[approved(existing, { imageAsset: { width: 1920, height: 1280 } })], 'does not fit header'],
         ]) {
             answers[`${lookup}[id]=${existing}`] = { data };
-            await expect(send({ header: { file: 'header.id', id: existing } })).rejects.toThrow(message);
+            await expect(send({ header: { file: 'listing.json', id: existing } })).rejects.toThrow(message);
         }
         expect(keys().every((key) => key.startsWith('GET'))).toBe(true);
     });
@@ -560,7 +560,7 @@ describe("the iOS version's creative assets", () => {
             if (body.data.relationships.image.data.id === existing) throw new Error('placement refused');
             return create(body);
         };
-        await expect(send({ header: { file: 'header.id', id: existing } })).rejects.toThrow('placement refused');
+        await expect(send({ header: { file: 'listing.json', id: existing } })).rejects.toThrow('placement refused');
         expect(current).toEqual([placed(search, 'other'), placed(header, 'original')]);
     });
 });
@@ -636,6 +636,6 @@ describe("a version's settings on App Store Connect", () => {
     test('stop where App Store Connect takes the categories and age rating in none of its versions now, naming the files to remove', async () => {
         answers['GET /apps/A1/appInfos'] = { data: [{ id: 'I0', attributes: { state: 'READY_FOR_DISTRIBUTION' } }] };
         await expect(release({ settings: { categories: { primaryCategory: 'UTILITIES' }, review: {} } })).rejects
-            .toThrow("crossbind: App Store Connect takes the app's categories and age rating in none of its versions now: remove primary_category.txt, secondary_category.txt and age_rating.json from");
+            .toThrow("crossbind: App Store Connect takes the app's categories and age rating in none of its versions now: remove store.json.primaryCategory, store.json.secondaryCategory and store.json.ageRating from");
     });
 });

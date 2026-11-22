@@ -9,15 +9,15 @@ const PARTNER_CENTER = 'https://partner.microsoft.com/dashboard/apps-and-games/o
 const USERS = 'https://partner.microsoft.com/dashboard/account/v3/usermanagement';
 // Partner Center's fields of a listing, by the files that hold them.
 const FIELDS = [
-    ['title.txt', 'Product name'],
+    ['listing.json.title', 'Product name'],
     ['description.txt', 'Description'],
-    ['short_description.txt', 'Short description'],
+    ['listing.json.shortDescription', 'Short description'],
     ['release_notes.txt', "What's new in this version"],
-    ['features.txt', 'Product features'],
-    ['keywords.txt', 'Search terms'],
-    ['copyright.txt', 'Copyright and trademark info'],
+    ['listing.json.features', 'Product features'],
+    ['listing.json.keywords', 'Search terms'],
+    ['listing.json.copyrightAndTrademarkInfo', 'Copyright and trademark info'],
     ['license_terms.txt', 'Additional license terms'],
-    ['developed_by.txt', 'Developed by'],
+    ['listing.json.devStudio', 'Developed by'],
     ['images/screenshots', 'Screenshots, Desktop'],
     ['images/tile.png', '1:1 App tile icon'],
     ['images/hero.png', '16:9 Super hero art'],
@@ -68,9 +68,9 @@ const valueOr = (value, file) => value ?? `(${path.join(STORE_LISTING, file)} wo
 
 // The fields of a language's listing its folder holds, each from its file, and those it lacks of what Partner Center
 // takes no listing without.
-function listingDetails(root, language) {
+function listingDetails(root, { language, texts }) {
     const folder = path.join(STORE_LISTING, language);
-    const has = (file) => fs.existsSync(path.join(root, folder, file));
+    const has = (file) => file.startsWith('listing.json.') ? Object.hasOwn(texts, file.slice('listing.json.'.length)) : fs.existsSync(path.join(root, folder, file));
     return [
         ...FIELDS.filter(([file]) => has(file)).map(([file, field]) => `${field} ← ${path.join(folder, file)}`),
         ...REQUIRED.filter(([file]) => !has(file)).map(([file, field]) => `${field}: none yet, which ${path.join(folder, file)} would hold and Partner Center takes no listing without`),
@@ -80,20 +80,20 @@ function listingDetails(root, language) {
 // The steps of the first submission, which Partner Center's API takes none of.
 function firstSubmission(api, listings, settings) {
     const name = api.project.name;
-    const languages = listings.length > 0 ? listings.map(({ language }) => language) : ['en-US'];
+    const languages = listings.length > 0 ? listings : [{ language: 'en-US', texts: {} }];
     return [
         { text: `First submission › Packages: dist/${name}-win32-x64.msix and dist/${name}-win32-arm64.msix, which crossbind app build -p windows makes with app.windows.msix set.` },
-        ...languages.map((language) => ({
-            text: `First submission › Store listings › ${language}, each field from its file:`,
-            details: listingDetails(api.project.root, language),
+        ...languages.map((listing) => ({
+            text: `First submission › Store listings › ${listing.language}, each field from its file:`,
+            details: listingDetails(api.project.root, listing),
         })),
         {
             text: "First submission › Properties, whose last three Partner Center's API takes no more, so a later change of them is made there too:",
             details: [
-                `Category: ${valueOr(settings.category, 'category.txt')}`,
-                `Privacy policy URL: ${valueOr(settings.privacyUrl, 'privacy_url.txt')}`,
-                `Website: ${valueOr(settings.websiteUrl, 'website_url.txt')}`,
-                `Support contact info: ${valueOr(settings.supportContact, 'support_contact.txt')}`,
+                `Category: ${valueOr(settings.category, 'store.json.category')}`,
+                `Privacy policy URL: ${valueOr(settings.privacyUrl, 'store.json.privacyUrl')}`,
+                `Website: ${valueOr(settings.websiteUrl, 'store.json.websiteUrl')}`,
+                `Support contact info: ${valueOr(settings.supportContact, 'store.json.supportContact')}`,
             ],
         },
         { text: 'First submission › Age ratings: answer the IARC questionnaire.' },

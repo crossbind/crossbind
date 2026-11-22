@@ -63,7 +63,7 @@ describe("a store's folder", () => {
         writeUnder(project, 'store/demo/notes.md', 'Notes');
         expect(() => languageFolders(STORE, project)).toThrow("is no language's folder, as en-US is, which a Demo Store listing takes.");
         const settings = { ...STORE, settings: ['contact.txt', 'review'] };
-        expect(() => languageFolders(settings, project)).toThrow("which a Demo Store listing takes. Beside the languages' folders it takes contact.txt, review alone.");
+        expect(() => languageFolders(settings, project)).toThrow("which a Demo Store listing takes. Beside the languages' folders it takes store.json, contact.txt, review alone.");
     });
 
     test("has a setting's text, trimmed, or none without its file, and stops at one longer than the store takes", () => {

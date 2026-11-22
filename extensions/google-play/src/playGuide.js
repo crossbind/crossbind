@@ -72,14 +72,14 @@ export function playGuide(api) {
         id === undefined
             ? { text: 'Set app.id in crossbind.config.js, as com.example.myapp, which Play keeps for good as the package name; then create the app in Play Console with it, as Play\'s API makes none.', url: PLAY_CONSOLE }
             : { text: `Create the app, with ${id} as its package name, as Play's API makes none.`, url: PLAY_CONSOLE },
-        { text: `Policy and programs › App content › Privacy policy: ${settings.privacyUrl ?? `the policy's URL, which ${file('privacy_url.txt')} would name here`}.` },
+        { text: `Policy and programs › App content › Privacy policy: ${settings.privacyUrl ?? `the policy's URL, which ${file('store.json.privacyUrl')} would name here`}.` },
         { text: 'Policy and programs › App content: answer App access, Ads, Content rating (the IARC questionnaire), Target audience and content, and each other declaration Play lists for the app.' },
         ...(settings.dataSafety === undefined
             ? [{ text: `Policy and programs › App content › Data safety: answer it; to keep it in the project, export it to CSV as ${file('data_safety.csv')}, which crossbind app store google-play --send then sends.` }]
             : []),
-        { text: `Grow users › Store presence › Store settings › App category: ${settings.category ?? `pick one, which ${file('category.txt')} would name here`}.` },
+        { text: `Grow users › Store presence › Store settings › App category: ${settings.category ?? `pick one, which ${file('store.json.category')} would name here`}.` },
         ...(settings.details.contactEmail === undefined
-            ? [{ text: `Grow users › Store presence › Store settings › Contact details: an e-mail at least, which ${file('contact_email.txt')} would send with crossbind app store google-play --send.` }]
+            ? [{ text: `Grow users › Store presence › Store settings › Contact details: an e-mail at least, which ${file('store.json.contactEmail')} would send with crossbind app store google-play --send.` }]
             : []),
         { text: 'Test and release › Production › Countries / regions: pick where the app goes. A personal account opened after 13 November 2023 first runs a closed test with 12 testers for 14 days.' },
         { text: 'Test and release: roll out the first release once, which the first upload leaves a draft; later uploads go out to their testers by themselves, as releases do on production.' },

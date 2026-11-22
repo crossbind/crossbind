@@ -210,7 +210,7 @@ describe("App Store Connect's publisher of a macOS app", () => {
     });
 
     test("hands the macOS version to App Review on a release, with the listing's Mac screenshots alone and no build", async () => {
-        write('store/app-store/en-US/name.txt', 'Demo');
+        write('store/app-store/en-US/listing.json', JSON.stringify({ name: 'Demo' }));
         write('store/app-store/en-US/screenshots/APP_DESKTOP/01.png', pngOf(2560, 1600));
         write('store/app-store/en-US/screenshots/APP_IPHONE_67/01.png', pngOf(1320, 2868));
         const { api, logs } = apiOf();
@@ -247,10 +247,10 @@ describe("App Store Connect's publisher of a macOS app", () => {
 
 describe("App Store Connect's page of an app, sent alone", () => {
     test('goes into the version of its number with the API key, with no build, and says what changed', async () => {
-        write('store/app-store/en-US/name.txt', 'Demo');
+        write('store/app-store/en-US/listing.json', JSON.stringify({ name: 'Demo' }));
         write('store/app-store/en-US/screenshots/APP_DESKTOP/01.png', pngOf(2880, 1800));
         write('store/app-store/en-US/screenshots/APP_IPHONE_67/01.png', pngOf(1320, 2868));
-        write('store/app-store/copyright.txt', '2026 Example Ltd.');
+        write('store/app-store/store.json', JSON.stringify({ copyright: '2026 Example Ltd.' }));
         const { api, logs, builds } = apiOf();
 
         expect(await publisher.send(api)).toEqual({});
@@ -268,7 +268,7 @@ describe("App Store Connect's page of an app, sent alone", () => {
     });
 
     test('names the API key it lacks, and a record not on macOS, before anything goes', async () => {
-        write('store/app-store/en-US/name.txt', 'Demo');
+        write('store/app-store/en-US/listing.json', JSON.stringify({ name: 'Demo' }));
         expect(await publisher.send(apiOf({ key: null }).api)).toEqual({
             missing: [expect.stringContaining("crossbind app store --send sends the page through App Store Connect's API, which takes an API key")],
         });

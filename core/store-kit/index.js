@@ -105,11 +105,11 @@ export function checkedText(store, source, value, { most = Infinity, canBeEmpty 
 export function languageFolders(store, project) {
     const root = path.join(project, store.folder);
     if (!fs.existsSync(root)) return [];
-    const settings = store.settings ?? [];
-    return namesIn(root).filter((name) => name !== 'store.json' && !settings.includes(name)).map((language) => {
+    const settings = ['store.json', ...(store.settings ?? [])];
+    return namesIn(root).filter((name) => !settings.includes(name)).map((language) => {
         const folder = path.join(root, language);
         if (!store.language.test(language) || !isFolder(folder)) {
-            const beside = settings.length > 0 ? ` Beside the languages' folders it takes ${settings.join(', ')} alone.` : '';
+            const beside = ` Beside the languages' folders it takes ${settings.join(', ')} alone.`;
             throw new Error(`crossbind: ${path.relative(project, folder)} is no language's folder, as ${store.example} is, which ${store.listing} takes.${beside}`);
         }
         return { language, folder };
@@ -149,4 +149,4 @@ export {
     APP_STORE_CONNECT, appStoreApp, appStoreState, releaseVersion, sendListing,
 } from './app-store/appStoreRelease.js';
 export { untilDone, uploadArchive } from './app-store/appStoreExport.js';
-export { metadataObject, readMetadata, metadataTexts, singleSource, stringList } from './metadata.js';
+export { metadataObject, readMetadata, metadataTexts, stringList } from './metadata.js';

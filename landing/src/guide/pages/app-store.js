@@ -4,15 +4,13 @@ const REFERENCE = `${REPO_URL}/blob/main/docs/api/app.md`;
 const REQUIRED_REASONS = 'https://developer.apple.com/documentation/bundleresources/describing-use-of-required-reason-api';
 
 const LISTING = `store/app-store/en-US/
-├── name.txt                  at most 30 characters
-├── subtitle.txt              at most 30
-├── privacy_url.txt           the privacy policy's URL
-├── description.txt           at most 4000
-├── keywords.txt              at most 100, separated by commas
+├── listing.json              name (30), subtitle (30), keywords (100 characters including commas),
+│                             promotionalText (170), privacyPolicyUrl, supportUrl, marketingUrl, creativeAssets
+├── description.txt           at most 4000 characters
 ├── release_notes.txt         what's new in the version, at most 4000
-├── promotional_text.txt      at most 170
-├── support_url.txt
-├── marketing_url.txt
+├── creative-assets/          iOS product page header and search results
+│   ├── universal.png         default artwork for both placements
+│   └── search-results.jpg    optional override for search results
 └── screenshots/
     ├── APP_IPHONE_67/          the 6.9-inch and 6.7-inch iPhone's: 01.png, 02.png, at most 10
     ├── APP_IPAD_PRO_3GEN_129/  the 13-inch iPad's
@@ -138,7 +136,7 @@ export default {
         { type: 'code', file: 'store/app-store', code: LISTING },
         {
             type: 'p',
-            text: "`--send`, or a release, sends what differs from App Store Connect, and a locale it has none of gets a new localization; the name, subtitle and privacy policy URL go into the app's information. What the folder leaves out stays as it is, so it may hold the release notes alone. An empty `subtitle.txt`, `promotional_text.txt` or `marketing_url.txt` clears its text. Before anything goes, it stops at any other empty text, a text over App Store Connect's limit, and a file or folder it does not take.",
+            text: "`--send`, or a release, sends what differs from App Store Connect, and a locale it has none of gets a new localization; the name, subtitle and privacy policy URL go into the app's information. What the folder leaves out stays as it is, so it may hold the release notes alone. An empty string for `subtitle`, `promotionalText` or `marketingUrl` in `listing.json` clears its text. Before anything goes, it stops at any other empty text, a text over App Store Connect's limit, and a file or folder it does not take.",
         },
         {
             type: 'p',
@@ -150,7 +148,7 @@ export default {
         },
         {
             type: 'p',
-            text: "Beside the locales, `copyright.txt`, `primary_category.txt` and `secondary_category.txt` (such as `UTILITIES`), `age_rating.json` with the answers by the API's names, and `review_information/` with App Review's contact go with `--send` and a release where App Store Connect's differ.",
+            text: "Put copyright, categories, age rating and `review.signInRequired` in `store/app-store/store.json`. Keep reviewer contacts and demo credentials in a Git-ignored `review_information/private.json`. Crossbind applies these fields with `--send` or a release.",
         },
 
         { type: 'h2', id: 'mac-app-store', text: 'The Mac App Store' },
