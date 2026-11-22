@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-    assertImage, imageOf, isFolder, languageFolders, readSetting, readText, sizeOf, takenNames,
+    assertImage, checkedText, imageOf, isFolder, languageFolders, metadataObject, metadataTexts, readMetadata,
+    singleSource, sizeOf, stringList, takenNames,
 } from '../index.js';
 import { creativeAssetProblems, readCreativeAssets } from './appStoreCreativeAssets.js';
 
@@ -73,10 +74,18 @@ function readScreenshots(project, folder) {
 }
 
 function readLocale(project, { language: locale, folder }) {
-    const names = takenNames(STORE, project, folder, (name, isDir) => (isDir ? ['screenshots', 'creative-assets'].includes(name) : Object.hasOwn(TEXTS, name)));
-    const texts = names.filter((name) => Object.hasOwn(TEXTS, name)).map((name) => ({ ...TEXTS[name], text: readText(STORE, project, path.join(folder, name), TEXTS[name]) }));
-    const partOf = (which) => Object.fromEntries(texts.filter(({ part }) => part === which).map(({ field, text }) => [field, text]));
-    const creativeAssets = readCreativeAssets(STORE, project, path.join(folder, 'creative-assets'));
+    takenNames(STORE, project, folder, (name, isDir) => (isDir ? ['screenshots', 'creative-assets'].includes(name) : name === 'listing.json' || Object.hasOwn(TEXTS, name)));
+    const file = path.join(folder, 'listing.json');
+    const source = path.relative(project, file);
+    const json = readMetadata(project, file, ['name', 'subtitle', 'privacyPolicyUrl', 'keywords', 'promotionalText', 'supportUrl', 'marketingUrl', 'creativeAssets']);
+    if (Object.hasOwn(json, 'keywords')) {
+        const terms = stringList(json.keywords, `${source}.keywords`);
+        if (terms.some((term) => term.includes(','))) throw new Error(`crossbind: ${source}.keywords takes one term per array entry.`);
+        json.keywords = terms.join(',');
+    }
+    const texts = metadataTexts(STORE, project, folder, source, json, TEXTS);
+    const partOf = (which) => Object.fromEntries(Object.values(TEXTS).filter(({ part, field }) => part === which && Object.hasOwn(texts, field)).map(({ field }) => [field, texts[field]]));
+    const creativeAssets = readCreativeAssets(STORE, project, path.join(folder, 'creative-assets'), json.creativeAssets);
     return {
         locale, info: partOf('info'), version: partOf('version'), screenshots: readScreenshots(project, path.join(folder, 'screenshots')),
         ...(Object.keys(creativeAssets).length ? { creativeAssets } : {}),
@@ -110,21 +119,26 @@ const CATEGORY_ID = /^[A-Z][A-Z_]*$/;
 
 // The answers of age_rating.json: those of App Store Connect's API it knows, each checked, and any other it passes on
 // as App Store Connect names it, for a question Apple adds.
-function readAgeRating(project) {
+function readAgeRating(project, json, source) {
     const file = path.join(project, STORE.folder, AGE_RATING);
-    if (!fs.existsSync(file)) return null;
-    const shown = path.relative(project, file);
-    let answers;
-    try {
-        answers = JSON.parse(fs.readFileSync(file, 'utf8'));
-    } catch (error) {
-        throw new Error(`crossbind: ${shown} holds no JSON: ${error.message}`, { cause: error });
+    let shown = `${source}.ageRating`;
+    let answers = json.ageRating;
+    if (answers === undefined) {
+        if (!fs.existsSync(file)) return null;
+        shown = path.relative(project, file);
+        try {
+            answers = JSON.parse(fs.readFileSync(file, 'utf8'));
+        } catch (error) {
+            throw new Error(`crossbind: ${shown} holds no JSON: ${error.message}`, { cause: error });
+        }
+    } else {
+        singleSource(project, file, shown);
     }
     if (answers === null || typeof answers !== 'object' || Array.isArray(answers)) {
         throw new Error(`crossbind: ${shown} holds no object of App Store Connect's age rating answers, as { "violenceCartoonOrFantasy": "NONE", "gambling": false }.`);
     }
     for (const [field, answer] of Object.entries(answers)) {
-        const known = AGE_RATING_ANSWERS[field];
+        const known = Object.hasOwn(AGE_RATING_ANSWERS, field) ? AGE_RATING_ANSWERS[field] : null;
         const isTaken = known ? known.includes(answer) : typeof answer === 'boolean' || (typeof answer === 'string' && CATEGORY_ID.test(answer));
         if (!isTaken) {
             throw new Error(`crossbind: ${shown} answers ${field} with ${JSON.stringify(answer)}, which App Store Connect takes none of${known ? `: it takes ${known.map((one) => JSON.stringify(one)).join(', ')}` : ''}.`);
@@ -134,32 +148,63 @@ function readAgeRating(project) {
 }
 
 // App Review's contact and demo account, by the files of review_information.
-function readReview(project) {
+function readReview(project, json, source) {
     const folder = path.join(project, STORE.folder, REVIEW);
-    if (!fs.existsSync(folder)) return {};
-    if (!isFolder(folder)) throw new Error(`crossbind: ${path.relative(project, folder)} is no folder, which holds App Review's contact as fastlane's deliver names its files.`);
-    const names = takenNames(STORE, project, folder, (name, isDir) => !isDir && Object.hasOwn(REVIEW_TEXTS, name));
-    const texts = Object.fromEntries(names.map((name) => [REVIEW_TEXTS[name], readText(STORE, project, path.join(folder, name), { most: name === 'notes.txt' ? REVIEW_NOTES_MOST : Infinity })]));
+    if (fs.existsSync(folder)) {
+        if (!isFolder(folder)) throw new Error(`crossbind: ${path.relative(project, folder)} is no folder, which holds App Review's contact as fastlane's deliver names its files.`);
+        takenNames(STORE, project, folder, (name, isDir) => !isDir && Object.hasOwn(REVIEW_TEXTS, name));
+    }
+    const fields = Object.fromEntries(Object.entries(REVIEW_TEXTS).map(([name, field]) => [name, { field, most: field === 'notes' ? REVIEW_NOTES_MOST : Infinity }]));
+    const texts = metadataTexts(STORE, project, folder, source, json, fields);
     if ((texts.demoAccountName === undefined) !== (texts.demoAccountPassword === undefined)) {
         throw new Error(`crossbind: ${path.relative(project, folder)} has one of demo_user.txt and demo_password.txt, and App Review signs in with both: add the other, or remove it.`);
     }
+    if (json.signInRequired === false && texts.demoAccountName !== undefined) throw new Error(`crossbind: ${source}.signInRequired is false but ${REVIEW} supplies demo credentials.`);
+    if (json.signInRequired !== undefined) return { ...texts, demoAccountRequired: json.signInRequired };
     return texts.demoAccountName === undefined ? texts : { ...texts, demoAccountRequired: true };
+}
+
+function versionSettings(value, source) {
+    if (Object.hasOwn(value, 'copyright')) checkedText(STORE, `${source}.copyright`, value.copyright);
+    if (Object.hasOwn(value, 'review')) {
+        const review = metadataObject(value.review, `${source}.review`, ['contactFirstName', 'contactLastName', 'contactEmail', 'contactPhone', 'signInRequired']);
+        for (const [field, entry] of Object.entries(review)) {
+            if (field === 'signInRequired') {
+                if (typeof entry !== 'boolean') throw new Error(`crossbind: ${source}.review.signInRequired must be true or false.`);
+            } else {
+                checkedText(STORE, `${source}.review.${field}`, entry);
+            }
+        }
+    }
+    return value;
 }
 
 // The app's settings beside the listing's locales, which a release and --send send, each left out without its file:
 // the version's copyright, the app's categories, its age rating's answers and App Review's contact.
-export function readAppStoreSettings(project) {
-    const copyright = readSetting(STORE, project, COPYRIGHT, { most: Infinity });
-    const categories = Object.fromEntries(Object.entries(CATEGORIES).map(([file, field]) => {
-        const id = readSetting(STORE, project, file, { most: Infinity });
-        if (id !== undefined && !CATEGORY_ID.test(id)) {
-            throw new Error(`crossbind: ${path.join(STORE.folder, file)} names ${JSON.stringify(id)}, which is no category's id as App Store Connect's API names it, as UTILITIES or PRODUCTIVITY.`);
+export function readAppStoreSettings(project, platform = 'ios') {
+    const folder = path.join(project, STORE.folder);
+    const file = path.join(folder, 'store.json');
+    const source = path.relative(project, file);
+    const json = versionSettings(readMetadata(project, file, ['copyright', 'primaryCategory', 'secondaryCategory', 'ageRating', 'review', 'platforms']), source);
+    const platforms = json.platforms === undefined ? {} : metadataObject(json.platforms, `${source}.platforms`, ['ios', 'macos']);
+    for (const [name, value] of Object.entries(platforms)) {
+        const label = `${source}.platforms.${name}`;
+        versionSettings(metadataObject(value, label, ['copyright', 'review']), label);
+    }
+    const overrides = platforms[platform] ?? {};
+    const copyright = metadataTexts(STORE, project, folder, source, { ...json, ...overrides }, { [COPYRIGHT]: { field: 'copyright' } });
+    const categoryFields = Object.fromEntries(Object.entries(CATEGORIES).map(([name, field]) => [name, { field }]));
+    const categories = metadataTexts(STORE, project, folder, source, json, categoryFields);
+    for (const [name, field] of Object.entries(CATEGORIES)) {
+        if (categories[field] !== undefined && !CATEGORY_ID.test(categories[field])) {
+            const label = Object.hasOwn(json, field) ? `${source}.${field}` : path.join(STORE.folder, name);
+            throw new Error(`crossbind: ${label} names ${JSON.stringify(categories[field])}, which is no category's id as App Store Connect's API names it, as UTILITIES or PRODUCTIVITY.`);
         }
-        return [field, id];
-    }).filter(([, id]) => id !== undefined));
-    const ageRating = readAgeRating(project);
+    }
+    const ageRating = readAgeRating(project, json, source);
     return {
-        ...(copyright === undefined ? {} : { copyright }), categories, ...(ageRating === null ? {} : { ageRating }), review: readReview(project),
+        ...copyright, categories, ...(ageRating === null ? {} : { ageRating }),
+        review: readReview(project, { ...json.review, ...overrides.review }, `${source}.review`),
     };
 }
 

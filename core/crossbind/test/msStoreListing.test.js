@@ -23,6 +23,19 @@ afterEach(() => {
 });
 
 describe("a project's Microsoft Store listing", () => {
+    test('reads typed lists from locale JSON with the same limits and keeps certification notes in their file', () => {
+        write('store.json', JSON.stringify({ category: 'Productivity', websiteUrl: 'https://example.com' }));
+        write('notes_for_certification.txt', 'Open a file.');
+        write('en-US/listing.json', JSON.stringify({ title: 'Demo', features: ['Reads maps'], keywords: ['geo'] }));
+        write('en-US/release_notes.txt', 'Initial release.');
+        expect(readStoreSettings(project)).toEqual({ category: 'Productivity', websiteUrl: 'https://example.com', notesForCertification: 'Open a file.' });
+        expect(readStoreListing(project)[0].texts).toEqual({ title: 'Demo', features: ['Reads maps'], keywords: ['geo'], releaseNotes: 'Initial release.' });
+        write('en-US/listing.json', JSON.stringify({ keywords: Array(8).fill('map') }));
+        expect(() => readStoreListing(project)).toThrow('7 at most');
+        write('en-US/keywords.txt', 'map');
+        expect(() => readStoreListing(project)).toThrow(/listing.json.keywords.*keywords.txt/);
+    });
+
     test('is none without its folder', () => {
         expect(readStoreListing(project)).toEqual([]);
         expect(readStoreSettings(project)).toEqual({});

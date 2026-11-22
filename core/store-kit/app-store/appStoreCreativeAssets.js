@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { imageOf, takenNames } from '../index.js';
+import { imageOf, metadataObject, takenNames } from '../index.js';
 import { uploadParts } from './appStoreApi.js';
 
 const placements = { header: 'PRODUCT_PAGE_HEADER_ASSET', 'search-results': 'APP_STORE_SEARCH_RESULTS_ASSET' };
@@ -10,17 +10,24 @@ const category = 'CREATIVE_ASSETS';
 const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 const maximumBytes = 500 * 1024 * 1024;
 
-export function readCreativeAssets(store, project, folder) {
-    if (!fs.existsSync(folder)) return {};
-    const names = takenNames(store, project, folder, (name, isDir) => {
+export function readCreativeAssets(store, project, folder, references = {}) {
+    const names = fs.existsSync(folder) ? takenNames(store, project, folder, (name, isDir) => {
         const { name: role, ext } = path.parse(name);
         return !isDir && (role === 'universal' || Object.hasOwn(placements, role)) && /^\.(png|jpe?g|id)$/i.test(ext);
-    });
+    }) : [];
     const assets = {};
+    const file = path.join(path.dirname(folder), 'listing.json');
+    const source = `${path.relative(project, file)}.creativeAssets`;
+    const roles = { header: 'header', searchResults: 'search-results', universal: 'universal' };
+    for (const [key, ref] of Object.entries(metadataObject(references, source, Object.keys(roles)))) {
+        const { assetId } = metadataObject(ref, `${source}.${key}`, ['assetId']);
+        if (typeof assetId !== 'string' || !uuid.test(assetId)) throw new Error(`crossbind: ${source}.${key}.assetId must be an Asset Library UUID.`);
+        assets[roles[key]] = { file, id: assetId.toLowerCase() };
+    }
     for (const name of names) {
         const [role, extension] = name.split('.');
         const file = path.join(folder, name);
-        if (assets[role]) throw new Error(`crossbind: ${path.relative(project, folder)} has two files for ${role}. Choose one image or one Asset Library ID for that role.`);
+        if (assets[role]) throw new Error(`crossbind: ${path.relative(project, folder)} has two files for ${role}: ${path.relative(project, assets[role].file)} and ${path.relative(project, file)}. Choose one image or one Asset Library ID for that role.`);
         if (extension.toLowerCase() === 'id') {
             const id = fs.readFileSync(file, 'utf8').trim();
             if (!uuid.test(id)) throw new Error(`crossbind: ${path.relative(project, file)} must contain one Asset Library image ID (UUID).`);

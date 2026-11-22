@@ -166,9 +166,9 @@ async function updateSettings(call, appId, version, {
         const detail = await relatedData(call, `/appStoreVersions/${version.id}/appStoreReviewDetail`);
         if (!detail) {
             await call('POST', '/appStoreReviewDetails', { data: { type: 'appStoreReviewDetails', attributes: review, relationships: { appStoreVersion: to('appStoreVersions', version.id) } } });
-            changed.push("App Review's contact");
+            changed.push('App Review information');
         } else if (await patchDiffering(call, 'appStoreReviewDetails', detail, review)) {
-            changed.push("App Review's contact");
+            changed.push('App Review information');
         }
     }
     return changed;

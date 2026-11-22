@@ -31,7 +31,7 @@ function localeLine({
 }
 
 // The project's listing and settings, with what stops reading them as a problem of its own.
-function readAll(root) {
+function readAll(root, platform) {
     const problems = [];
     let listings = [];
     let settings = { categories: {}, review: {} };
@@ -42,7 +42,7 @@ function readAll(root) {
         problems.push(error.message);
     }
     try {
-        settings = readAppStoreSettings(root);
+        settings = readAppStoreSettings(root, platform);
     } catch (error) {
         problems.push(error.message);
     }
@@ -57,7 +57,9 @@ function settingsLines({
         copyright === undefined ? null : `copyright: ${copyright}`,
         Object.keys(categories).length === 0 ? null : `categories: ${Object.values(categories).join(', ')}`,
         ageRating ? `the age rating's answers in ${file('age_rating.json')}` : null,
-        Object.keys(review).length === 0 ? null : `App Review's contact in ${file('review_information')}`,
+        Object.hasOwn(review, 'demoAccountRequired') ? `App Review sign-in required: ${review.demoAccountRequired ? 'yes' : 'no'}` : null,
+        Object.keys(review).some((key) => key.startsWith('contact')) ? 'App Review contact details' : null,
+        review.notes !== undefined ? 'App Review notes' : null,
     ].filter(Boolean);
 }
 
@@ -70,7 +72,7 @@ function lackedSteps(listings, settings) {
         settings.categories.primaryCategory ? null : `App Information › Category, which ${file('primary_category.txt')} would send, as UTILITIES.`,
         settings.ageRating ? null : `App Information › Age Rating: answer Apple's questions, which ${file('age_rating.json')} would send.`,
         settings.copyright === undefined ? `The version's Copyright, which ${file('copyright.txt')} would send.` : null,
-        Object.keys(settings.review).length > 0 ? null : `The version's App Review Information: a contact's name, phone and e-mail, which ${file('review_information')} would send.`,
+        ['contactFirstName', 'contactLastName', 'contactPhone', 'contactEmail'].every((key) => settings.review[key]) ? null : `The version's App Review Information: a contact's name, phone and e-mail, which ${file('review_information')} would send.`,
         has(/^APP_IPHONE_/) ? null : "The version's iPhone screenshots, 6.9-inch ones at least, which a locale's screenshots/APP_IPHONE_67 would send.",
         has(/^APP_IPAD_PRO_3GEN_129$/) ? null : "The version's 13-inch iPad screenshots, which App Store Connect takes of an app that runs on iPads, as crossbind's iOS apps do; a locale's screenshots/APP_IPAD_PRO_3GEN_129 would send them.",
         has(/^APP_DESKTOP$/) ? null : "The macOS version's screenshots, 16:10 ones of 1280 × 800 to 2880 × 1800, which a locale's screenshots/APP_DESKTOP would send.",
@@ -81,7 +83,7 @@ function lackedSteps(listings, settings) {
 // a release puts out, what --send sends, which a release sends too, what App Store Connect would refuse of them, and the
 // steps it alone takes.
 export function appStoreGuide(api) {
-    const { listings, settings, problems: read } = readAll(api.project.root);
+    const { listings, settings, problems: read } = readAll(api.project.root, api.platform);
     const problems = [...read, ...(api.app.category?.macos ? [] : ['crossbind: app.category is not set, and the Mac App Store takes no app without its category.'])];
     const uploads = [
         'the iOS app, archived and uploaded, which TestFlight hands to testers once Apple has processed it; -p ios sends it alone',

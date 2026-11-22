@@ -28,6 +28,21 @@ afterEach(() => {
 });
 
 describe("a project's Google Play listing", () => {
+    test('combines structured metadata with file-based descriptions and versioned release notes', () => {
+        write('store.json', JSON.stringify({ contactEmail: 'support@example.com', category: 'TOOLS' }));
+        write('en-US/listing.json', JSON.stringify({ title: 'Map', shortDescription: 'Convert files', video: '' }));
+        write('en-US/full_description.txt', 'Long description.');
+        write('en-US/changelogs/42.txt', 'New format.');
+        expect(readPlaySettings(project)).toEqual({ details: { contactEmail: 'support@example.com' }, category: 'TOOLS' });
+        expect(readPlayListing(project)[0]).toMatchObject({ texts: { title: 'Map', shortDescription: 'Convert files', fullDescription: 'Long description.', video: '' }, notes: { 42: 'New format.' } });
+        write('contact_email.txt', 'other@example.com');
+        expect(() => readPlaySettings(project)).toThrow(/store.json.contactEmail.*contact_email.txt/);
+        write('en-US/listing.json', JSON.stringify({ title: 'x'.repeat(31) }));
+        expect(() => readPlayListing(project)).toThrow('30 at most');
+        write('en-US/listing.json', '[]');
+        expect(() => readPlayListing(project)).toThrow('must contain an object');
+    });
+
     test('is none without its folder', () => {
         expect(readPlayListing(project)).toEqual([]);
     });
