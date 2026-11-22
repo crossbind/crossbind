@@ -13,7 +13,7 @@ const maximumBytes = 500 * 1024 * 1024;
 export function readCreativeAssets(store, project, folder, references = {}) {
     const names = fs.existsSync(folder) ? takenNames(store, project, folder, (name, isDir) => {
         const { name: role, ext } = path.parse(name);
-        return !isDir && (role === 'universal' || Object.hasOwn(placements, role)) && /^\.(png|jpe?g|id)$/i.test(ext);
+        return !isDir && (role === 'universal' || Object.hasOwn(placements, role)) && /^\.(png|jpe?g)$/i.test(ext);
     }) : [];
     const assets = {};
     const file = path.join(path.dirname(folder), 'listing.json');
@@ -25,16 +25,10 @@ export function readCreativeAssets(store, project, folder, references = {}) {
         assets[roles[key]] = { file, id: assetId.toLowerCase() };
     }
     for (const name of names) {
-        const [role, extension] = name.split('.');
+        const role = path.parse(name).name;
         const file = path.join(folder, name);
         if (assets[role]) throw new Error(`crossbind: ${path.relative(project, folder)} has two files for ${role}: ${path.relative(project, assets[role].file)} and ${path.relative(project, file)}. Choose one image or one Asset Library ID for that role.`);
-        if (extension.toLowerCase() === 'id') {
-            const id = fs.readFileSync(file, 'utf8').trim();
-            if (!uuid.test(id)) throw new Error(`crossbind: ${path.relative(project, file)} must contain one Asset Library image ID (UUID).`);
-            assets[role] = { file, id: id.toLowerCase() };
-        } else {
-            assets[role] = { file };
-        }
+        assets[role] = { file };
     }
     return assets;
 }

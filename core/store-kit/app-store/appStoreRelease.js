@@ -136,7 +136,7 @@ async function patchDiffering(call, type, resource, wanted) {
 // Puts the app's categories and age rating into its information that changes with the version, where App Store
 // Connect's differ, and gives the names of those it changed.
 async function updateInfoSettings(call, appId, { categories, ageRating }) {
-    const info = await openInfo(call, appId, { what: 'categories and age rating', files: 'primary_category.txt, secondary_category.txt and age_rating.json' });
+    const info = await openInfo(call, appId, { what: 'categories and age rating', files: 'store.json.primaryCategory, store.json.secondaryCategory and store.json.ageRating' });
     const changed = [];
     if (Object.keys(categories).length > 0) {
         const { data } = await call('GET', query(`/appInfos/${info.id}`, { include: 'primaryCategory,secondaryCategory' }));
@@ -270,11 +270,11 @@ async function updateListing(call, appId, version, listings, afterwards) {
     if (listings.length === 0) return [];
     const { data: versionTexts } = await call('GET', query(`/appStoreVersions/${version.id}/appStoreVersionLocalizations`, { limit: '200' }));
     const info = listings.some((listing) => Object.keys(listing.info).length > 0)
-        ? await openInfo(call, appId, { what: 'name, subtitle and privacy policy URL', files: 'name.txt, subtitle.txt and privacy_url.txt' }) : null;
+        ? await openInfo(call, appId, { what: 'name, subtitle and privacy policy URL', files: 'listing.json.name, listing.json.subtitle and listing.json.privacyPolicyUrl' }) : null;
     const infoTexts = info ? (await call('GET', query(`/appInfos/${info.id}/appInfoLocalizations`, { limit: '200' }))).data : [];
     const lacking = listings.find((listing) => Object.keys(listing.info).length > 0 && listing.info.name === undefined
         && !infoTexts.some(({ attributes }) => attributes.locale === listing.locale));
-    if (lacking) throw new Error(`crossbind: App Store Connect has no ${lacking.locale} information of the app yet, which it makes of its name: add name.txt to ${path.join(APP_STORE_LISTING, lacking.locale)}.`);
+    if (lacking) throw new Error(`crossbind: App Store Connect has no ${lacking.locale} information of the app yet, which it makes of its name: add listing.json.name to ${path.join(APP_STORE_LISTING, lacking.locale)}.`);
     const changed = [];
     const sets = [];
     for (const listing of listings) {

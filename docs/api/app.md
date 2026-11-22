@@ -1603,7 +1603,8 @@ names every missing piece at once. `-p` sends one platform's page, as `-p ios` A
 Put settings in `store/<store>/store.json` and localized short fields in
 `store/<store>/<locale>/listing.json`. Keep long descriptions, release notes, screenshots and artwork in the files
 listed in each store's section below. Both JSON files are optional. Each field has one source. To migrate a field,
-move its value into JSON and remove its old file in the same change. Existing per-field listings keep working.
+move its value into JSON and remove its old file in the same change. Crossbind rejects the old per-field metadata files, including when the JSON file is absent. For example, move
+Google Play’s `en-US/title.txt` to the `title` property in `en-US/listing.json`.
 Crossbind reports unknown keys, wrong types, duplicate sources and store limits before sending the affected listing.
 An omitted field preserves the store's value. An explicit `false` updates a boolean.
 
@@ -1627,12 +1628,12 @@ For example, an Apple `store.json` can disable review sign-in on both platforms 
 }
 ```
 
-`platforms.ios` and `platforms.macos` can override `copyright` and individual `review` fields.
-Categories and age rating apply to the app. `ageRating` accepts the same object as the earlier `age_rating.json`.
-`review` accepts `signInRequired` (boolean) and the optional strings `contactFirstName`, `contactLastName`,
-`contactEmail` and `contactPhone`. Keep private contacts, reviewer notes and demo credentials in a Git-ignored
-`review_information/` directory or supply those files from CI. A demo username and password imply required sign-in.
-Remove both credentials before setting `signInRequired` to `false`.
+`platforms.ios` and `platforms.macos` can override `copyright` and `review.signInRequired`.
+Categories and age rating apply to the app. Move the contents of an earlier `age_rating.json` into `ageRating`.
+Put reviewer contact details and demo credentials in a Git-ignored `review_information/private.json`.
+Its optional string fields are `contactFirstName`, `contactLastName`, `contactEmail`, `contactPhone`,
+`demoAccountName` and `demoAccountPassword`. Supply both demo fields together. They imply required sign-in.
+Omit both when setting `signInRequired` to `false`. Put longer review instructions in `review_information/notes.txt`.
 
 An Apple locale can use `"creativeAssets": { "header": { "assetId": "<image UUID>" } }` in `listing.json` to
 reuse a library image. Supported roles are `header`, `searchResults` and `universal`.
@@ -1712,14 +1713,12 @@ Without a terminal, as in CI, nothing is asked, and the upload names every missi
 ### Google Play's listing
 
 A project's `store/google-play` folder accepts [store metadata files](#store-metadata-files) and the following layout: a folder per language, named as Play names it
-(`en-US`, `tr-TR`), with the files fastlane's supply reads:
+(`en-US`, `tr-TR`), with these files:
 
 ```text
 store/google-play/en-US/
-├── title.txt                 at most 30 characters
-├── short_description.txt     at most 80
+├── listing.json              title (30 characters), shortDescription (80), video (YouTube URL)
 ├── full_description.txt      at most 4000
-├── video.txt                 a YouTube URL
 ├── changelogs/default.txt    the release's notes, at most 500; <versionCode>.txt for that release alone
 └── images/
     ├── icon.png              .png, .jpg or .jpeg, as every image
@@ -1733,7 +1732,7 @@ store/google-play/en-US/
 language's texts where one differs and its images of a type where Play shows others or in another order, with the
 contact details and the Data safety declaration below, and commits it where one did. An upload sends the notes alone,
 in its release. What the folder leaves out stays as Play has it, so it may hold the notes alone, or the screenshots. A
-language Play has no listing in yet takes `title.txt`, `short_description.txt` and `full_description.txt`, which Play
+language Play has no listing in yet takes `title` and `shortDescription` in `listing.json` plus `full_description.txt`, which Play
 makes a listing of. `--send` stops at an empty text but a video's, which takes the video away, at a text longer than
 Play takes, at two files of one image, and at a file or folder Play takes none of, naming it; an upload stops before its
 build at release notes Play would refuse.
@@ -1747,12 +1746,9 @@ Beside the languages, the folder holds the app's settings:
 
 ```text
 store/google-play/
-├── contact_email.txt         the contact details --send sends where Play's differ
-├── contact_website.txt
-├── contact_phone.txt
-├── data_safety.csv           the Data safety declaration as Play Console exports it, which --send sends
-├── privacy_url.txt           what Play Console alone takes, which crossbind app store names to enter there
-└── category.txt
+├── store.json                contactEmail, contactWebsite and contactPhone are sent by --send
+│                             privacyUrl and category appear in the Play Console instructions
+└── data_safety.csv           the Data safety declaration exported by Play Console
 ```
 
 The declaration goes first, so one Play refuses stops `--send` before its edit. The contact details take "Manage store
@@ -1833,20 +1829,14 @@ App Store Connect busy or out of reach for a moment tries again.
 ### The App Store listing
 
 A project's `store/app-store` folder accepts [store metadata files](#store-metadata-files) and the following layout, which goes with `--send` and with a release: a folder per locale, named
-as App Store Connect names it (`en-US`, `tr`, `zh-Hans`), with the texts' files fastlane's deliver reads and a folder of
-screenshots per display type:
+as App Store Connect names it (`en-US`, `tr`, `zh-Hans`), with these files and a folder of screenshots per display type:
 
 ```text
 store/app-store/en-US/
-├── name.txt                  at most 30 characters
-├── subtitle.txt              at most 30
-├── privacy_url.txt           the privacy policy's URL
-├── description.txt           at most 4000
-├── keywords.txt              at most 100, separated by commas
+├── listing.json              name (30), subtitle (30), keywords (100 characters including commas),
+│                             promotionalText (170), privacyPolicyUrl, supportUrl, marketingUrl, creativeAssets
+├── description.txt           at most 4000 characters
 ├── release_notes.txt         what's new in the version, at most 4000
-├── promotional_text.txt      at most 170
-├── support_url.txt
-├── marketing_url.txt
 ├── creative-assets/          iOS product page header and search results
 │   ├── universal.png         default artwork for both placements
 │   └── search-results.jpg    optional override for search results
@@ -1859,7 +1849,7 @@ store/app-store/en-US/
 The version takes what the folder has where App Store Connect's own differs, in a new localization for a locale it has
 none of; the name, subtitle and privacy policy URL go into the app's information that changes with the version, which
 App Store Connect makes for a new locale of its name alone. What the folder leaves out stays as App Store Connect has
-it, so it may hold the release notes alone. An empty `subtitle.txt`, `promotional_text.txt` or `marketing_url.txt`
+it, so it may hold the release notes alone. An empty string for `subtitle`, `promotionalText` or `marketingUrl`
 clears its text. `--send` and a release stop before anything changes at another empty text, at a text longer than App
 Store Connect takes, and at a file or folder it takes none of, naming it.
 
@@ -1890,9 +1880,9 @@ individual images, or a shared image with a different one for a particular place
 | `header.png` | Header | 3840 × 1646 PNG or the universal size |
 | `search-results.png`, `.jpg`, `.jpeg` | Search Results | 3:2 from 1920 × 1280 to 3840 × 2560, or the universal PNG |
 
-Use opaque images up to 500 MiB. To reuse an image already in the app’s Asset Library, put its image UUID in
-`universal.id`, `header.id`, or `search-results.id`. Supply one file per role. For example, `header.id` with
-`search-results.jpg` keeps an existing header and gives the locale its own search artwork.
+Use opaque images up to 500 MiB. To reuse an existing Asset Library image for the header, set
+`creativeAssets.header.assetId` in the locale’s `listing.json`. Each role accepts one image or library reference.
+A local `search-results.jpg` can supply different artwork for search results.
 
 `crossbind app store app-store` lists the configured roles and checks local artwork.
 `crossbind app store app-store --send -p ios` applies them to the draft and `crossbind app release app-store -p ios`
@@ -1906,25 +1896,10 @@ safe area for that placement. Apple provides layout templates and examples in it
 
 #### App settings
 
-Beside the locales, the folder holds the app's settings, by the names fastlane's deliver gives them, which a release and
-`--send` send where App Store Connect's differ:
-
-```text
-store/app-store/
-├── copyright.txt             the version's copyright, as 2026 Example Ltd.
-├── primary_category.txt      the app's categories, by the ids of App Store Connect's API: UTILITIES, PRODUCTIVITY
-├── secondary_category.txt
-├── age_rating.json           the age rating's answers, by the names of its API, as
-│                             { "violenceCartoonOrFantasy": "NONE", "gambling": false }
-└── review_information/       App Review's contact: first_name.txt, last_name.txt, phone_number.txt,
-                              email_address.txt and notes.txt, and demo_user.txt with demo_password.txt
-                              for an app that signs in
-```
-
-The categories and the age rating go into the app's information that changes with the version, as its name does. An
-answer of `age_rating.json` App Store Connect takes none of stops the upload before the build; a question crossbind
-does not know goes as it is, for one Apple adds. A demo account's password is a secret: keep `demo_password.txt` out of
-the repository, and write it from one in CI.
+Put app settings in `store/app-store/store.json`. Use Apple’s category IDs (for example, `UTILITIES`)
+for `primaryCategory` and `secondaryCategory`. `ageRating` holds Apple’s API answers, for example
+`{ "violenceCartoonOrFantasy": "NONE", "gambling": false }`. Crossbind validates known answers before building.
+The review flag and private contact file are described in [Store metadata files](#store-metadata-files).
 
 ### GitHub Releases
 
@@ -2061,22 +2036,18 @@ keeping the ids in `~/.crossbind/config.json` and the key in the system keychain
 
 ### The Microsoft Store listing
 
-Use [store metadata files](#store-metadata-files) for settings and short localized fields. The previous layout below is also supported.
+Use [store metadata files](#store-metadata-files) for settings and short localized fields.
 
 A project's `store/microsoft-store` folder holds its Microsoft Store listing: a folder per language, named as BCP 47
-names it (`en-US`, `tr-TR`), with a file per field:
+names it (`en-US`, `tr-TR`), with these files:
 
 ```text
 store/microsoft-store/en-US/
-├── title.txt                 the product's name, one Partner Center reserved
+├── listing.json              title, shortDescription (1000), copyrightAndTrademarkInfo (200), devStudio,
+│                             features (20 entries of 200 characters), keywords (7 of 40, 21 words total)
 ├── description.txt           at most 10000 characters
-├── short_description.txt     at most 1000
-├── features.txt              a feature a line, 20 at most of 200 characters each
-├── keywords.txt              a search term a line, 7 at most of 40 characters each, 21 words in all
 ├── release_notes.txt         what's new in the version, at most 1500
-├── copyright.txt             at most 200
 ├── license_terms.txt         additional license terms, at most 10000
-├── developed_by.txt
 └── images/
     ├── screenshots/          the desktop's: 01.png, 02.png, 10 at most, 1366 × 768 to 3840 × 2160,
     │                         and 01.txt with 01.png's caption, at most 200 characters
@@ -2084,10 +2055,9 @@ store/microsoft-store/en-US/
     └── hero.png              the 16:9 super hero art, 1920 × 1080 or 3840 × 2160, with no text
 ```
 
-Beside the languages, `category.txt` names the app's category as Partner Center's API does, as `UtilitiesAndTools`, and
-`notes_for_certification.txt` holds the notes for certification, which a release and `--send` send; `privacy_url.txt`,
-`website_url.txt` and `support_contact.txt` hold what Partner Center's Properties page alone takes, as its API takes them
-no more, so `crossbind app store` names them to enter there. `crossbind app store microsoft-store --send` sends the
+In `store.json`, set `category` to a Partner Center category ID such as `UtilitiesAndTools`.
+A release and `--send` send it along with `notes_for_certification.txt`. The guide displays `privacyUrl`,
+`websiteUrl` and `supportContact` for entry on Partner Center’s Properties page. `crossbind app store microsoft-store --send` sends the
 listing and these settings alone, in a submission of the packages Partner Center has, which it certifies as it does a
 release's. Where an upload left a submission not submitted yet, `--send` stops and names the release, which sends the
 page with the upload's packages, as Partner Center takes one submission at a time.

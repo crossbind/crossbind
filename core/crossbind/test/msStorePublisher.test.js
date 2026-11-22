@@ -177,8 +177,8 @@ describe('the Microsoft Store publisher', () => {
     });
 
     test("tells crossbind app store the first submission's steps, each field from its file", () => {
-        writeUnder(project, 'store/microsoft-store/en-US/title.txt', 'Demo');
-        writeUnder(project, 'store/microsoft-store/category.txt', 'UtilitiesAndTools');
+        writeUnder(project, 'store/microsoft-store/en-US/listing.json', JSON.stringify({ title: 'Demo' }));
+        writeUnder(project, 'store/microsoft-store/store.json', JSON.stringify({ category: 'UtilitiesAndTools' }));
         const {
             uploads, sends, releases, problems, where, steps,
         } = publisher.guide(apiOf({ msix: null }).api);
@@ -205,15 +205,15 @@ describe('the Microsoft Store publisher', () => {
             'For later versions, which uploads and releases send',
         ]);
         expect(steps[3].details.map(upath.toUnix)).toEqual([
-            'Product name ← store/microsoft-store/en-US/title.txt',
+            'Product name ← store/microsoft-store/en-US/listing.json.title',
             'Description: none yet, which store/microsoft-store/en-US/description.txt would hold and Partner Center takes no listing without',
             'Screenshots, Desktop: none yet, which store/microsoft-store/en-US/images/screenshots would hold and Partner Center takes no listing without',
         ]);
         expect(steps[4].details.map(upath.toUnix)).toEqual([
             'Category: UtilitiesAndTools',
-            'Privacy policy URL: (store/microsoft-store/privacy_url.txt would name it)',
-            'Website: (store/microsoft-store/website_url.txt would name it)',
-            'Support contact info: (store/microsoft-store/support_contact.txt would name it)',
+            'Privacy policy URL: (store/microsoft-store/store.json.privacyUrl would name it)',
+            'Website: (store/microsoft-store/store.json.websiteUrl would name it)',
+            'Support contact info: (store/microsoft-store/store.json.supportContact would name it)',
         ]);
     });
 });

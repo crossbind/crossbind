@@ -28,13 +28,24 @@ afterEach(() => {
 });
 
 describe("a project's App Store listing", () => {
+    test.each([
+        ['en-US/name.txt', readAppStoreListing],
+        ['en-US/creative-assets/header.id', readAppStoreListing],
+        ['copyright.txt', readAppStoreSettings],
+        ['age_rating.json', readAppStoreSettings],
+        ['review_information/email_address.txt', readAppStoreSettings]
+    ])('rejects the retired %s file even without JSON', (file, read) => {
+        write(file, 'unused');
+        expect(() => read(project)).toThrow(file.split('/').at(-1));
+    });
+
     test('reads store and locale JSON, preserving an explicit false and applying version overrides per platform', () => {
         const id = '6e4f57c4-447c-464f-9525-ca3856ea8afc';
         write('store.json', JSON.stringify({
             primaryCategory: 'UTILITIES', ageRating: { advertising: false },
             review: { signInRequired: false }, platforms: { ios: { copyright: '2026 Demo' }, macos: { review: { signInRequired: true } } },
         }));
-        write('review_information/email_address.txt', 'review@example.com');
+        write('review_information/private.json', JSON.stringify({ contactEmail: 'review@example.com' }));
         write('en-US/listing.json', JSON.stringify({ name: 'Demo', subtitle: '', keywords: ['convert', 'maps'], creativeAssets: { header: { assetId: id } } }));
         write('en-US/description.txt', 'Multi-line\ndescription.');
         const ios = readAppStoreSettings(project, 'ios');
@@ -51,8 +62,7 @@ describe("a project's App Store listing", () => {
         write('store.json', JSON.stringify({ review: { signInRequired: 'false' } }));
         expect(() => readAppStoreSettings(project)).toThrow('signInRequired must be true or false');
         write('store.json', JSON.stringify({ review: { signInRequired: false } }));
-        write('review_information/demo_user.txt', 'demo');
-        write('review_information/demo_password.txt', 'secret');
+        write('review_information/private.json', JSON.stringify({ demoAccountName: 'demo', demoAccountPassword: 'secret' }));
         expect(() => readAppStoreSettings(project)).toThrow('supplies demo credentials');
         write('store.json', JSON.stringify({ platforms: { ios: { primaryCategory: 'GAMES' } } }));
         expect(() => readAppStoreSettings(project)).toThrow('unknown field primaryCategory');
@@ -60,14 +70,13 @@ describe("a project's App Store listing", () => {
         expect(() => readAppStoreListing(project)).toThrow('array');
         write('en-US/listing.json', JSON.stringify({ name: 'Demo' }));
         write('en-US/name.txt', 'Demo');
-        expect(() => readAppStoreListing(project)).toThrow(/listing.json.name.*name.txt/);
+        expect(() => readAppStoreListing(project)).toThrow(/name.txt is none/);
     });
 
     test('previews shared and localized creative artwork and only includes it for iOS', () => {
         write('en-US/creative-assets/universal.png', pngOf(5244, 2950));
         write('en-US/creative-assets/search-results.jpg', jpegOf(3000, 2000));
-        write('tr/creative-assets/header.id', '6E4F57C4-447C-464F-9525-CA3856EA8AFC\n');
-        write('tr/keywords.txt', 'harita');
+        write('tr/listing.json', JSON.stringify({ keywords: ['harita'], creativeAssets: { header: { assetId: '6E4F57C4-447C-464F-9525-CA3856EA8AFC' } } }));
         const listings = readAppStoreListing(project);
         expect(listings[1].creativeAssets.header.id).toBe('6e4f57c4-447c-464f-9525-ca3856ea8afc');
         expect(appStoreListingProblems(project, listingOf(listings, 'IOS'))).toEqual([]);
@@ -97,9 +106,9 @@ describe("a project's App Store listing", () => {
     });
 
     test('identifies invalid IDs and competing sources for one placement', () => {
-        write('tr/creative-assets/header.id', 'bad id');
-        expect(() => readAppStoreListing(project)).toThrow(/header.id.*UUID/);
-        write('tr/creative-assets/header.id', '6e4f57c4-447c-464f-9525-ca3856ea8afc');
+        write('tr/listing.json', JSON.stringify({ creativeAssets: { header: { assetId: 'bad id' } } }));
+        expect(() => readAppStoreListing(project)).toThrow(/header.assetId.*UUID/);
+        write('tr/listing.json', JSON.stringify({ creativeAssets: { header: { assetId: '6e4f57c4-447c-464f-9525-ca3856ea8afc' } } }));
         write('tr/creative-assets/header.png', pngOf(3840, 1646));
         expect(() => readAppStoreListing(project)).toThrow('two files for header');
     });
@@ -108,16 +117,18 @@ describe("a project's App Store listing", () => {
         expect(readAppStoreListing(project)).toEqual([]);
     });
 
-    test("is each locale's texts of the app's information and of its version, by the names fastlane's deliver gives their files", () => {
-        write('en-US/name.txt', 'Demo\n');
-        write('en-US/subtitle.txt', '');
-        write('en-US/privacy_url.txt', 'https://example.com/privacy');
+    test("is each locale's texts of the app's information and of its version", () => {
+        write('en-US/listing.json', JSON.stringify({
+            name: 'Demo\n',
+            subtitle: '',
+            privacyPolicyUrl: 'https://example.com/privacy',
+            keywords: ['demo', 'example'],
+            promotionalText: 'Now faster.',
+            supportUrl: 'https://example.com/support',
+            marketingUrl: 'https://example.com',
+        }));
         write('en-US/description.txt', 'Line one\r\nLine two\n');
-        write('en-US/keywords.txt', 'demo,example');
         write('en-US/release_notes.txt', 'Fixes.');
-        write('en-US/promotional_text.txt', 'Now faster.');
-        write('en-US/support_url.txt', 'https://example.com/support');
-        write('en-US/marketing_url.txt', 'https://example.com');
         write('tr/release_notes.txt', 'Düzeltmeler.');
         write('zh-Hans/release_notes.txt', '修复。');
         write('en-US/.DS_Store');
@@ -137,12 +148,11 @@ describe("a project's App Store listing", () => {
     });
 
     test('stops at a text longer than App Store Connect takes, or empty where Apple takes none empty', () => {
-        write('en-US/keywords.txt', 'k'.repeat(101));
-        expect(() => readAppStoreListing(project)).toThrow(`crossbind: ${shown('en-US/keywords.txt')} has 101 characters, and App Store Connect takes 100 at most.`);
-        write('en-US/keywords.txt', 'demo');
-        write('en-US/promotional_text.txt', 'p'.repeat(171));
-        expect(() => readAppStoreListing(project)).toThrow(`${shown('en-US/promotional_text.txt')} has 171 characters, and App Store Connect takes 170 at most.`);
-        write('en-US/promotional_text.txt', '');
+        write('en-US/listing.json', JSON.stringify({ keywords: ['k'.repeat(101)] }));
+        expect(() => readAppStoreListing(project)).toThrow(`crossbind: ${shown('en-US/listing.json.keywords')} has 101 characters, and App Store Connect takes 100 at most.`);
+        write('en-US/listing.json', JSON.stringify({ keywords: ['demo'], promotionalText: 'p'.repeat(171) }));
+        expect(() => readAppStoreListing(project)).toThrow(`${shown('en-US/listing.json.promotionalText')} has 171 characters, and App Store Connect takes 170 at most.`);
+        write('en-US/listing.json', JSON.stringify({ promotionalText: '' }));
         write('en-US/release_notes.txt', '\n');
         expect(() => readAppStoreListing(project)).toThrow(`crossbind: ${shown('en-US/release_notes.txt')} is empty: write its text, or remove the file.`);
     });
@@ -188,23 +198,20 @@ describe("a project's App Store listing", () => {
         write('en-US/copyright.txt', '2026 Demo');
         expect(() => readAppStoreListing(project)).toThrow(`crossbind: ${shown('en-US/copyright.txt')} is none of the files an App Store listing takes; app.md's Publishing names them.`);
         fs.rmSync(path.join(project, 'store'), { recursive: true });
-        write('en-us/name.txt', 'Demo');
+        write('en-us/listing.json', JSON.stringify({ name: 'Demo' }));
         expect(() => readAppStoreListing(project)).toThrow(`crossbind: ${shown('en-us')} is no language's folder, as en-US is, which an App Store listing takes.`);
     });
 });
 
 describe("a project's App Store settings", () => {
     test('are the copyright, categories, age rating answers and App Review contact a release sends', () => {
-        write('copyright.txt', '2026 Example Ltd.\n');
-        write('primary_category.txt', 'UTILITIES');
-        write('secondary_category.txt', 'PRODUCTIVITY');
-        write('age_rating.json', JSON.stringify({
-            violenceCartoonOrFantasy: 'NONE', gambling: false, kidsAgeBand: null, aQuestionAppleAdds: true,
+        write('store.json', JSON.stringify({
+            copyright: '2026 Example Ltd.\n', primaryCategory: 'UTILITIES', secondaryCategory: 'PRODUCTIVITY',
+            ageRating: { violenceCartoonOrFantasy: 'NONE', gambling: false, kidsAgeBand: null, aQuestionAppleAdds: true },
         }));
-        write('review_information/first_name.txt', 'Ada');
-        write('review_information/email_address.txt', 'review@example.com');
+        write('review_information/private.json', JSON.stringify({ contactFirstName: 'Ada', contactEmail: 'review@example.com' }));
         write('review_information/notes.txt', 'No sign-in.');
-        write('en-US/name.txt', 'Demo');
+        write('en-US/listing.json', JSON.stringify({ name: 'Demo' }));
         expect(readAppStoreSettings(project)).toEqual({
             copyright: '2026 Example Ltd.',
             categories: { primaryCategory: 'UTILITIES', secondaryCategory: 'PRODUCTIVITY' },
@@ -221,25 +228,24 @@ describe("a project's App Store settings", () => {
     });
 
     test("take a demo account's name and password together, which App Review signs in with", () => {
-        write('review_information/demo_user.txt', 'demo');
-        expect(() => readAppStoreSettings(project)).toThrow('has one of demo_user.txt and demo_password.txt, and App Review signs in with both: add the other, or remove it.');
-        write('review_information/demo_password.txt', 'secret');
+        write('review_information/private.json', JSON.stringify({ demoAccountName: 'demo' }));
+        expect(() => readAppStoreSettings(project)).toThrow('must supply demoAccountName and demoAccountPassword together.');
+        write('review_information/private.json', JSON.stringify({ demoAccountName: 'demo', demoAccountPassword: 'secret' }));
         expect(readAppStoreSettings(project).review).toEqual({ demoAccountName: 'demo', demoAccountPassword: 'secret', demoAccountRequired: true });
     });
 
     test("stop at answers App Store Connect takes none of, and at a category's id it names none by", () => {
-        write('age_rating.json', JSON.stringify({ violenceRealistic: 'SOMETIMES' }));
+        write('store.json', JSON.stringify({ ageRating: { violenceRealistic: 'SOMETIMES' } }));
         expect(() => readAppStoreSettings(project)).toThrow('answers violenceRealistic with "SOMETIMES", which App Store Connect takes none of: it takes "NONE", "INFREQUENT_OR_MILD", "FREQUENT_OR_INTENSE", "INFREQUENT", "FREQUENT".');
-        write('age_rating.json', JSON.stringify({ gambling: 'no' }));
+        write('store.json', JSON.stringify({ ageRating: { gambling: 'no' } }));
         expect(() => readAppStoreSettings(project)).toThrow('answers gambling with "no", which App Store Connect takes none of: it takes true, false.');
-        write('age_rating.json', JSON.stringify({ aQuestionAppleAdds: 'maybe' }));
+        write('store.json', JSON.stringify({ ageRating: { aQuestionAppleAdds: 'maybe' } }));
         expect(() => readAppStoreSettings(project)).toThrow('answers aQuestionAppleAdds with "maybe", which App Store Connect takes none of.');
-        write('age_rating.json', '[]');
+        write('store.json', JSON.stringify({ ageRating: [] }));
         expect(() => readAppStoreSettings(project)).toThrow("holds no object of App Store Connect's age rating answers");
-        write('age_rating.json', '{');
-        expect(() => readAppStoreSettings(project)).toThrow('holds no JSON');
-        write('age_rating.json', '{}');
-        write('primary_category.txt', 'Utilities');
+        write('store.json', '{');
+        expect(() => readAppStoreSettings(project)).toThrow('cannot read JSON');
+        write('store.json', JSON.stringify({ primaryCategory: 'Utilities' }));
         expect(() => readAppStoreSettings(project)).toThrow('names "Utilities", which is no category\'s id as App Store Connect\'s API names it, as UTILITIES or PRODUCTIVITY.');
     });
 });
@@ -281,7 +287,7 @@ describe("what App Store Connect would refuse of a listing's screenshots", () =>
 
 describe("a platform's version of the App Store listing", () => {
     test("takes the Mac's screenshots for macOS, and every other type's for iOS", () => {
-        write('en-US/name.txt', 'Demo');
+        write('en-US/listing.json', JSON.stringify({ name: 'Demo' }));
         write('en-US/screenshots/APP_IPHONE_67/01.png', pngOf(1320, 2868));
         write('en-US/screenshots/APP_DESKTOP/01.png', pngOf(2560, 1600));
         const listings = readAppStoreListing(project);
@@ -293,11 +299,9 @@ describe("a platform's version of the App Store listing", () => {
 
 describe("crossbind app store's word on App Store Connect", () => {
     test('names what an upload sends, what --send sends, and the steps App Store Connect alone takes', () => {
-        write('en-US/name.txt', 'Demo');
-        write('en-US/privacy_url.txt', 'https://example.com/privacy');
+        write('en-US/listing.json', JSON.stringify({ name: 'Demo', privacyPolicyUrl: 'https://example.com/privacy' }));
         write('en-US/screenshots/APP_IPHONE_67/01.png', pngOf(1320, 2868));
-        write('copyright.txt', '2026 Example Ltd.');
-        write('primary_category.txt', 'UTILITIES');
+        write('store.json', JSON.stringify({ copyright: '2026 Example Ltd.', primaryCategory: 'UTILITIES' }));
 
         const guide = appStoreGuide({ project: { root: project }, config: { app: { id: 'dev.example.demo' } }, app: { encryption: false, category: { macos: 'public.app-category.utilities' } } });
 
@@ -319,8 +323,8 @@ describe("crossbind app store's word on App Store Connect", () => {
         const texts = guide.steps.map(({ text }) => text);
         expect(texts[0]).toBe("Apps › New App: an app with dev.example.demo as its bundle ID, on iOS and macOS, as an upload without -p sends both, with its name, primary language and SKU, as Apple's API makes none; an upload registers the bundle ID first, so the form lists it. An app on iOS alone takes macOS later with the + beside its platform in the sidebar, as a universal purchase, which stays one once both platforms are approved, and uploads with -p ios until then.");
         expect(texts.map(upath.toUnix)).toEqual(expect.arrayContaining([
-            "App Information › Age Rating: answer Apple's questions, which store/app-store/age_rating.json would send.",
-            "The version's App Review Information: a contact's name, phone and e-mail, which store/app-store/review_information would send.",
+            "App Information › Age Rating: answer Apple's questions, which store/app-store/store.json.ageRating would send.",
+            "The version's App Review Information: a contact's name, phone and e-mail, which store/app-store/review_information/private.json would send.",
             "The version's 13-inch iPad screenshots, which App Store Connect takes of an app that runs on iPads, as crossbind's iOS apps do; a locale's screenshots/APP_IPAD_PRO_3GEN_129 would send them.",
         ]));
         expect(texts.some((text) => ['Privacy Policy URL', '› Category', 'Copyright', 'app.encryption'].some((part) => text.includes(part)))).toBe(false);

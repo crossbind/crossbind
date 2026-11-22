@@ -6,38 +6,38 @@ import {
 
 // The app's contact details on Google Play, by their files beside the languages' folders, which an upload sends.
 const DETAILS = {
-    'contact_email.txt': { field: 'contactEmail', most: 100 },
-    'contact_website.txt': { field: 'contactWebsite', most: 2000 },
-    'contact_phone.txt': { field: 'contactPhone', most: 30 },
+    contactEmail: { most: 100 },
+    contactWebsite: { most: 2000 },
+    contactPhone: { most: 30 },
 };
 // The declaration of the app's Data safety section, as Play Console exports it, which an upload sends.
 const DATA_SAFETY = 'data_safety.csv';
 // What only Play Console takes, which crossbind app store names to enter there.
 const BY_HAND = {
-    'privacy_url.txt': { field: 'privacyUrl', most: 2000 },
-    'category.txt': { field: 'category', most: 50 },
+    privacyUrl: { most: 2000 },
+    category: { most: 50 },
 };
 
 // A project's Google Play listing: a folder per language, named as Play names its listings (en-US, tr-TR, es-419, fil),
-// with the files fastlane's supply names, and the app's settings beside them.
+// with localized JSON, long text and images beside the app's settings.
 const STORE = {
     name: 'Google Play',
     listing: 'a Google Play listing',
     folder: path.join('store', 'google-play'),
     language: /^[a-z]{2,3}(-([A-Z]{2}|\d{3}))?$/,
     example: 'en-US',
-    settings: [...Object.keys(DETAILS), DATA_SAFETY, ...Object.keys(BY_HAND)],
+    settings: [DATA_SAFETY],
 };
 export const PLAY_LISTING = STORE.folder;
 // A listing's texts by their files, and the most characters Play takes of each; a video's alone may be empty.
 const TEXTS = {
-    'full_description.txt': { field: 'fullDescription', most: 4000 },
-    'short_description.txt': { field: 'shortDescription', most: 80 },
-    'title.txt': { field: 'title', most: 30 },
-    'video.txt': { field: 'video', most: Infinity, canBeEmpty: true },
+    fullDescription: { file: 'full_description.txt', most: 4000 },
+    shortDescription: { most: 80 },
+    title: { most: 30 },
+    video: { most: Infinity, canBeEmpty: true },
 };
 // The texts Play makes a new listing of.
-const NEW_LISTING = ['title.txt', 'short_description.txt', 'full_description.txt'];
+const NEW_LISTING = ['title', 'shortDescription', 'fullDescription'];
 const NOTES_MOST = 500;
 const NOTES_FILE = /^(default|\d+)\.txt$/;
 // Play's image types: one image each, or a folder of screenshots each.
@@ -67,10 +67,10 @@ function readImages(project, folder) {
 }
 
 function readLanguage(project, { language, folder }) {
-    takenNames(STORE, project, folder, (name, isDir) => (isDir ? ['changelogs', 'images'].includes(name) : name === 'listing.json' || Object.hasOwn(TEXTS, name)));
+    takenNames(STORE, project, folder, (name, isDir) => (isDir ? ['changelogs', 'images'].includes(name) : name === 'listing.json' || name === TEXTS.fullDescription.file));
     const file = path.join(folder, 'listing.json');
     const json = readMetadata(project, file, ['title', 'shortDescription', 'video']);
-    const texts = metadataTexts(STORE, project, folder, path.relative(project, file), json, TEXTS);
+    const texts = metadataTexts(STORE, project, file, json, TEXTS);
     return {
         language,
         texts,
@@ -94,7 +94,7 @@ export const readPlayNotes = (project) => languageFolders(STORE, project)
 export const isListed = ({ texts, images }) => Object.keys(texts).length > 0 || Object.keys(images).length > 0;
 
 // The files a language's folder lacks of those Play makes a new listing of.
-export const lackedForNewListing = ({ texts }) => NEW_LISTING.filter((file) => texts[TEXTS[file].field] === undefined);
+export const lackedForNewListing = ({ texts }) => NEW_LISTING.filter((field) => texts[field] === undefined).map((field) => TEXTS[field].file ?? `listing.json.${field}`);
 
 // A release's notes in each language that has some, for its versionCode or else the default ones.
 export const releaseNotesOf = (listings, versionCode) => listings
@@ -106,8 +106,9 @@ export const releaseNotesOf = (listings, versionCode) => listings
 export function readPlaySettings(project) {
     const folder = path.join(project, STORE.folder);
     const file = path.join(folder, 'store.json');
-    const json = readMetadata(project, file, Object.values({ ...DETAILS, ...BY_HAND }).map(({ field }) => field));
-    const textsOf = (fields) => metadataTexts(STORE, project, folder, path.relative(project, file), json, fields);
+    languageFolders(STORE, project);
+    const json = readMetadata(project, file, Object.keys({ ...DETAILS, ...BY_HAND }));
+    const textsOf = (fields) => metadataTexts(STORE, project, file, json, fields);
     const dataSafety = readSetting(STORE, project, DATA_SAFETY, { most: Infinity });
     return { details: textsOf(DETAILS), ...(dataSafety === undefined ? {} : { dataSafety }), ...textsOf(BY_HAND) };
 }

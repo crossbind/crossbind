@@ -28,6 +28,14 @@ afterEach(() => {
 });
 
 describe("a project's Google Play listing", () => {
+    test.each([
+        ['en-US/title.txt', readPlayListing],
+        ['contact_email.txt', readPlaySettings]
+    ])('rejects the retired %s file even without JSON', (file, read) => {
+        write(file, 'unused');
+        expect(() => read(project)).toThrow(file.split('/').at(-1));
+    });
+
     test('combines structured metadata with file-based descriptions and versioned release notes', () => {
         write('store.json', JSON.stringify({ contactEmail: 'support@example.com', category: 'TOOLS' }));
         write('en-US/listing.json', JSON.stringify({ title: 'Map', shortDescription: 'Convert files', video: '' }));
@@ -35,8 +43,6 @@ describe("a project's Google Play listing", () => {
         write('en-US/changelogs/42.txt', 'New format.');
         expect(readPlaySettings(project)).toEqual({ details: { contactEmail: 'support@example.com' }, category: 'TOOLS' });
         expect(readPlayListing(project)[0]).toMatchObject({ texts: { title: 'Map', shortDescription: 'Convert files', fullDescription: 'Long description.', video: '' }, notes: { 42: 'New format.' } });
-        write('contact_email.txt', 'other@example.com');
-        expect(() => readPlaySettings(project)).toThrow(/store.json.contactEmail.*contact_email.txt/);
         write('en-US/listing.json', JSON.stringify({ title: 'x'.repeat(31) }));
         expect(() => readPlayListing(project)).toThrow('30 at most');
         write('en-US/listing.json', '[]');
@@ -47,10 +53,9 @@ describe("a project's Google Play listing", () => {
         expect(readPlayListing(project)).toEqual([]);
     });
 
-    test("is each language's texts, release notes and images, by the names fastlane gives their files, in order", () => {
-        write('en-US/title.txt', 'Demo\r\n');
+    test("is each language's texts, release notes and images, in order", () => {
+        write('en-US/listing.json', JSON.stringify({ title: 'Demo\r\n', video: 'https://www.youtube.com/watch?v=demo' }));
         write('en-US/full_description.txt', '  Line one\r\nLine two\n');
-        write('en-US/video.txt', 'https://www.youtube.com/watch?v=demo');
         write('en-US/changelogs/default.txt', 'Fixes.\n');
         write('en-US/changelogs/1000007.txt', 'This one.');
         const icon = write('en-US/images/icon.png');
@@ -59,7 +64,7 @@ describe("a project's Google Play listing", () => {
         const first = write('en-US/images/phoneScreenshots/1.jpeg');
         write('en-US/images/phoneScreenshots/.DS_Store');
         fs.mkdirSync(path.join(project, 'store', 'google-play', 'en-US', 'images', 'tenInchScreenshots'));
-        write('tr-TR/short_description.txt', 'Bir deneme');
+        write('tr-TR/listing.json', JSON.stringify({ shortDescription: 'Bir deneme' }));
         write('.DS_Store');
 
         expect(readPlayListing(project)).toEqual([
@@ -74,11 +79,11 @@ describe("a project's Google Play listing", () => {
     });
 
     test('counts characters, not bytes, and stops at a text longer than Google Play takes', () => {
-        write('en-US/title.txt', 'ü'.repeat(30));
+        write('en-US/listing.json', JSON.stringify({ title: 'ü'.repeat(30) }));
         expect(readPlayListing(project)[0].texts.title).toHaveLength(30);
-        write('en-US/title.txt', 'ü'.repeat(31));
-        expect(() => readPlayListing(project)).toThrow(`crossbind: ${shown('en-US/title.txt')} has 31 characters, and Google Play takes 30 at most.`);
-        write('en-US/title.txt', 'Demo');
+        write('en-US/listing.json', JSON.stringify({ title: 'ü'.repeat(31) }));
+        expect(() => readPlayListing(project)).toThrow(`crossbind: ${shown('en-US/listing.json.title')} has 31 characters, and Google Play takes 30 at most.`);
+        write('en-US/listing.json', JSON.stringify({ title: 'Demo' }));
         write('en-US/changelogs/default.txt', 'x'.repeat(501));
         expect(() => readPlayListing(project)).toThrow(`crossbind: ${shown('en-US/changelogs/default.txt')} has 501 characters, and Google Play takes 500 at most.`);
     });
@@ -106,18 +111,18 @@ describe("a project's Google Play listing", () => {
         write('README.md');
         expect(() => readPlayListing(project)).toThrow(`crossbind: ${shown('README.md')} is no language's folder`);
         fs.rmSync(path.join(project, 'store'), { recursive: true });
-        write('en-us/title.txt', 'Demo');
+        write('en-us/listing.json', JSON.stringify({ title: 'Demo' }));
         expect(() => readPlayListing(project)).toThrow(`crossbind: ${shown('en-us')} is no language's folder`);
         fs.rmSync(path.join(project, 'store'), { recursive: true });
-        ['es-419', 'fil', 'iw-IL'].forEach((language) => write(`${language}/title.txt`, 'Demo'));
+        ['es-419', 'fil', 'iw-IL'].forEach((language) => write(`${language}/listing.json`, JSON.stringify({ title: 'Demo' })));
         expect(readPlayListing(project).map(({ language }) => language)).toEqual(['es-419', 'fil', 'iw-IL']);
     });
 
     test("stops at an empty text, but a video's, which takes the video away", () => {
-        write('en-US/video.txt', '\n');
+        write('en-US/listing.json', JSON.stringify({ video: '\n' }));
         expect(readPlayListing(project)[0].texts).toEqual({ video: '' });
-        write('en-US/title.txt', ' \r\n');
-        expect(() => readPlayListing(project)).toThrow(`crossbind: ${shown('en-US/title.txt')} is empty: write its text, or remove the file.`);
+        write('en-US/listing.json', JSON.stringify({ title: ' \r\n' }));
+        expect(() => readPlayListing(project)).toThrow(`crossbind: ${shown('en-US/listing.json.title')} is empty: write its text, or remove the file.`);
         fs.rmSync(path.join(project, 'store'), { recursive: true });
         write('en-US/changelogs/default.txt');
         expect(() => readPlayListing(project)).toThrow(`crossbind: ${shown('en-US/changelogs/default.txt')} is empty`);
@@ -151,12 +156,14 @@ describe("a release's notes", () => {
 
 describe("a project's Google Play settings", () => {
     test('are the contact details and Data safety declaration an upload sends, and what Play Console alone takes, beside the languages', () => {
-        write('contact_email.txt', 'support@example.com\n');
-        write('contact_website.txt', 'https://example.com');
+        write('store.json', JSON.stringify({
+            contactEmail: 'support@example.com\n',
+            contactWebsite: 'https://example.com',
+            privacyUrl: 'https://example.com/privacy',
+            category: 'Tools',
+        }));
         write('data_safety.csv', 'Question ID,Response ID\nPSL_DATA_COLLECTION_COLLECTS_PERSONAL_DATA,false\n');
-        write('privacy_url.txt', 'https://example.com/privacy');
-        write('category.txt', 'Tools');
-        write('en-US/title.txt', 'Demo');
+        write('en-US/listing.json', JSON.stringify({ title: 'Demo' }));
         expect(readPlaySettings(project)).toEqual({
             details: { contactEmail: 'support@example.com', contactWebsite: 'https://example.com' },
             dataSafety: 'Question ID,Response ID\nPSL_DATA_COLLECTION_COLLECTS_PERSONAL_DATA,false',
@@ -204,13 +211,11 @@ describe("what Google Play would refuse of a listing's images", () => {
 
 describe("crossbind app store's word on Google Play", () => {
     test('names what an upload sends, what --send sends, what Play would refuse of it, and the steps Play Console alone takes', () => {
-        write('en-US/title.txt', 'Demo');
-        write('en-US/short_description.txt', 'A demo');
+        write('en-US/listing.json', JSON.stringify({ title: 'Demo', shortDescription: 'A demo' }));
         write('en-US/full_description.txt', 'The demo app.');
         write('en-US/images/icon.png', pngOf(500, 500));
         write('en-US/changelogs/default.txt', 'Fixes.');
-        write('contact_email.txt', 'support@example.com');
-        write('privacy_url.txt', 'https://example.com/privacy');
+        write('store.json', JSON.stringify({ contactEmail: 'support@example.com', privacyUrl: 'https://example.com/privacy' }));
 
         const guide = playGuide({ project: { root: project }, config: { app: { id: 'dev.example.demo' } } });
 

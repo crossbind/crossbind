@@ -195,7 +195,7 @@ describe('a release on Google Play', () => {
 
     test("puts out on production what the testing tracks have, after the page, at --rollout's share, with no build", async () => {
         fs.mkdirSync(upath.join(base, listing), { recursive: true });
-        fs.writeFileSync(upath.join(base, listing, 'title.txt'), 'Demo\n');
+        fs.writeFileSync(upath.join(base, listing, 'listing.json'), JSON.stringify({ title: 'Demo\n' }));
         play.promoted = {
             versionCode: 1002006, name: '1.2.3', from: 'internal', status: 'inProgress',
         };
@@ -226,7 +226,7 @@ describe('a release on Google Play', () => {
     test("sends the release notes of the listing's folder with the bundle, and nothing of the listing itself", async () => {
         fs.mkdirSync(upath.join(base, listing, 'changelogs'), { recursive: true });
         fs.writeFileSync(path.join(base, listing, 'changelogs', 'default.txt'), 'Fixes.');
-        fs.writeFileSync(upath.join(base, listing, 'title.txt'), 'A title longer than Google Play takes');
+        fs.writeFileSync(upath.join(base, listing, 'listing.json'), JSON.stringify({ title: 'A title longer than Google Play takes' }));
         await publishAndroid(['--track', 'internal']);
         expect(play.uploads[0].notes).toEqual([{ language: 'en-US', notes: { default: 'Fixes.' } }]);
         expect(printed.join('\n')).not.toContain('listing');
@@ -251,8 +251,8 @@ describe("Google Play's page, sent alone", () => {
     };
 
     test('goes with no build: the listing, the contact details and the Data safety declaration, saying what changed', async () => {
-        write(`${listing}/title.txt`, 'Demo\n');
-        write('store/google-play/contact_email.txt', 'support@example.com\n');
+        write(`${listing}/listing.json`, JSON.stringify({ title: 'Demo\n' }));
+        write('store/google-play/store.json', JSON.stringify({ contactEmail: 'support@example.com\n' }));
         write('store/google-play/data_safety.csv', 'Question ID,Response ID\n');
         play.sent = { listed: ['en-US'], isDetailed: true, isDeclared: true };
 
@@ -287,7 +287,7 @@ describe("Google Play's page, sent alone", () => {
     });
 
     test('names every missing piece at once without a terminal, and asks for the sign-in on one', async () => {
-        write(`${listing}/title.txt`, 'Demo\n');
+        write(`${listing}/listing.json`, JSON.stringify({ title: 'Demo\n' }));
         state.config.app = {};
         play.credentials = null;
         const sent = storeGuide('google-play', { send: true });

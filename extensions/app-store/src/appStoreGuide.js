@@ -56,7 +56,7 @@ function settingsLines({
     return [
         copyright === undefined ? null : `copyright: ${copyright}`,
         Object.keys(categories).length === 0 ? null : `categories: ${Object.values(categories).join(', ')}`,
-        ageRating ? `the age rating's answers in ${file('age_rating.json')}` : null,
+        ageRating ? `the age rating's answers in ${file('store.json.ageRating')}` : null,
         Object.hasOwn(review, 'demoAccountRequired') ? `App Review sign-in required: ${review.demoAccountRequired ? 'yes' : 'no'}` : null,
         Object.keys(review).some((key) => key.startsWith('contact')) ? 'App Review contact details' : null,
         review.notes !== undefined ? 'App Review notes' : null,
@@ -68,11 +68,11 @@ function lackedSteps(listings, settings) {
     const has = (pattern) => listings.some(({ screenshots }) => Object.keys(screenshots).some((type) => pattern.test(type)));
     return [
         listings.some(({ info }) => info.privacyPolicyUrl !== undefined) ? null
-            : `App Information › Privacy Policy URL, which privacy_url.txt in a locale's folder of ${APP_STORE_LISTING} would send.`,
-        settings.categories.primaryCategory ? null : `App Information › Category, which ${file('primary_category.txt')} would send, as UTILITIES.`,
-        settings.ageRating ? null : `App Information › Age Rating: answer Apple's questions, which ${file('age_rating.json')} would send.`,
-        settings.copyright === undefined ? `The version's Copyright, which ${file('copyright.txt')} would send.` : null,
-        ['contactFirstName', 'contactLastName', 'contactPhone', 'contactEmail'].every((key) => settings.review[key]) ? null : `The version's App Review Information: a contact's name, phone and e-mail, which ${file('review_information')} would send.`,
+            : `App Information › Privacy Policy URL, which listing.json.privacyPolicyUrl in a locale's folder of ${APP_STORE_LISTING} would send.`,
+        settings.categories.primaryCategory ? null : `App Information › Category, which ${file('store.json.primaryCategory')} would send, as UTILITIES.`,
+        settings.ageRating ? null : `App Information › Age Rating: answer Apple's questions, which ${file('store.json.ageRating')} would send.`,
+        settings.copyright === undefined ? `The version's Copyright, which ${file('store.json.copyright')} would send.` : null,
+        ['contactFirstName', 'contactLastName', 'contactPhone', 'contactEmail'].every((key) => settings.review[key]) ? null : `The version's App Review Information: a contact's name, phone and e-mail, which ${file('review_information/private.json')} would send.`,
         has(/^APP_IPHONE_/) ? null : "The version's iPhone screenshots, 6.9-inch ones at least, which a locale's screenshots/APP_IPHONE_67 would send.",
         has(/^APP_IPAD_PRO_3GEN_129$/) ? null : "The version's 13-inch iPad screenshots, which App Store Connect takes of an app that runs on iPads, as crossbind's iOS apps do; a locale's screenshots/APP_IPAD_PRO_3GEN_129 would send them.",
         has(/^APP_DESKTOP$/) ? null : "The macOS version's screenshots, 16:10 ones of 1280 × 800 to 2880 × 1800, which a locale's screenshots/APP_DESKTOP would send.",

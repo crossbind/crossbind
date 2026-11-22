@@ -383,7 +383,7 @@ describe("an app's listing on Google Play, sent alone", () => {
     test('makes a listing in a language Play has none in only of a title, a short and a full description', async () => {
         const listings = [{ language: 'tr-TR', texts: { title: 'Deneme' }, notes: {}, images: { icon: [file('icon.png', 'icon')] } }];
         await expect(sendListing('dev.example.app', credentials(), { listings })).rejects.toThrow(
-            `crossbind: Google Play has no listing in tr-TR yet, which it makes of a title, a short and a full description: add short_description.txt, full_description.txt to ${path.join('store', 'google-play', 'tr-TR')}.`,
+            `crossbind: Google Play has no listing in tr-TR yet, which it makes of a title, a short and a full description: add listing.json.shortDescription, full_description.txt to ${path.join('store', 'google-play', 'tr-TR')}.`,
         );
         expect(requests.filter(({ route }) => route.includes('/listings/tr-TR'))).toEqual([]);
         expect(requests.at(-1).route).toBe('DELETE /edits/E1');
