@@ -29,7 +29,8 @@ HRESULT onScriptDialog(void *webView, ICoreWebView2ScriptDialogOpeningEventArgs 
     // A frame of another origin gets no dialog, as it would show under the app's name: one not accepted is cancelled.
     LPWSTR source = nullptr;
     args->get_Uri(&source);
-    if (!crossbind::app::isOwnOrigin(crossbind::app::originOf(take(source)))) return S_OK;
+    const std::string origin = crossbind::app::originOf(take(source));
+    if (!crossbind::app::isOwnOrigin(origin)) return S_OK;
     const PageDialog::Kind kind = type == COREWEBVIEW2_SCRIPT_DIALOG_KIND_CONFIRM  ? PageDialog::Kind::confirm
                                   : type == COREWEBVIEW2_SCRIPT_DIALOG_KIND_PROMPT ? PageDialog::Kind::prompt
                                                                                    : PageDialog::Kind::alert;
@@ -54,7 +55,11 @@ HRESULT onScriptDialog(void *webView, ICoreWebView2ScriptDialogOpeningEventArgs 
             deferral->Release();
             args->Release();
         }));
-    onMainThread([dialog] { crossbind::app::askPageDialog(dialog); });
+    // The window's thread's queue hands it over, which a task dialog holds while it shows: an origin that ended meanwhile
+    // gets no dialog then, and the dialog, let go, answers as cancelled.
+    onMainThread([dialog, origin] {
+        if (crossbind::app::isOwnOrigin(origin)) crossbind::app::askPageDialog(dialog);
+    });
     return S_OK;
 }
 
