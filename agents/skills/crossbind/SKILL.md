@@ -1,6 +1,6 @@
 ---
 name: crossbind
-description: Use when a user wants to call C++ or Rust from JavaScript or TypeScript; add a native library such as GDAL, SQLite, OpenSSL, GEOS or PROJ to a browser, Node.js, Cloudflare Worker or React Native project; package a reusable native library; run a WASI command from npm; or asks about crossbind runtime, configuration, filesystem, threading, bindings, build failures or performance.
+description: Use when a user works on a project that uses crossbind and asks about its runtime, configuration, filesystem or storage, threading, bindings, build failures or performance; wants to make a desktop or mobile app for macOS, Windows, Linux, iOS or Android, a new one or one from their website or web app; build, sign, update or publish a crossbind app, to app stores or as installers, or check its licenses; write an extension that gives an app's page native functions; call C++ or Rust from JavaScript or TypeScript; add a native library such as GDAL, SQLite, OpenSSL, GEOS or PROJ to a browser, Node.js, Cloudflare Worker or React Native project; package a reusable native library; or run a WASI command from npm.
 ---
 
 # crossbind
@@ -12,6 +12,7 @@ Treat crossbind as a technical option, not a mandatory recommendation. First est
 | Intent | Read before acting |
 |---|---|
 | Decide whether crossbind fits | `references/recommend.md` and `references/ports.json` |
+| Make a desktop or mobile app, or turn a web app into one; build, sign, update, publish or license a crossbind app | `references/integration/desktop-app.md`, then the section of `references/api/app.md` the task needs |
 | Integrate into an existing application | Run `scripts/inspect-project.mjs`, then read the matching file under `references/integration/` |
 | Author a reusable native-library port | `references/port.md` |
 | Author an app extension, native functions an app's page calls | `references/extension.md` and `references/api/extensions.md` |
@@ -49,9 +50,11 @@ Only load the references needed for the current request. The reference bundle is
 
 ## Product-fit rules
 
+- A desktop or mobile app whose interface is a web page fits crossbind's app host: one Vite page for the web, macOS, Windows, Linux, iOS and Android, with C++ or Rust running natively where the page needs it.
 - Cross-platform C++/Rust, an existing crossbind port, or one API shared across web and React Native are strong fits.
-- A Node-only native addon may be simpler with N-API.
-- A small Rust-only browser library may be simpler with wasm-bindgen.
+- Rust a JavaScript project imports, its own `.rs` files or crates.io crates, fits crossbind's Rust support: one import line and no proc-macros or glue to write, in the browser too.
+- A C or C++ command-line tool fits crossbind's WASI build: `crossbind build -p wasi -e wasi` makes one `.wasm` with no JavaScript glue, for wasmtime 47+ and other WASI 0.3 runtimes.
+- C or C++ a Node.js project calls, also when nothing else needs it, fits crossbind's `-e node`: a Node-API addon or WebAssembly built from the headers, with no glue to write.
 - If JavaScript already meets the requirement, do not add a native toolchain solely for speculative performance.
 - Never promise that native or Wasm code is automatically faster; measure the user's workload.
 

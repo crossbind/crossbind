@@ -14,12 +14,9 @@ now.
    pnpm add -D crossbind@beta @crossbind/plugin-vite@beta @crossbind/core-app-host@beta vite
    ```
 
-2. Mark the project as an app in `crossbind.config.js` and keep the rest of the config as for the web:
-
-   ```js
-   target: { runtimeEnv: 'app' },
-   ```
-
+2. Leave `target.runtimeEnv` out of `crossbind.config.js`: `crossbind app dev` and `crossbind app build` then make the
+   app, and `vite` and `vite build` the website, from the same page. `target: { runtimeEnv: 'app' }` makes a project
+   an app alone.
 3. Add `viteCrossbindPlugin()` to `vite.config.js` if it is not there yet.
 4. Write the page as for a worker-backed web build: `await initNative()`, then await every call. A function passed to
    the module runs in the page later, without an answer for native code. What the app's host does, the file and
@@ -70,8 +67,8 @@ now.
 
 ## Pitfalls
 
-- A web build of the same project makes wasm, an app build the host: switch with `target.runtimeEnv`, or keep two
-  configs.
+- A project with `target: { runtimeEnv: 'app' }` makes the app with `vite build` too, and so no website: leave it out
+  to keep both.
 - Navigation to another origin is refused; links the user follows open in the default browser. Embed no third-party
   page in an iframe.
 - The page's `shell.openPath` opens nothing until `app.openPath` lists where it may, and its `shell.revealInFolder`

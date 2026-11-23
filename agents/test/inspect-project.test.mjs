@@ -60,6 +60,31 @@ test('detects Expo before React Native CLI', (t) => {
     assert.equal(result.constraints.coopCoepRequiredForMt, false);
 });
 
+test('detects a crossbind app before Vite', (t) => {
+    const root = fixture({
+        pkg: {
+            devDependencies: {
+                crossbind: '^2.0.0',
+                vite: '^7.0.0',
+                '@crossbind/plugin-vite': '^2.0.0',
+                '@crossbind/core-app-host': '^2.0.0',
+            },
+        },
+        files: {
+            'vite.config.js': 'export default {}\n',
+            'crossbind.config.js': "export default { target: { runtimeEnv: 'app' } };\n",
+        },
+    });
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+
+    const result = inspectProject(root);
+    assert.equal(result.framework, 'crossbind-app');
+    assert.equal(result.confidence, 'high');
+    assert.deepEqual(result.targets, ['app']);
+    assert.equal(result.constraints.coopCoepRequiredForMt, false);
+    assert.equal(result.recommendedReference, 'integration/desktop-app.md');
+});
+
 test('applies edge runtime constraints', (t) => {
     const root = fixture({
         pkg: { devDependencies: { wrangler: '^5' } },

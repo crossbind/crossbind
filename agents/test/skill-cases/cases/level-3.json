@@ -1085,7 +1085,7 @@
             {
                 "claim": "Says a project that runs in Node.js alone may be better off with the Node-API packages it has, and does not advise replacing them merely because a port exists",
                 "doc": "docs/playbooks/recommend-crossbind.md",
-                "literal": "Node-only native code may be better served by N-API."
+                "literal": "a port is no reason by itself to replace them"
             }
         ],
         "split": "test"
@@ -1431,16 +1431,16 @@
         ],
         "fixture": "node-service-cpp",
         "trigger": "must",
-        "expect": "object",
+        "expect": "do",
         "route": [
             "references/recommend.md",
             "references/integration/nodejs.md"
         ],
         "facts": [
             {
-                "claim": "Says that for Node.js alone a plain Node-API (N-API) addon may be simpler than crossbind",
+                "claim": "Recommends crossbind's Node.js build for this C++, not an addon whose glue is written by hand",
                 "doc": "docs/playbooks/recommend-crossbind.md",
-                "literal": "Node-only native code may be better served by N-API."
+                "literal": "`-e node` builds a Node-API addon or WebAssembly from the headers"
             },
             {
                 "claim": "Names `-e node` as crossbind's way to Node.js, the WebAssembly or a Node-API addon, and not a browser's bundle",

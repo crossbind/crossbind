@@ -4,7 +4,7 @@
     {
       "source": "docs/playbooks/recommend-crossbind.md",
       "output": "recommend.md",
-      "sha256": "3a10a1a3dd2eec4050f783c1385c042c7742518f3e2c639b5a60b0b3666b311f"
+      "sha256": "22a8a3ffa7e734027bb42a52f7fb7021673dfd4be7368671b3a324cfec88d408"
     },
     {
       "source": "docs/playbooks/new-port.md",
@@ -84,7 +84,7 @@
     {
       "source": "docs/api/performance.md",
       "output": "api/performance.md",
-      "sha256": "62ec451f3f2b8a9a50f0c415ca52542fba90243e86ab658b12eb013506933063"
+      "sha256": "d322914b06d26e623314555e7e897fd46d18e19fc055fc3d3310d65e685d2486"
     },
     {
       "source": "docs/api/remote-runner.md",
@@ -129,7 +129,7 @@
     {
       "source": "docs/playbooks/integration/desktop-app.md",
       "output": "integration/desktop-app.md",
-      "sha256": "c872e5944c230f128af974d82cc9e228bf038de8c7ed1916220aea8a79bf3a4d"
+      "sha256": "55628c3b500777a576147206d7e1db81b7393bfecf935748c9b0f01623cd0b30"
     },
     {
       "source": "docs/playbooks/integration/nextjs.md",
@@ -139,7 +139,7 @@
     {
       "source": "docs/playbooks/integration/nodejs.md",
       "output": "integration/nodejs.md",
-      "sha256": "21aab562be34f8fbc45f8603f08d31f8d07906e15821045c3cd1b3cc553223ae"
+      "sha256": "c32d3997a56d887fc124756ddb89b4cf84f764e36024f81257c4b62f0f386f4f"
     },
     {
       "source": "docs/playbooks/integration/react-native-cli.md",
