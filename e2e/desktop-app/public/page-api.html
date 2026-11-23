@@ -82,6 +82,8 @@
         got.dialog = await within(shown, QUIET_MS, 'shown');
         if (got.dialog === 'shown') {
             got.mainThread = await within(answered(api.invoke('probe.onMainThread')), QUIET_MS, 'held');
+            // On Android a close sent for another call's message dialog leaves this one up.
+            if (api.device.platform === 'android') got.closedAnother = await answered(api.invoke('probe.closeAnotherMessage'));
             got.closed = await api.invoke('probe.closeDialog', { message: MESSAGE }).catch(failure);
             got.dialogClosed = await within(shown, ANSWER_MS, 'no answer once closed');
         }

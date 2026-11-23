@@ -43,6 +43,8 @@ public final class DialogExtension implements Extension {
     private static final int MAX_ENDING = 16;
 
     private AlertDialog messageDialog;
+    // The number native code gave the message dialog shown, which its close names.
+    private int messageId;
 
     @Override
     public void call(ExtensionHost host, String function, JSONObject options, Call call) {
@@ -52,11 +54,12 @@ public final class DialogExtension implements Extension {
                 JSONArray buttons = options.optJSONArray("buttons");
                 String[] labels = new String[buttons == null ? 0 : buttons.length()];
                 for (int i = 0; i < labels.length; i += 1) labels[i] = buttons.optString(i);
-                showMessageDialog(host.activity(), options.optString("message"), options.optString("detail"), labels, call);
+                showMessageDialog(host.activity(), options.optInt("id"), options.optString("message"), options.optString("detail"), labels, call);
             }
-            // The message dialog shown closes, as its call was cancelled.
+            // The message dialog of this number closes, as its call was cancelled: another call's, shown once that one's
+            // was answered, stays.
             case "closeMessage" -> {
-                if (messageDialog != null) messageDialog.dismiss();
+                if (messageDialog != null && messageId == options.optInt("id")) messageDialog.dismiss();
                 call.resolve(null);
             }
             default -> call.reject("crossbind: the dialog extension's Java has no function " + function);
@@ -182,7 +185,7 @@ public final class DialogExtension implements Extension {
     // Android has a positive, a neutral and a negative button: the first label is the positive one, and the last of
     // several the negative, which Android places where its apps put Cancel. Back and a tap outside close the dialog. The
     // message goes in the dialog's text with the detail, as a title stops after two lines.
-    private void showMessageDialog(Activity activity, String message, String detail, String[] labels, Call call) {
+    private void showMessageDialog(Activity activity, int id, String message, String detail, String[] labels, Call call) {
         if (activity.isFinishing() || activity.isDestroyed()) {
             call.resolve(-1);
             return;
@@ -199,6 +202,7 @@ public final class DialogExtension implements Extension {
         if (names.length > 1) builder.setNegativeButton(names[names.length - 1], (dialog, which) -> clicked[0] = names.length - 1);
         try {
             messageDialog = builder.show();
+            messageId = id;
         } catch (WindowManager.BadTokenException gone) {
             call.resolve(-1);
         }

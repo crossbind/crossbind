@@ -34,4 +34,12 @@ void probePlatform(crossbind::Registry &registry) {
     registry.function("probe.tapShortcut", [](Call call) { crossbind::android::callJava("probe", "tapShortcut", call); });
     // The UI thread's Java messages wait ms, as the page opens one the host hears of only then.
     registry.function("probe.holdUi", [](Call call) { crossbind::android::callJava("probe", "holdUi", call); });
+    // The close the dialog extension sends for a message dialog that is not the one shown, as for a call whose dialog
+    // was answered just as another call's showed: the extension numbers its dialogs from 1.
+    registry.function("probe.closeAnotherMessage", {"app", "project"}, [](Call call) {
+        crossbind::android::callJava("dialog", "closeMessage", Value::Object{{"id", 0}}, [call](std::optional<std::string> failure, Value) {
+            if (failure) call.reject(*failure);
+            else call.resolve();
+        });
+    });
 }
