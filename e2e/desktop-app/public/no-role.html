@@ -9,12 +9,14 @@
 // A page of another origin than the app's, which src/served-origins.js opens and the app's page-navigation loads, so it
 // has no role. Its top frame's POST toward the app's origin and toward a served one must load nothing: it posts each,
 // stays, and goes back to the app's page by a link page-navigation loads, saying how many it stayed through, and whose
-// POST opened it where page-navigation refused that POST.
+// POST opened it where page-navigation refused that POST. On Android it goes first to a second page of no role, of
+// another origin, whose first link elsewhere page-navigation hears before the host hears of that page.
 (() => {
     const QUIET_MS = 1500;
     // The app's origin and the served one, as each platform names them: the page goes to those its query names among
     // these alone, never to a URL a query makes up.
     const APP_ORIGINS = ['https://appassets.androidplatform.net', 'crossbind://app'];
+    const SECOND_ELSEWHERE = 'https://crossbind-e2e.invalid/no-role-second';
     const SERVED_ORIGINS = ['http://e2e-posted.localhost/', 'crossbind://e2e-posted/'];
     const query = new URLSearchParams(location.search);
     const app = APP_ORIGINS.find((origin) => origin === query.get('app'));
@@ -29,9 +31,19 @@
         document.body.append(form);
         form.submit();
     };
+    const back = (posted) => {
+        location.href = `${app}/?from=no-role-back&posted=${posted}${refused ? `&refused=${refused}` : ''}`;
+    };
+    if (query.get('second') === '1') {
+        location.href = SECOND_ELSEWHERE;
+        setTimeout(() => back(targets.length), QUIET_MS);
+        return;
+    }
+    const isAndroid = app === APP_ORIGINS[0];
     const next = (posted) => {
         if (posted === targets.length) {
-            location.href = `${app}/?from=no-role-back&posted=${posted}${refused ? `&refused=${refused}` : ''}`;
+            if (isAndroid && !refused) location.href = `${location.href.replace(location.host, `localhost:${location.port}`)}&second=1`;
+            else back(posted);
             return;
         }
         post(targets[posted]);

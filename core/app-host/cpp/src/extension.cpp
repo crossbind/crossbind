@@ -1332,12 +1332,8 @@ Page pageOf(const void *webView) {
     return make<Page>(uint64_t{0}, uint64_t{0});
 }
 
-Page pageAt(const std::string &page) {
-    const std::string name = pageNameOf(page);
-    {
-        std::lock_guard<std::mutex> lock(shownMutex);
-        if (name == windowlessOrigin) return make<Page>(windowlessPage, uint64_t{0}, windowlessRole, windowlessLabel);
-    }
+Page pageAt(const std::string &page, const std::string &heard) {
+    if (documentOriginOf(page) == documentOriginOf(heard)) return pageOf(nullptr);
     PageOrigin origin = pageOriginOf(page);
     return make<Page>(uint64_t{0}, uint64_t{0}, std::move(origin.role), std::move(origin.label));
 }
