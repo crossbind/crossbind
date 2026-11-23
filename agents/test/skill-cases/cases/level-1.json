@@ -1,0 +1,657 @@
+[
+    {
+        "id": "p001",
+        "prompt": "Make a mobile app of my website.",
+        "tags": [
+            "site-to-app"
+        ],
+        "fixture": "site-vite-react",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/desktop-app.md",
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Makes the app with crossbind's app host (`@crossbind/core-app-host` and the `crossbind app` commands) from the existing Vite site, without rewriting the page for another framework",
+                "doc": "docs/playbooks/integration/desktop-app.md",
+                "literal": "pnpm add -D crossbind@beta @crossbind/plugin-vite@beta @crossbind/core-app-host@beta vite"
+            },
+            {
+                "claim": "Names the iOS and the Android build or run commands, with `-p ios` and `-p android`",
+                "doc": "docs/api/app.md",
+                "literal": "- `crossbind app build -p android`:"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p002",
+        "prompt": "Turn this web app into a desktop app.",
+        "tags": [
+            "site-to-app"
+        ],
+        "fixture": "site-vite-react",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/desktop-app.md",
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Adds crossbind's app host (`@crossbind/core-app-host`) and its Vite plugin to the existing Vite project instead of rewriting the page",
+                "doc": "docs/playbooks/integration/desktop-app.md",
+                "literal": "pnpm add -D crossbind@beta @crossbind/plugin-vite@beta @crossbind/core-app-host@beta vite"
+            },
+            {
+                "claim": "Runs the app with `crossbind app dev` or builds it with `crossbind app build`",
+                "doc": "docs/api/app.md",
+                "literal": "- `crossbind app build`:"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p003",
+        "prompt": "Put my web app on the App Store and Google Play.",
+        "tags": [
+            "site-to-app"
+        ],
+        "fixture": "site-vite-react",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/desktop-app.md",
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Makes iOS and Android apps of the page with crossbind's app host (the `crossbind app` commands with `-p ios` and `-p android`, or the upload commands that build them)",
+                "doc": "docs/api/app.md",
+                "literal": "- `crossbind app build -p ios`:"
+            },
+            {
+                "claim": "Sends the iOS app to App Store Connect with `crossbind app upload app-store`",
+                "doc": "docs/api/app.md",
+                "literal": "- `crossbind app upload app-store`: Builds the iOS app, then the macOS app"
+            },
+            {
+                "claim": "Sends the Android app to Google Play with `crossbind app upload google-play`",
+                "doc": "docs/api/app.md",
+                "literal": "- `crossbind app upload google-play`: Builds the Android app"
+            },
+            {
+                "claim": "Says what has to be done by hand at the stores first: creating the app in App Store Connect and in Play Console",
+                "doc": "docs/api/app.md",
+                "literal": "Play's API makes none"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p004",
+        "prompt": "Make my app work without an internet connection.",
+        "tags": [
+            "site-to-app"
+        ],
+        "fixture": "site-vite-react",
+        "trigger": "either",
+        "expect": "do",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "p005",
+        "prompt": "Make a puzzle game for mobile and desktop.",
+        "tags": [
+            "new-app"
+        ],
+        "fixture": "empty",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/desktop-app.md",
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Starts a crossbind app with a Vite page, for example with `npm create crossbind@beta -- <dir> Desktop App`",
+                "doc": "docs/api/app.md",
+                "literal": "`npm create crossbind@beta -- <dir> Desktop App` scaffolds such a project"
+            },
+            {
+                "claim": "Builds the one project for the desktop and for iOS and Android with `crossbind app build` and its `-p` option",
+                "doc": "docs/api/app.md",
+                "literal": "- `crossbind app build -p ios`:"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p006",
+        "prompt": "Build a chess game I can play against the computer on my phone and my laptop.",
+        "tags": [
+            "new-app"
+        ],
+        "fixture": "empty",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/desktop-app.md",
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Starts a crossbind app with a Vite page, for example with `npm create crossbind@beta -- <dir> Desktop App`",
+                "doc": "docs/api/app.md",
+                "literal": "`npm create crossbind@beta -- <dir> Desktop App` scaffolds such a project"
+            },
+            {
+                "claim": "Builds the one project for the laptop and for the phone (`crossbind app build`, with `-p ios` or `-p android` for the phone)",
+                "doc": "docs/api/app.md",
+                "literal": "- `crossbind app build -p android`:"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p007",
+        "prompt": "Make a to-do app for my phone and my computer.",
+        "tags": [
+            "new-app"
+        ],
+        "fixture": "empty",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/desktop-app.md",
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Starts a crossbind app with a Vite page, for example with `npm create crossbind@beta -- <dir> Desktop App`",
+                "doc": "docs/api/app.md",
+                "literal": "`npm create crossbind@beta -- <dir> Desktop App` scaffolds such a project"
+            },
+            {
+                "claim": "Builds the one project for the computer and for the phone (`crossbind app build`, with `-p ios` or `-p android` for the phone)",
+                "doc": "docs/api/app.md",
+                "literal": "- `crossbind app build -p ios`:"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p008",
+        "prompt": "Build a notes app that keeps everything on my device.",
+        "tags": [
+            "new-app"
+        ],
+        "fixture": "empty",
+        "trigger": "either",
+        "expect": "do",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "p009",
+        "prompt": "Make an expense tracker that works offline.",
+        "tags": [
+            "new-app"
+        ],
+        "fixture": "empty",
+        "trigger": "either",
+        "expect": "do",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "p010",
+        "prompt": "Build a map app like Google Maps that works on web, mobile and desktop.",
+        "tags": [
+            "new-app"
+        ],
+        "fixture": "empty",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/desktop-app.md",
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Starts a crossbind app with a Vite page, for example with `npm create crossbind@beta -- <dir> Desktop App`",
+                "doc": "docs/api/app.md",
+                "literal": "`npm create crossbind@beta -- <dir> Desktop App` scaffolds such a project"
+            },
+            {
+                "claim": "Keeps a web build of the same page beside the apps: `vite build` makes the website and `crossbind app build` the apps",
+                "doc": "docs/api/app.md",
+                "literal": "A project that leaves `target.runtimeEnv` out builds by the command that runs it"
+            },
+            {
+                "claim": "Builds the mobile apps with `crossbind app build -p ios` and `-p android`",
+                "doc": "docs/api/app.md",
+                "literal": "- `crossbind app build -p android`:"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p011",
+        "prompt": "Make an app that shrinks my photos without uploading them anywhere.",
+        "tags": [
+            "new-app"
+        ],
+        "fixture": "empty",
+        "trigger": "either",
+        "expect": "do",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "p012",
+        "prompt": "Build a file converter that runs entirely in the browser.",
+        "tags": [
+            "new-app"
+        ],
+        "fixture": "empty",
+        "trigger": "either",
+        "expect": "do",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "p013",
+        "prompt": "Make a markdown editor for Mac and Windows.",
+        "tags": [
+            "new-app"
+        ],
+        "fixture": "empty",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/desktop-app.md",
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Starts a crossbind app with a Vite page, for example with `npm create crossbind@beta -- <dir> Desktop App`",
+                "doc": "docs/api/app.md",
+                "literal": "`npm create crossbind@beta -- <dir> Desktop App` scaffolds such a project"
+            },
+            {
+                "claim": "Builds the Windows app with `crossbind app build -p windows`",
+                "doc": "docs/api/app.md",
+                "literal": "- `crossbind app build -p windows`:"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p014",
+        "prompt": "Build a small app that lives in the menu bar and lists my bookmarks.",
+        "tags": [
+            "new-app"
+        ],
+        "fixture": "empty",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/desktop-app.md",
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Starts a crossbind app with a Vite page, for example with `npm create crossbind@beta -- <dir> Desktop App`",
+                "doc": "docs/api/app.md",
+                "literal": "`npm create crossbind@beta -- <dir> Desktop App` scaffolds such a project"
+            },
+            {
+                "claim": "Puts the app's icon and menu in the menu bar with `tray.set` from `crossbind/app`",
+                "doc": "docs/api/app.md",
+                "literal": "- `tray.set({ tooltip, menu })` (desktop): The app's icon in the menu bar"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p015",
+        "prompt": "Connect a C++ library to my web project.",
+        "tags": [
+            "native-to-js"
+        ],
+        "fixture": "site-vite-react-cpp",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/vite.md",
+            "references/integration/README.md"
+        ],
+        "facts": [
+            {
+                "claim": "Adds `@crossbind/plugin-vite` and puts `viteCrossbindPlugin()` among the Vite config's plugins",
+                "doc": "docs/playbooks/integration/vite.md",
+                "literal": "Add `viteCrossbindPlugin()` to the `plugins` array"
+            },
+            {
+                "claim": "Lets crossbind make the bindings from the library's headers, with no hand-written glue code",
+                "doc": "docs/api/cpp-binding-rules.md",
+                "literal": "The project's own headers bind every function and class"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p016",
+        "prompt": "Use my C++ code in my React app.",
+        "tags": [
+            "native-to-js"
+        ],
+        "fixture": "site-vite-react-cpp",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/vite.md",
+            "references/integration/README.md"
+        ],
+        "facts": [
+            {
+                "claim": "Adds `@crossbind/plugin-vite` and puts `viteCrossbindPlugin()` among the Vite config's plugins",
+                "doc": "docs/playbooks/integration/vite.md",
+                "literal": "Add `viteCrossbindPlugin()` to the `plugins` array"
+            },
+            {
+                "claim": "Has the React code import the functions from the C++ header and call `initNative()` before it uses them",
+                "doc": "docs/api/init.md",
+                "literal": "import { initNative, Matrix } from './native/Matrix.h';"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p017",
+        "prompt": "Use Rust in my JavaScript project.",
+        "tags": [
+            "native-to-js"
+        ],
+        "fixture": "site-vite-react",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/rust.md",
+            "references/integration/vite.md"
+        ],
+        "facts": [
+            {
+                "claim": "Brings the Rust in through crossbind's Rust support: a `.rs` file of the project or a crate imported with `cargo:`",
+                "doc": "docs/api/rust.md",
+                "literal": "### 2. App-local `.rs` source"
+            },
+            {
+                "claim": "Sets up the plugin of the project's bundler, here `@crossbind/plugin-vite`",
+                "doc": "docs/playbooks/integration/vite.md",
+                "literal": "pnpm add -D @crossbind/plugin-vite@beta"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p018",
+        "prompt": "Add a database to my app that works offline.",
+        "tags": [
+            "native-to-js"
+        ],
+        "fixture": "site-vite-react",
+        "trigger": "either",
+        "expect": "do",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "p019",
+        "prompt": "Share the same native code between my website and my mobile app.",
+        "tags": [
+            "native-to-js"
+        ],
+        "fixture": "monorepo",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/README.md",
+            "references/integration/vite.md",
+            "references/integration/react-native-expo.md"
+        ],
+        "facts": [
+            {
+                "claim": "Builds the one native source as WebAssembly for the website and as native iOS and Android libraries for the React Native app",
+                "doc": "docs/playbooks/recommend-crossbind.md",
+                "literal": "The same native library must run through WebAssembly on web/Node/edge and through native binaries in React Native."
+            },
+            {
+                "claim": "Uses `@crossbind/plugin-vite` in the web app",
+                "doc": "docs/playbooks/integration/vite.md",
+                "literal": "pnpm add -D @crossbind/plugin-vite@beta"
+            },
+            {
+                "claim": "Uses `@crossbind/plugin-react-native` in the mobile app",
+                "doc": "docs/playbooks/integration/react-native-expo.md",
+                "literal": "pnpm add @crossbind/plugin-react-native@beta @crossbind/plugin-react-native-ios-helper@beta"
+            },
+            {
+                "claim": "Says Expo Go cannot run it: the mobile app needs `expo prebuild` or a build of its own",
+                "doc": "docs/playbooks/integration/react-native-expo.md",
+                "literal": "**Expo Go** is **not** supported"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p020",
+        "prompt": "This JavaScript is too slow. Make it faster.",
+        "tags": [
+            "native-to-js"
+        ],
+        "fixture": "site-vite-react",
+        "trigger": "either",
+        "expect": "do",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "p021",
+        "prompt": "Publish my app to the stores.",
+        "tags": [
+            "publish"
+        ],
+        "fixture": "app",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Uploads with `crossbind app upload` and the store's name, such as `google-play` or `app-store`",
+                "doc": "docs/api/app.md",
+                "literal": "- `crossbind app upload google-play`: Builds the Android app"
+            },
+            {
+                "claim": "Gives the app an id of its own in `app.id` before the first upload, as a store keeps it for good",
+                "doc": "docs/api/app.md",
+                "literal": "as Play keeps an app's package name for good"
+            },
+            {
+                "claim": "Says the app has to be created by hand at the store first, in Play Console or App Store Connect",
+                "doc": "docs/api/app.md",
+                "literal": "Play's API makes none"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p022",
+        "prompt": "Make my desktop app update itself.",
+        "tags": [
+            "publish"
+        ],
+        "fixture": "app",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/app.md",
+            "references/integration/desktop-app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Sets `app.updater` in `crossbind.config.js`, with a `url` and a `publicKey`",
+                "doc": "docs/api/app.md",
+                "literal": "A desktop app updates itself from where `app.updater` says"
+            },
+            {
+                "claim": "Makes the key pair with `crossbind app key updater`",
+                "doc": "docs/api/app.md",
+                "literal": "- `crossbind app key updater`: Prints a new key pair for a desktop app's updates"
+            },
+            {
+                "claim": "Keeps the private key in `CROSSBIND_UPDATER_PRIVATE_KEY` where the app is built, and out of the repository",
+                "doc": "docs/api/app.md",
+                "literal": "`CROSSBIND_UPDATER_PRIVATE_KEY` where the app is built, and nowhere else"
+            },
+            {
+                "claim": "Has the page call `updater.check()` and `updater.install()` from `crossbind/app`",
+                "doc": "docs/api/app.md",
+                "literal": "const update = await updater.check();"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p023",
+        "prompt": "Give me installers people can download for Windows, Mac and Linux.",
+        "tags": [
+            "publish"
+        ],
+        "fixture": "app",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Gets the macOS disk image (`.dmg`) from `crossbind app build`",
+                "doc": "docs/api/app.md",
+                "literal": "`dist/<name>.dmg`, a disk image"
+            },
+            {
+                "claim": "Gets the Windows setup program (`-setup.exe`) from `crossbind app build -p windows`",
+                "doc": "docs/api/app.md",
+                "literal": "`dist/<name>-win32-<arch>-setup.exe`, which installs the app for the user who runs it"
+            },
+            {
+                "claim": "Gets the Linux packages (the `.deb`, and the `.tar.gz`) from `crossbind app build -p linux`",
+                "doc": "docs/api/app.md",
+                "literal": "`dist/<name>-linux-<arch>.deb`, a Debian package"
+            },
+            {
+                "claim": "Says the downloads warn their users unless the apps are signed: without keys the Windows app is unsigned and the macOS app signed ad hoc",
+                "doc": "docs/api/app.md",
+                "literal": "leaves a Windows app and its setup program unsigned"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p024",
+        "prompt": "Is crossbind a good fit for this project?",
+        "tags": [
+            "ask"
+        ],
+        "fixture": "monorepo",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/recommend.md",
+            "references/ports.json"
+        ],
+        "facts": [
+            {
+                "claim": "Rests the answer on what this project holds (its web app, its mobile app and its C++ library), not on a general description of crossbind",
+                "doc": "docs/playbooks/recommend-crossbind.md",
+                "literal": "Use information already provided"
+            },
+            {
+                "claim": "Says the fit is strong because one native library has to run both on the web and in the React Native app",
+                "doc": "docs/playbooks/recommend-crossbind.md",
+                "literal": "The same native library must run through WebAssembly on web/Node/edge and through native binaries in React Native."
+            },
+            {
+                "claim": "Does not promise that native or WebAssembly code will be faster than JavaScript",
+                "doc": "docs/playbooks/recommend-crossbind.md",
+                "literal": "Native code is not automatically faster than JavaScript"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p025",
+        "prompt": "What would it take to get this web app into the App Store?",
+        "tags": [
+            "ask"
+        ],
+        "fixture": "site-vite-react",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/app.md",
+            "references/integration/desktop-app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Says the page of a crossbind app must be a Vite app, which this project is",
+                "doc": "docs/playbooks/integration/desktop-app.md",
+                "literal": "The page must be a Vite app."
+            },
+            {
+                "claim": "Names how the iOS app reaches App Store Connect: `crossbind app upload app-store`, or a build with `-p ios` uploaded from Xcode",
+                "doc": "docs/api/app.md",
+                "literal": "- `crossbind app upload app-store`: Builds the iOS app, then the macOS app"
+            },
+            {
+                "claim": "Says it takes a Mac with Xcode and an Apple Developer Program team",
+                "doc": "docs/api/app.md",
+                "literal": "the Apple Developer Program team, `app.team` or `XCODE_DEVELOPMENT_TEAM`"
+            },
+            {
+                "claim": "Says the app has to be created by hand in App Store Connect, with the app's bundle id",
+                "doc": "docs/api/app.md",
+                "literal": "as a new iOS app with `app.id` as its bundle ID"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p026",
+        "prompt": "The build is broken. Fix it.",
+        "tags": [
+            "ask"
+        ],
+        "fixture": "web-crossbind",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/troubleshooting.md"
+        ],
+        "facts": [
+            {
+                "claim": "Asks for the build's actual error, or goes looking for it, before it proposes a fix",
+                "doc": "docs/api/troubleshooting.md",
+                "literal": "Read the error literally."
+            }
+        ],
+        "split": "train"
+    }
+]

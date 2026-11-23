@@ -1,0 +1,887 @@
+[
+    {
+        "id": "p027",
+        "prompt": "Turn this Vite + React project into an app for macOS, Windows and Linux, and keep the web build working.",
+        "tags": [
+            "site-to-app"
+        ],
+        "fixture": "site-vite-react",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/desktop-app.md",
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Leaves `target.runtimeEnv` out of `crossbind.config.js`, so that `vite build` still makes the website and `crossbind app build` the app",
+                "doc": "docs/api/app.md",
+                "literal": "A project that leaves `target.runtimeEnv` out builds by the command that runs it"
+            },
+            {
+                "claim": "Adds crossbind's app host (`@crossbind/core-app-host`) and its Vite plugin to the project",
+                "doc": "docs/playbooks/integration/desktop-app.md",
+                "literal": "pnpm add -D crossbind@beta @crossbind/plugin-vite@beta @crossbind/core-app-host@beta vite"
+            },
+            {
+                "claim": "Builds the Windows app with `crossbind app build -p windows` and the Linux app with `crossbind app build -p linux`",
+                "doc": "docs/api/app.md",
+                "literal": "- `crossbind app build -p linux`:"
+            },
+            {
+                "claim": "Says the Linux and Windows apps build in Docker",
+                "doc": "docs/api/app.md",
+                "literal": "They need `RUNNER=DOCKER_RUN` or `DOCKER_EXEC`, and another runner stops the build before its first step."
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p028",
+        "prompt": "Add iOS and Android builds to this crossbind app and open it in the iOS Simulator.",
+        "tags": [
+            "site-to-app"
+        ],
+        "fixture": "app",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/desktop-app.md",
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Opens the app in the iOS Simulator with `crossbind app dev -p ios`, directly or through the project's script for it",
+                "doc": "docs/api/app.md",
+                "literal": "- `crossbind app dev -p ios`:"
+            },
+            {
+                "claim": "Builds the Android app with `crossbind app build -p android`, or runs it with `crossbind app dev -p android`",
+                "doc": "docs/api/app.md",
+                "literal": "- `crossbind app build -p android`:"
+            },
+            {
+                "claim": "Says the Android app builds in Docker and runs on an emulator or a device that `adb` reaches, neither of which crossbind starts",
+                "doc": "docs/playbooks/integration/desktop-app.md",
+                "literal": "An Android app needs Docker alone to build"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p029",
+        "prompt": "Create a new crossbind desktop app with a File menu (Open, Save, Quit) and native file dialogs.",
+        "tags": [
+            "new-app"
+        ],
+        "fixture": "empty",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/desktop-app.md",
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Starts the project with `npm create crossbind@beta -- <dir> Desktop App`, or sets up the same packages by hand",
+                "doc": "docs/api/app.md",
+                "literal": "`npm create crossbind@beta -- <dir> Desktop App` scaffolds such a project"
+            },
+            {
+                "claim": "Sets the menu from the page with `menu.set` from `crossbind/app` and hears its clicks as the `menu` event",
+                "doc": "docs/api/app.md",
+                "literal": "await menu.set(["
+            },
+            {
+                "claim": "Makes Quit the standard `quit` role, or ends the app with `app.requestQuit()` or `app.quit()`",
+                "doc": "docs/api/app.md",
+                "literal": "{ role: 'quit' },"
+            },
+            {
+                "claim": "Opens and saves through `dialog.open` and `dialog.save` from `crossbind/app`",
+                "doc": "docs/api/app.md",
+                "literal": "const file = await dialog.save({ defaultName: 'report.csv'"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p030",
+        "prompt": "Build a SQLite database browser for macOS, Windows and Linux: open a .sqlite file, list its tables, run a query.",
+        "tags": [
+            "new-app"
+        ],
+        "fixture": "empty",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/desktop-app.md",
+            "references/api/app.md",
+            "references/ports.json"
+        ],
+        "facts": [
+            {
+                "claim": "Uses crossbind's SQLite port, `@crossbind/port-sqlite3`, for the database",
+                "doc": "agents/skills/crossbind/references/ports.json",
+                "literal": "@crossbind/port-sqlite3"
+            },
+            {
+                "claim": "Makes it a crossbind app with a Vite page",
+                "doc": "docs/api/app.md",
+                "literal": "`npm create crossbind@beta -- <dir> Desktop App` scaffolds such a project"
+            },
+            {
+                "claim": "Has its user pick the file with `dialog.open` from `crossbind/app`, which gives the native code the file's path",
+                "doc": "docs/api/app.md",
+                "literal": "- `dialog.open({ title, defaultPath, filters, directory, multiple })` (every platform): The paths of the files or folders its user picks"
+            },
+            {
+                "claim": "Builds the three desktop apps with `crossbind app build`, `-p windows` and `-p linux`",
+                "doc": "docs/api/app.md",
+                "literal": "- `crossbind app build -p windows`:"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p031",
+        "prompt": "Build an offline map viewer for web, iOS and Android that opens GeoTIFF and GeoPackage files with GDAL.",
+        "tags": [
+            "new-app"
+        ],
+        "fixture": "empty",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/desktop-app.md",
+            "references/api/app.md",
+            "references/ports.json"
+        ],
+        "facts": [
+            {
+                "claim": "Uses crossbind's GDAL port, `@crossbind/port-gdal`",
+                "doc": "agents/skills/crossbind/references/ports.json",
+                "literal": "@crossbind/port-gdal"
+            },
+            {
+                "claim": "Makes the iOS and Android apps with `crossbind app` (`-p ios`, `-p android`) from the same Vite page as the web build",
+                "doc": "docs/api/app.md",
+                "literal": "- `crossbind app build -p ios`:"
+            },
+            {
+                "claim": "Keeps the web build, where the native code is WebAssembly, by leaving `target.runtimeEnv` out of the config",
+                "doc": "docs/api/app.md",
+                "literal": "A project that leaves `target.runtimeEnv` out builds by the command that runs it"
+            },
+            {
+                "claim": "On the web, gets the files its user picks to GDAL by mounting them in the module's filesystem, as `autoMountFiles` does",
+                "doc": "docs/api/filesystem.md",
+                "literal": "m.autoMountFiles(files, parentPath?)"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p032",
+        "prompt": "Make an image converter app: drop JPEG or TIFF files on the window and save them as WebP.",
+        "tags": [
+            "new-app"
+        ],
+        "fixture": "empty",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/desktop-app.md",
+            "references/api/app.md",
+            "references/ports.json"
+        ],
+        "facts": [
+            {
+                "claim": "Uses crossbind's ports for the codecs: libjpeg-turbo, libtiff and WebP (`@crossbind/port-jpegturbo`, `@crossbind/port-tiff`, `@crossbind/port-webp`)",
+                "doc": "agents/skills/crossbind/references/ports.json",
+                "literal": "@crossbind/port-webp"
+            },
+            {
+                "claim": "Makes it a crossbind desktop app",
+                "doc": "docs/api/app.md",
+                "literal": "`npm create crossbind@beta -- <dir> Desktop App` scaffolds such a project"
+            },
+            {
+                "claim": "Takes the dropped files from the app's `drop` event, which gives their paths",
+                "doc": "docs/api/app.md",
+                "literal": "events.on('drop', ({ paths }) => open(paths[0]));"
+            },
+            {
+                "claim": "Asks where to save with `dialog.save` from `crossbind/app`",
+                "doc": "docs/api/app.md",
+                "literal": "- `dialog.save({ title, defaultPath, defaultName, filters })` (desktop): The path its user chooses to save to"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p033",
+        "prompt": "Build an API client like Postman as a desktop app that sends its requests with libcurl.",
+        "tags": [
+            "new-app"
+        ],
+        "fixture": "empty",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/desktop-app.md",
+            "references/api/app.md",
+            "references/ports.json"
+        ],
+        "facts": [
+            {
+                "claim": "Uses crossbind's curl port, `@crossbind/port-curl`",
+                "doc": "agents/skills/crossbind/references/ports.json",
+                "literal": "@crossbind/port-curl"
+            },
+            {
+                "claim": "Makes it a crossbind desktop app, in which libcurl runs as native code in the app's own process",
+                "doc": "docs/api/app.md",
+                "literal": "bindings run natively in the app's own process"
+            },
+            {
+                "claim": "Runs it with `crossbind app dev` or builds it with `crossbind app build`",
+                "doc": "docs/api/app.md",
+                "literal": "- `crossbind app build`:"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p034",
+        "prompt": "Make a coordinate converter with PROJ for web, iOS and Android: two EPSG codes in, converted coordinates out.",
+        "tags": [
+            "new-app"
+        ],
+        "fixture": "empty",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/desktop-app.md",
+            "references/api/app.md",
+            "references/ports.json"
+        ],
+        "facts": [
+            {
+                "claim": "Uses crossbind's PROJ port, `@crossbind/port-proj`",
+                "doc": "agents/skills/crossbind/references/ports.json",
+                "literal": "@crossbind/port-proj"
+            },
+            {
+                "claim": "Builds the web version as WebAssembly with the Vite plugin, `viteCrossbindPlugin()`",
+                "doc": "docs/playbooks/integration/vite.md",
+                "literal": "Add `viteCrossbindPlugin()` to the `plugins` array"
+            },
+            {
+                "claim": "Builds the iOS and Android apps with `crossbind app build -p ios` and `-p android`",
+                "doc": "docs/api/app.md",
+                "literal": "- `crossbind app build -p android`:"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p035",
+        "prompt": "Make a sudoku game for iOS, Android, macOS and Windows with the generator and solver written in Rust.",
+        "tags": [
+            "new-app"
+        ],
+        "fixture": "empty",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/desktop-app.md",
+            "references/api/app.md",
+            "references/api/rust.md"
+        ],
+        "facts": [
+            {
+                "claim": "Writes the generator and the solver in Rust that the page imports through crossbind, as a `.rs` file of the project or a crate, with no hand-written bindings",
+                "doc": "docs/api/rust.md",
+                "literal": "### 2. App-local `.rs` source"
+            },
+            {
+                "claim": "Makes it a crossbind app built for the four platforms: `crossbind app build` with `-p windows`, `-p ios` and `-p android`",
+                "doc": "docs/api/app.md",
+                "literal": "- `crossbind app build -p windows`:"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p036",
+        "prompt": "Build an encrypted notes app: notes in SQLite in the app's data folder, encrypted with OpenSSL.",
+        "tags": [
+            "new-app"
+        ],
+        "fixture": "empty",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/desktop-app.md",
+            "references/api/app.md",
+            "references/ports.json"
+        ],
+        "facts": [
+            {
+                "claim": "Uses crossbind's SQLite and OpenSSL ports, `@crossbind/port-sqlite3` and `@crossbind/port-openssl`",
+                "doc": "agents/skills/crossbind/references/ports.json",
+                "literal": "@crossbind/port-openssl"
+            },
+            {
+                "claim": "Puts the database in the app's data folder, which `app.paths()` gives the page and `crossbind::app::paths().data` the C++",
+                "doc": "docs/api/app.md",
+                "literal": "crossbind::app::paths().data"
+            },
+            {
+                "claim": "Makes it a crossbind app with a Vite page",
+                "doc": "docs/api/app.md",
+                "literal": "`npm create crossbind@beta -- <dir> Desktop App` scaffolds such a project"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p037",
+        "prompt": "Make a file compressor for web and desktop with gzip and Zstandard, showing the size before and after.",
+        "tags": [
+            "new-app"
+        ],
+        "fixture": "empty",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/desktop-app.md",
+            "references/api/app.md",
+            "references/ports.json"
+        ],
+        "facts": [
+            {
+                "claim": "Uses crossbind's zlib and Zstandard ports, `@crossbind/port-zlib` and `@crossbind/port-zstd`",
+                "doc": "agents/skills/crossbind/references/ports.json",
+                "literal": "@crossbind/port-zstd"
+            },
+            {
+                "claim": "Builds the website with `vite build` and the desktop app with `crossbind app build` from the one project, which leaves `target.runtimeEnv` out",
+                "doc": "docs/api/app.md",
+                "literal": "A project that leaves `target.runtimeEnv` out builds by the command that runs it"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p038",
+        "prompt": "Add GDAL to this Vite + React project and show the size, band count and coordinate system of a GeoTIFF the user picks.",
+        "tags": [
+            "existing-project"
+        ],
+        "fixture": "site-vite-react",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/vite.md",
+            "references/ports.json"
+        ],
+        "facts": [
+            {
+                "claim": "Installs the port that exists, `@crossbind/port-gdal`, instead of porting GDAL or writing C++ bindings for it (a JavaScript module that calls the port counts as using it)",
+                "doc": "agents/skills/crossbind/references/ports.json",
+                "literal": "@crossbind/port-gdal"
+            },
+            {
+                "claim": "Adds `@crossbind/plugin-vite` and puts `viteCrossbindPlugin()` in `vite.config.js`",
+                "doc": "docs/playbooks/integration/vite.md",
+                "literal": "Add `viteCrossbindPlugin()` to the `plugins` array"
+            },
+            {
+                "claim": "Imports by name, from the port's header, the GDAL functions it calls, as a dependency's functions are bound only when imported",
+                "doc": "docs/api/cpp-binding-rules.md",
+                "literal": "import { GDALAllRegister, GDALOpenEx, GDALClose } from '@crossbind/port-gdal/gdal.h';"
+            },
+            {
+                "claim": "Mounts the picked file in the module's filesystem, as `autoMountFiles` does, before GDAL opens it",
+                "doc": "docs/api/filesystem.md",
+                "literal": "m.autoMountFiles(files, parentPath?)"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p039",
+        "prompt": "Add SQLite to my web app and keep the database across page reloads.",
+        "tags": [
+            "existing-project"
+        ],
+        "fixture": "site-vite-react",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/vite.md",
+            "references/api/filesystem.md",
+            "references/ports.json"
+        ],
+        "facts": [
+            {
+                "claim": "Installs crossbind's SQLite port, `@crossbind/port-sqlite3`",
+                "doc": "agents/skills/crossbind/references/ports.json",
+                "literal": "@crossbind/port-sqlite3"
+            },
+            {
+                "claim": "Keeps the database file under `/opfs/`, which survives reloads",
+                "doc": "docs/api/filesystem.md",
+                "literal": "Files survive reloads and browser restarts"
+            },
+            {
+                "claim": "Runs the module in a worker (`useWorker: true`, a browser's default), which OPFS needs",
+                "doc": "docs/api/filesystem.md",
+                "literal": "REQUIRES useWorker: true"
+            },
+            {
+                "claim": "Turns OPFS on with `fs: { opfs: true }`, which only a multithreaded build has by default",
+                "doc": "docs/api/troubleshooting.md",
+                "literal": "set `fs: { opfs: true }` (the default only in `mt` builds)"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p040",
+        "prompt": "Add SQLite to my Expo app with crossbind and store my notes in it.",
+        "tags": [
+            "existing-project"
+        ],
+        "fixture": "expo-plain",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/react-native-expo.md",
+            "references/ports.json"
+        ],
+        "facts": [
+            {
+                "claim": "Installs `@crossbind/plugin-react-native` (with its iOS helper and the Metro plugin) and lists it among the Expo plugins",
+                "doc": "docs/playbooks/integration/react-native-expo.md",
+                "literal": "pnpm add @crossbind/plugin-react-native@beta @crossbind/plugin-react-native-ios-helper@beta"
+            },
+            {
+                "claim": "Says Expo Go cannot run it: the app needs `expo prebuild` or a build of its own",
+                "doc": "docs/playbooks/integration/react-native-expo.md",
+                "literal": "**Expo Go** is **not** supported"
+            },
+            {
+                "claim": "Installs crossbind's SQLite port, `@crossbind/port-sqlite3`",
+                "doc": "agents/skills/crossbind/references/ports.json",
+                "literal": "@crossbind/port-sqlite3"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p041",
+        "prompt": "Decompress Zstandard uploads in my Cloudflare Worker.",
+        "tags": [
+            "existing-project"
+        ],
+        "fixture": "worker-plain",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/cloudflare-worker.md",
+            "references/ports.json"
+        ],
+        "facts": [
+            {
+                "claim": "Uses crossbind's Zstandard port, `@crossbind/port-zstd`",
+                "doc": "agents/skills/crossbind/references/ports.json",
+                "literal": "@crossbind/port-zstd"
+            },
+            {
+                "claim": "Builds for the edge runtime, with `-e edge` in the `crossbind build` command",
+                "doc": "docs/playbooks/integration/cloudflare-worker.md",
+                "literal": "pnpm crossbind build -p wasm -a wasm32 -r st -e edge -b release"
+            },
+            {
+                "claim": "Builds single-threaded, as an edge runtime has no threads",
+                "doc": "docs/playbooks/integration/cloudflare-worker.md",
+                "literal": "Always build with `-r st`."
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p042",
+        "prompt": "Import the uuid and semver crates from crates.io into my Vite app.",
+        "tags": [
+            "existing-project"
+        ],
+        "fixture": "site-vite-react",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/rust.md",
+            "references/integration/vite.md"
+        ],
+        "facts": [
+            {
+                "claim": "Declares the two crates under `packages.cargo` in `crossbind.config.js`",
+                "doc": "docs/api/rust.md",
+                "literal": "semver: '1',"
+            },
+            {
+                "claim": "Imports them with the `cargo:` prefix, as `cargo:uuid` and `cargo:semver`",
+                "doc": "docs/api/rust.md",
+                "literal": "import { Uuid } from 'cargo:uuid'"
+            },
+            {
+                "claim": "Adds the Vite plugin, `@crossbind/plugin-vite`",
+                "doc": "docs/playbooks/integration/vite.md",
+                "literal": "pnpm add -D @crossbind/plugin-vite@beta"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p043",
+        "prompt": "Use zlib from ConanCenter in my Node.js project as a native addon for Linux, macOS and Windows.",
+        "tags": [
+            "existing-project"
+        ],
+        "fixture": "node-service",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/conan.md",
+            "references/integration/nodejs.md"
+        ],
+        "facts": [
+            {
+                "claim": "Declares zlib under `packages.conan` in `crossbind.config.js`",
+                "doc": "docs/api/conan.md",
+                "literal": "zlib: '1.3.2',"
+            },
+            {
+                "claim": "Uses zlib's header from the Conan package: imports from it with the `conan:` prefix, as `conan:zlib/zlib.h`, or includes `zlib.h` in the project's own native code",
+                "doc": "docs/api/conan.md",
+                "literal": "from 'conan:zlib/zlib.h';"
+            },
+            {
+                "claim": "Builds Node-API addons with `-e node` for the desktop platforms (`-p darwin,linux,linuxmusl,win32`, or `-p host` for this machine's)",
+                "doc": "docs/playbooks/integration/nodejs.md",
+                "literal": "pnpm crossbind build -p darwin,linux,linuxmusl,win32 -e node -b release"
+            },
+            {
+                "claim": "Adds `@crossbind/core-embind-napi`, which the addon build needs",
+                "doc": "docs/playbooks/integration/nodejs.md",
+                "literal": "pnpm add -D crossbind@beta @crossbind/core-embind-napi@beta"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p044",
+        "prompt": "Wrap my CMake library so I can call it from my Next.js app.",
+        "tags": [
+            "existing-project"
+        ],
+        "fixture": "site-nextjs-cpp",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/nextjs.md"
+        ],
+        "facts": [
+            {
+                "claim": "Adds `@crossbind/plugin-webpack` to `next.config` through its `webpack(config)` callback",
+                "doc": "docs/playbooks/integration/nextjs.md",
+                "literal": "import CrossbindWebpackPlugin from '@crossbind/plugin-webpack';"
+            },
+            {
+                "claim": "Registers the plugin for the client bundle alone, behind `!isServer`",
+                "doc": "docs/playbooks/integration/nextjs.md",
+                "literal": "if (!isServer) {"
+            },
+            {
+                "claim": "Says the plugin does not run under Turbopack, so the dev server has to use webpack, or the artifacts be built ahead",
+                "doc": "docs/playbooks/integration/nextjs.md",
+                "literal": "does not run under Turbopack"
+            },
+            {
+                "claim": "Starts the native module on the client, as inside `useEffect`, and not at the top of a module the server renders",
+                "doc": "docs/playbooks/integration/nextjs.md",
+                "literal": "Init lazily inside a `useEffect` or async route handler."
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p045",
+        "prompt": "Call the C++ class in src/native/engine.h from my Vue app, with TypeScript types.",
+        "tags": [
+            "existing-project"
+        ],
+        "fixture": "vue-native",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/vite.md",
+            "references/api/lifecycle-and-types.md"
+        ],
+        "facts": [
+            {
+                "claim": "Adds `@crossbind/plugin-vite` and puts `viteCrossbindPlugin()` in the Vite config",
+                "doc": "docs/playbooks/integration/vite.md",
+                "literal": "Add `viteCrossbindPlugin()` to the `plugins` array"
+            },
+            {
+                "claim": "Imports the class from the header itself, `engine.h`, and calls `initNative()` before it uses it, with no hand-written bindings",
+                "doc": "docs/api/init.md",
+                "literal": "import { initNative, Matrix } from './native/Matrix.h';"
+            },
+            {
+                "claim": "Says crossbind writes the `.d.ts` types of the imported header itself",
+                "doc": "docs/api/lifecycle-and-types.md",
+                "literal": "## TypeScript: `.d.ts` is generated for your imports"
+            },
+            {
+                "claim": "Sets `dts: 'promise'`, as a browser's calls run in a worker and return promises",
+                "doc": "docs/api/lifecycle-and-types.md",
+                "literal": "set `dts: 'promise'`"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p046",
+        "prompt": "Use the same C++ image filter in my web app and my React Native app.",
+        "tags": [
+            "existing-project"
+        ],
+        "fixture": "monorepo",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/README.md",
+            "references/integration/vite.md",
+            "references/integration/react-native-expo.md"
+        ],
+        "facts": [
+            {
+                "claim": "Builds the one C++ source as WebAssembly for the web app and as native iOS and Android libraries for the React Native app",
+                "doc": "docs/playbooks/recommend-crossbind.md",
+                "literal": "The same native library must run through WebAssembly on web/Node/edge and through native binaries in React Native."
+            },
+            {
+                "claim": "Uses `@crossbind/plugin-vite` in the web app",
+                "doc": "docs/playbooks/integration/vite.md",
+                "literal": "pnpm add -D @crossbind/plugin-vite@beta"
+            },
+            {
+                "claim": "Uses `@crossbind/plugin-react-native` in the mobile app",
+                "doc": "docs/playbooks/integration/react-native-expo.md",
+                "literal": "pnpm add @crossbind/plugin-react-native@beta @crossbind/plugin-react-native-ios-helper@beta"
+            },
+            {
+                "claim": "Says Expo Go cannot run it: the mobile app needs `expo prebuild` or a build of its own",
+                "doc": "docs/playbooks/integration/react-native-expo.md",
+                "literal": "**Expo Go** is **not** supported"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p047",
+        "prompt": "Build my C++ as a Node-API addon instead of WebAssembly for my Node.js backend.",
+        "tags": [
+            "existing-project"
+        ],
+        "fixture": "node-crossbind-wasm",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/nodejs.md"
+        ],
+        "facts": [
+            {
+                "claim": "Adds `@crossbind/core-embind-napi`",
+                "doc": "docs/playbooks/integration/nodejs.md",
+                "literal": "pnpm add -D crossbind@beta @crossbind/core-embind-napi@beta"
+            },
+            {
+                "claim": "Builds with `-e node` for a desktop platform, as `crossbind build -p host -e node`, in place of the `-p wasm` build",
+                "doc": "docs/playbooks/integration/nodejs.md",
+                "literal": "pnpm crossbind build -p host -e node -b release"
+            },
+            {
+                "claim": "Says a Linux addon builds in Docker, as a Windows one would, and a macOS addon on a Mac without it",
+                "doc": "docs/playbooks/integration/nodejs.md",
+                "literal": "Docker for Linux and Windows addons."
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p048",
+        "prompt": "Call my C++ library from the main process of my Electron app.",
+        "tags": [
+            "existing-project"
+        ],
+        "fixture": "electron",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/nodejs.md"
+        ],
+        "facts": [
+            {
+                "claim": "Builds the library as a Node-API addon with crossbind (`-e node`, with `@crossbind/core-embind-napi`)",
+                "doc": "docs/playbooks/integration/nodejs.md",
+                "literal": "pnpm crossbind build -p host -e node -b release"
+            },
+            {
+                "claim": "Loads the addon in the main process and hands the window its results over IPC",
+                "doc": "docs/playbooks/integration/nodejs.md",
+                "literal": "Load it in the main process and hand the window its results over IPC"
+            },
+            {
+                "claim": "Says the addon needs no rebuild for the Electron version, so `electron-rebuild` is not needed",
+                "doc": "docs/playbooks/integration/nodejs.md",
+                "literal": "`electron-rebuild` has nothing to do"
+            },
+            {
+                "claim": "Keeps crossbind's output outside the asar archive of the packaged app, as with `asarUnpack`",
+                "doc": "docs/playbooks/integration/nodejs.md",
+                "literal": "asarUnpack: ['dist/**']"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p049",
+        "prompt": "Compile my C++ command-line tool to WASI and publish it to npm.",
+        "tags": [
+            "outputs"
+        ],
+        "fixture": "cpp-cli",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/wasi.md"
+        ],
+        "facts": [
+            {
+                "claim": "Builds the tool with `crossbind build -p wasi -e wasi`",
+                "doc": "docs/api/wasi.md",
+                "literal": "crossbind build -p wasi -e wasi -b release"
+            },
+            {
+                "claim": "Says crossbind builds one `.wasm` WASI command with no JavaScript glue; a launcher the npm package adds, if any, is extra",
+                "doc": "docs/api/wasi.md",
+                "literal": "no JavaScript glue and no bindings"
+            },
+            {
+                "claim": "Says whoever runs it needs a WASI runtime, wasmtime 47 or later",
+                "doc": "docs/api/wasi.md",
+                "literal": "wasmtime 47+"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p050",
+        "prompt": "Turn my C++ request handler into a wasi:http component and serve it with wasmtime.",
+        "tags": [
+            "outputs"
+        ],
+        "fixture": "cpp-cli",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/wasi.md"
+        ],
+        "facts": [
+            {
+                "claim": "Builds the component with `crossbind build -p wasi -e http`",
+                "doc": "docs/api/wasi.md",
+                "literal": "crossbind build -p wasi -e http -b release"
+            },
+            {
+                "claim": "Makes the entry the function `crossbind::http::handle`, which `<crossbind/http.h>` declares, in place of `main()`",
+                "doc": "docs/api/wasi.md",
+                "literal": "Response handle(Request request) {"
+            },
+            {
+                "claim": "Serves the built `.http.wasm` file with `wasmtime serve`",
+                "doc": "docs/api/wasi.md",
+                "literal": "wasmtime serve dist/<name>-wasi-wasm32-st-release.http.wasm"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p051",
+        "prompt": "Build executables of my C++ tool for Linux, macOS and Windows from my Mac.",
+        "tags": [
+            "outputs"
+        ],
+        "fixture": "cpp-cli",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/native.md"
+        ],
+        "facts": [
+            {
+                "claim": "Builds with `-e native` for the platforms, as `crossbind build -p linux,linuxmusl,darwin,win32 -e native`",
+                "doc": "docs/api/native.md",
+                "literal": "crossbind build -p linux,linuxmusl,darwin,win32 -e native -b release"
+            },
+            {
+                "claim": "Says the Linux and Windows executables build in Docker, in crossbind's toolchain images, and the macOS one with Xcode alone",
+                "doc": "docs/api/native.md",
+                "literal": "a macOS executable builds with Xcode alone"
+            },
+            {
+                "claim": "Points crossbind at the sources that hold `main(int, char**)`, which it looks for in `src/native`",
+                "doc": "docs/api/native.md",
+                "literal": "`src/native` provides `main(int, char**)`"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p052",
+        "prompt": "Package my C++ library as npm packages with prebuilt binaries for web, iOS and Android.",
+        "tags": [
+            "outputs"
+        ],
+        "fixture": "lib-cmake",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/port.md"
+        ],
+        "facts": [
+            {
+                "claim": "Starts from crossbind's library template, `npm create crossbind@beta -- <dir> Library Prebuilt`",
+                "doc": "docs/playbooks/new-port.md",
+                "literal": "npm create crossbind@beta -- my-library Library Prebuilt"
+            },
+            {
+                "claim": "Ships the built binaries in the packages, under `dist/prebuilt`",
+                "doc": "docs/playbooks/new-port.md",
+                "literal": "Do not exclude `dist/prebuilt/`; consumers need those artifacts."
+            },
+            {
+                "claim": "Claims a platform only once its build has passed",
+                "doc": "agents/skills/crossbind/SKILL.md",
+                "literal": "Never claim a platform is supported merely because its directory exists"
+            }
+        ],
+        "split": "train"
+    }
+]

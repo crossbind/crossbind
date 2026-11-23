@@ -1,0 +1,410 @@
+[
+    {
+        "id": "a001",
+        "prompt": "Add dark mode to this React app.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "site-vite-react",
+        "trigger": "must-not",
+        "split": "test",
+        "facts": []
+    },
+    {
+        "id": "a002",
+        "prompt": "Make my site a PWA with offline caching.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "site-vite-react",
+        "trigger": "must-not",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "a003",
+        "prompt": "Make the site look good on phones.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "site-vite-react",
+        "trigger": "must-not",
+        "split": "test",
+        "facts": []
+    },
+    {
+        "id": "a004",
+        "prompt": "Add a login page with email and password.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "site-vite-react",
+        "trigger": "must-not",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "a005",
+        "prompt": "Deploy this site to Netlify.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "site-vite-react",
+        "trigger": "must-not",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "a006",
+        "prompt": "Add a GitHub Actions workflow that runs my tests on every pull request.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "site-vite-react",
+        "trigger": "must-not",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "a007",
+        "prompt": "Write unit tests for the price formatting helpers.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "site-vite-react",
+        "trigger": "must-not",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "a008",
+        "prompt": "Split the bundle and lazy-load the routes so the first page loads faster.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "site-vite-react",
+        "trigger": "must-not",
+        "split": "test",
+        "facts": []
+    },
+    {
+        "id": "a009",
+        "prompt": "Add a button that downloads the product table as a CSV file.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "site-vite-react",
+        "trigger": "must-not",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "a010",
+        "prompt": "Add a web app manifest and icons so people can add the site to their home screen.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "site-vite-react",
+        "trigger": "must-not",
+        "split": "test",
+        "facts": []
+    },
+    {
+        "id": "a011",
+        "prompt": "Add a blog with MDX to this Next.js site.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "site-nextjs",
+        "trigger": "must-not",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "a012",
+        "prompt": "Cache the product page for an hour instead of rendering it on every request.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "site-nextjs",
+        "trigger": "must-not",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "a013",
+        "prompt": "Send the contact form's message by email from the API route.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "site-nextjs",
+        "trigger": "must-not",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "a014",
+        "prompt": "Add push notifications to my Expo app with expo-notifications.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "expo-plain",
+        "trigger": "must-not",
+        "split": "test",
+        "facts": []
+    },
+    {
+        "id": "a015",
+        "prompt": "Add a bottom tab bar with Notes and Settings to my Expo app.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "expo-plain",
+        "trigger": "must-not",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "a016",
+        "prompt": "Keep the notes after the app restarts, with AsyncStorage.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "expo-plain",
+        "trigger": "must-not",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "a017",
+        "prompt": "Submit my Expo app to the App Store with EAS.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "expo-plain",
+        "trigger": "must-not",
+        "split": "test",
+        "facts": []
+    },
+    {
+        "id": "a018",
+        "prompt": "Add rate limiting to the Express API.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "node-service",
+        "trigger": "must-not",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "a019",
+        "prompt": "Add a /health endpoint and a Dockerfile for this service.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "node-service",
+        "trigger": "must-not",
+        "split": "test",
+        "facts": []
+    },
+    {
+        "id": "a020",
+        "prompt": "Hash the passwords with bcrypt before saving them.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "node-service",
+        "trigger": "must-not",
+        "split": "test",
+        "facts": []
+    },
+    {
+        "id": "a021",
+        "prompt": "Write tests for the users routes with node:test.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "node-service",
+        "trigger": "must-not",
+        "split": "test",
+        "facts": []
+    },
+    {
+        "id": "a022",
+        "prompt": "Cache the API's responses in KV for five minutes.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "worker-plain",
+        "trigger": "must-not",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "a023",
+        "prompt": "Add a cron trigger that deletes uploads older than 30 days.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "worker-plain",
+        "trigger": "must-not",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "a024",
+        "prompt": "Write a Rust command-line tool that renames photos by their EXIF date.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "empty",
+        "trigger": "must-not",
+        "split": "test",
+        "facts": []
+    },
+    {
+        "id": "a025",
+        "prompt": "Write a Python script that converts a folder of CSV files to JSON.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "empty",
+        "trigger": "must-not",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "a026",
+        "prompt": "Fix the crash when the file is empty, and add a --top N option.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "cpp-cli",
+        "trigger": "must-not",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "a027",
+        "prompt": "Move the tests of my CMake library to GoogleTest.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "lib-cmake",
+        "trigger": "must-not",
+        "split": "test",
+        "facts": []
+    },
+    {
+        "id": "a028",
+        "prompt": "Build a SwiftUI settings screen for my iOS app.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "empty",
+        "trigger": "must-not",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "a029",
+        "prompt": "Write a Go HTTP server with an /upload endpoint.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "empty",
+        "trigger": "must-not",
+        "split": "test",
+        "facts": []
+    },
+    {
+        "id": "a030",
+        "prompt": "Change the page's title to \"Matrix\" and center its text.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "app",
+        "trigger": "must-not",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "a031",
+        "prompt": "Fix the typos in the README.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "app",
+        "trigger": "must-not",
+        "split": "test",
+        "facts": []
+    },
+    {
+        "id": "a032",
+        "prompt": "Add a footer with the copyright year to the page.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "web-crossbind",
+        "trigger": "must-not",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "a033",
+        "prompt": "Set up Prettier and format the JavaScript files.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "web-crossbind",
+        "trigger": "must-not",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "a034",
+        "prompt": "Translate the page's text to Turkish.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "app",
+        "trigger": "must-not",
+        "split": "test",
+        "facts": []
+    },
+    {
+        "id": "a035",
+        "prompt": "Explain the difference between a Web Worker and a Service Worker.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "empty",
+        "trigger": "must-not",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "a036",
+        "prompt": "Write a regular expression that matches ISO 8601 dates.",
+        "tags": [
+            "negative"
+        ],
+        "fixture": "empty",
+        "trigger": "must-not",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "a037",
+        "prompt": "Make a to-do app.",
+        "tags": [
+            "boundary"
+        ],
+        "fixture": "empty",
+        "trigger": "either",
+        "expect": "do",
+        "split": "train",
+        "facts": []
+    }
+]

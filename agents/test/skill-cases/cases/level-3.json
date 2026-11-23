@@ -1,0 +1,1453 @@
+[
+    {
+        "id": "p053",
+        "prompt": "Run the native calls in a Web Worker so the UI never blocks.",
+        "tags": [
+            "runtime"
+        ],
+        "fixture": "web-crossbind",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/threading.md",
+            "references/api/init.md"
+        ],
+        "facts": [
+            {
+                "claim": "Says the module already runs in a Web Worker in a browser by default, or sets `useWorker: true`",
+                "doc": "docs/api/threading.md",
+                "literal": "`useWorker` is on by default in a browser"
+            },
+            {
+                "claim": "Says every call then returns a promise and has to be awaited",
+                "doc": "docs/api/threading.md",
+                "literal": "// m looks identical, but every call is async."
+            },
+            {
+                "claim": "Does not switch to the multithreaded runtime (`runtime: 'mt'`) for this, as the worker and threads are separate choices",
+                "doc": "docs/api/threading.md",
+                "literal": "they're independent"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p054",
+        "prompt": "Switch the WebAssembly build to multithreaded and add the COOP/COEP headers for my Netlify deploy.",
+        "tags": [
+            "runtime"
+        ],
+        "fixture": "web-crossbind",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/threading.md",
+            "references/integration/vite.md"
+        ],
+        "facts": [
+            {
+                "claim": "Sets `target: { runtime: 'mt' }` in `crossbind.config.js`",
+                "doc": "docs/api/threading.md",
+                "literal": "target: { runtime: 'mt' },"
+            },
+            {
+                "claim": "Adds both headers, `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`, in a Netlify `_headers` file",
+                "doc": "docs/api/threading.md",
+                "literal": "**Netlify:** in `_headers`"
+            },
+            {
+                "claim": "Says the Vite plugin already sends the headers in dev and preview, so only the deployed site needs them",
+                "doc": "docs/playbooks/integration/vite.md",
+                "literal": "Dev/preview is handled by the plugin."
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p055",
+        "prompt": "Let the user pick local files and hand them to the native code without uploading them.",
+        "tags": [
+            "runtime"
+        ],
+        "fixture": "web-crossbind",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/filesystem.md"
+        ],
+        "facts": [
+            {
+                "claim": "Mounts the picked `File` objects in the module's filesystem with `autoMountFiles`",
+                "doc": "docs/api/filesystem.md",
+                "literal": "const paths = await m.autoMountFiles(Array.from(fileInput.files))"
+            },
+            {
+                "claim": "Gives the native functions the paths that mounting returns",
+                "doc": "docs/api/filesystem.md",
+                "literal": "Returns: Promise<string[]> (the resolved paths of each mounted file)"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p056",
+        "prompt": "Report progress from my C++ to the page while a long job runs.",
+        "tags": [
+            "runtime"
+        ],
+        "fixture": "app",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Uses one of an app's two ways from native code to the page: a JavaScript function the page passes to the call, or an event the C++ emits with `crossbind::app::emitEvent` and the page hears with `events.on`",
+                "doc": "docs/api/app.md",
+                "literal": "await Native.exportReport(file, (done) => { progress.value = done; });"
+            },
+            {
+                "claim": "Says the native code gets no answer from the page: a passed function runs later, and the native code goes on at once",
+                "doc": "docs/api/app.md",
+                "literal": "Native code goes on at once and gets `undefined` for an answer"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p057",
+        "prompt": "Lay the page out differently on a phone, a tablet and a desktop in the crossbind app.",
+        "tags": [
+            "runtime"
+        ],
+        "fixture": "app",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Reads `device.formFactor` from `crossbind/app`, which is `phone`, `tablet` or `desktop`",
+                "doc": "docs/api/app.md",
+                "literal": "if (device.formFactor === 'phone') mountPhoneLayout();"
+            },
+            {
+                "claim": "Says the page should also lay itself out by its window's size with CSS, as `formFactor` stays what it was when the app started",
+                "doc": "docs/api/app.md",
+                "literal": "so a page lays itself out by its window's size, with CSS, as on the web"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p058",
+        "prompt": "Add a `myapp://` URL scheme and open the matching screen when a link starts the app.",
+        "tags": [
+            "app-feature"
+        ],
+        "fixture": "app",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Declares the scheme under `app.urlSchemes` in `crossbind.config.js`",
+                "doc": "docs/api/app.md",
+                "literal": "urlSchemes: ['myapp'],"
+            },
+            {
+                "claim": "Asks for the links that opened the app with `app.launchUrls()`",
+                "doc": "docs/api/app.md",
+                "literal": "for (const url of await app.launchUrls()) show(new URL(url));"
+            },
+            {
+                "claim": "Hears of later links as the `open-url` event",
+                "doc": "docs/api/app.md",
+                "literal": "events.on('open-url', ({ url }) => show(new URL(url)));"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p059",
+        "prompt": "Register the app for .csv files so double-clicking one opens it.",
+        "tags": [
+            "app-feature"
+        ],
+        "fixture": "app",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Declares the type under `app.fileTypes` in `crossbind.config.js`, with its name and the extension `csv`",
+                "doc": "docs/api/app.md",
+                "literal": "fileTypes: [{ name: 'GeoJSON', extensions: ['geojson'], mimeTypes: ['application/geo+json'] }],"
+            },
+            {
+                "claim": "Gets the files the app was opened with from `app.launchFiles()` and the `open-files` event",
+                "doc": "docs/api/app.md",
+                "literal": "for (const path of await app.launchFiles()) open(path);"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p060",
+        "prompt": "Keep the app to one instance and bring its window to the front on a second launch.",
+        "tags": [
+            "app-feature"
+        ],
+        "fixture": "app",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Sets `app.singleInstance: true` in `crossbind.config.js`",
+                "doc": "docs/api/app.md",
+                "literal": "singleInstance: true,"
+            },
+            {
+                "claim": "Says the running instance then brings its window to the front by itself, with no code of the page's",
+                "doc": "docs/api/app.md",
+                "literal": "The instance brings its window in front to the front"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p061",
+        "prompt": "Ask for the camera with a reason and show the preview.",
+        "tags": [
+            "app-feature"
+        ],
+        "fixture": "app",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Lists the camera with its reason under `app.permissions` in `crossbind.config.js`",
+                "doc": "docs/api/app.md",
+                "literal": "camera: 'To scan barcodes',"
+            },
+            {
+                "claim": "Shows the preview with the web's own `getUserMedia()` in the page",
+                "doc": "docs/api/app.md",
+                "literal": "through the web's own APIs, `getUserMedia()` and"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p062",
+        "prompt": "Add the clipboard extension and a Copy button.",
+        "tags": [
+            "app-feature"
+        ],
+        "fixture": "app",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/app.md",
+            "references/api/extensions.md"
+        ],
+        "facts": [
+            {
+                "claim": "Adds the extension with `crossbind add @crossbind/extension-clipboard`, or installs it and lists it under `extensions` in `crossbind.config.js`",
+                "doc": "docs/api/extensions.md",
+                "literal": "which `crossbind add @crossbind/extension-clipboard` does with"
+            },
+            {
+                "claim": "Copies with `writeText` imported from `@crossbind/extension-clipboard`",
+                "doc": "docs/api/extensions.md",
+                "literal": "import { readText, writeText } from '@crossbind/extension-clipboard';"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p063",
+        "prompt": "Add home-screen quick actions on iOS and Android.",
+        "tags": [
+            "app-feature"
+        ],
+        "fixture": "app",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Declares the actions under `app.shortcutItems` in `crossbind.config.js`, each with a `type` and a `title`",
+                "doc": "docs/api/app.md",
+                "literal": "shortcutItems: [{ type: 'new-note', title: 'New note', icon: 'compose' }],"
+            },
+            {
+                "claim": "Acts on a tap through the `shortcut-item` event, asking for the held ones with `events.held('shortcut-item')`",
+                "doc": "docs/api/app.md",
+                "literal": "for (const { type } of await events.held('shortcut-item')) run(type);"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p064",
+        "prompt": "Set the app's name, icon and window size for every platform.",
+        "tags": [
+            "app-feature"
+        ],
+        "fixture": "app",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Sets the name with `app.name`",
+                "doc": "docs/api/app.md",
+                "literal": "name: 'My App',"
+            },
+            {
+                "claim": "Sets `app.icon` to a square PNG, from which the build makes each platform's icon",
+                "doc": "docs/api/app.md",
+                "literal": "`app.icon` names a square PNG"
+            },
+            {
+                "claim": "Sets the size with `app.window` (`width`, `height`)",
+                "doc": "docs/api/app.md",
+                "literal": "window: { width: 1024, height: 768"
+            },
+            {
+                "claim": "Says `app.window` sizes the desktop window alone: a phone sizes the app itself",
+                "doc": "docs/api/app.md",
+                "literal": "`app.window` sizes the desktop window"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p065",
+        "prompt": "Add an open-source licenses screen to the app.",
+        "tags": [
+            "app-feature"
+        ],
+        "fixture": "app",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Takes the list from `licenses()` of `crossbind/licenses`",
+                "doc": "docs/api/app.md",
+                "literal": "import { licenses } from 'crossbind/licenses';"
+            },
+            {
+                "claim": "Says the list exists in a build alone: on the dev server `licenses()` rejects",
+                "doc": "docs/api/app.md",
+                "literal": "The dev server has no list, so there `licenses()` rejects, saying so."
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p066",
+        "prompt": "Write an app extension that gives the page the battery level on every platform.",
+        "tags": [
+            "app-feature"
+        ],
+        "fixture": "empty",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/extension.md",
+            "references/api/extensions.md"
+        ],
+        "facts": [
+            {
+                "claim": "Starts the package with `npm create crossbind@beta -- <name> Extension`",
+                "doc": "docs/playbooks/new-extension.md",
+                "literal": "`npm create crossbind@beta -- <name> Extension` makes a start"
+            },
+            {
+                "claim": "Registers the function by its name, as `<name>.<function>`, in the extension's C++ entry",
+                "doc": "docs/api/extensions.md",
+                "literal": "registry.function(\"clipboard.writeText\""
+            },
+            {
+                "claim": "Writes native code for each platform (macOS, iOS, Linux, Windows and Android), as the battery's API differs on each",
+                "doc": "docs/playbooks/new-extension.md",
+                "literal": "**Write each platform.**"
+            },
+            {
+                "claim": "Has the page's module call the function through `invoke`",
+                "doc": "docs/playbooks/new-extension.md",
+                "literal": "the page's functions, each through invoke('<name>.<function>')"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p067",
+        "prompt": "Release the Android app to Google Play's internal track.",
+        "tags": [
+            "ship"
+        ],
+        "fixture": "app",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Uses `crossbind app upload google-play`, whose track is the internal one unless `--track` names another",
+                "doc": "docs/api/app.md",
+                "literal": "internal unless `--track` names another"
+            },
+            {
+                "claim": "Says the bundle needs an upload key, which `crossbind app key upload` makes",
+                "doc": "docs/api/app.md",
+                "literal": "- `crossbind app key upload`: Makes this machine's upload key"
+            },
+            {
+                "claim": "Says the app has to be created by hand in Play Console first, with `app.id` as its package name",
+                "doc": "docs/api/app.md",
+                "literal": "Play's API makes none"
+            },
+            {
+                "claim": "Says the first upload leaves its release a draft, to roll out once in Play Console",
+                "doc": "docs/api/app.md",
+                "literal": "So the first upload leaves its release a draft"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p068",
+        "prompt": "Upload the iOS build to TestFlight and submit it for review.",
+        "tags": [
+            "ship"
+        ],
+        "fixture": "app",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Uploads with `crossbind app upload app-store`, which sends the app to App Store Connect and its TestFlight",
+                "doc": "docs/api/app.md",
+                "literal": "- `crossbind app upload app-store`: Builds the iOS app, then the macOS app"
+            },
+            {
+                "claim": "Sends it to App Review with `crossbind app release app-store`",
+                "doc": "docs/api/app.md",
+                "literal": "the newest TestFlight build to App Review"
+            },
+            {
+                "claim": "Says it runs on a Mac with Xcode, for the app's Apple team",
+                "doc": "docs/api/app.md",
+                "literal": "It runs on macOS, with Xcode."
+            },
+            {
+                "claim": "Says the app has to be created by hand in App Store Connect first, with `app.id` as its bundle id",
+                "doc": "docs/api/app.md",
+                "literal": "as a new iOS app with `app.id` as its bundle ID"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p069",
+        "prompt": "Create a GitHub release with the dmg, the Windows setup and the deb.",
+        "tags": [
+            "ship"
+        ],
+        "fixture": "app",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Uses `crossbind app upload github` once for each platform (`-p macos`, `-p windows`, `-p linux`), then `crossbind app release github` to take the release out of its draft",
+                "doc": "docs/api/app.md",
+                "literal": "into the draft GitHub release of its version"
+            },
+            {
+                "claim": "Says it takes a token that may write the repository's contents (`GH_TOKEN` or `GITHUB_TOKEN`), or the `gh` sign-in",
+                "doc": "docs/api/app.md",
+                "literal": "GitHub takes the release from a token with write access to the repository's contents: `GH_TOKEN` or `GITHUB_TOKEN`"
+            },
+            {
+                "claim": "Says the release is the one of the app's version, tagged `v` and the version of `package.json`",
+                "doc": "docs/api/app.md",
+                "literal": "tagged `v` and package.json's version"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p070",
+        "prompt": "Turn on auto-update and show an \"Update available\" banner.",
+        "tags": [
+            "ship"
+        ],
+        "fixture": "app",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/app.md",
+            "references/integration/desktop-app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Sets `app.updater` in `crossbind.config.js`, with a `url` and a `publicKey`",
+                "doc": "docs/api/app.md",
+                "literal": "A desktop app updates itself from where `app.updater` says"
+            },
+            {
+                "claim": "Makes the key pair with `crossbind app key updater`",
+                "doc": "docs/api/app.md",
+                "literal": "- `crossbind app key updater`: Prints a new key pair for a desktop app's updates"
+            },
+            {
+                "claim": "Keeps the private key in `CROSSBIND_UPDATER_PRIVATE_KEY` where the app is built, and out of the repository",
+                "doc": "docs/api/app.md",
+                "literal": "`CROSSBIND_UPDATER_PRIVATE_KEY` where the app is built, and nowhere else"
+            },
+            {
+                "claim": "Shows the banner when `updater.check()` gives a version, and installs with `updater.install()` once its user agrees",
+                "doc": "docs/api/app.md",
+                "literal": "const update = await updater.check();"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p071",
+        "prompt": "Sign and notarize the macOS app, and sign the Windows setup.",
+        "tags": [
+            "ship"
+        ],
+        "fixture": "app",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/app.md",
+            "references/integration/desktop-app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Signs the macOS app by setting `CROSSBIND_APPLE_SIGNING_IDENTITY` to a Developer ID Application identity",
+                "doc": "docs/api/app.md",
+                "literal": "- `CROSSBIND_APPLE_SIGNING_IDENTITY`:"
+            },
+            {
+                "claim": "Has Apple notarize it with an App Store Connect API key in `CROSSBIND_APPLE_API_KEY`, `CROSSBIND_APPLE_API_KEY_ID` and `CROSSBIND_APPLE_API_ISSUER`",
+                "doc": "docs/api/app.md",
+                "literal": "- `CROSSBIND_APPLE_API_ISSUER`:"
+            },
+            {
+                "claim": "Signs the Windows app and its setup program through the `CROSSBIND_WINDOWS_SIGNING_*` variables",
+                "doc": "docs/api/app.md",
+                "literal": "- `CROSSBIND_WINDOWS_SIGNING_STORETYPE`:"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p072",
+        "prompt": "Publish each release to winget.",
+        "tags": [
+            "ship"
+        ],
+        "fixture": "app",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Adds a GitHub Actions workflow with WinGet Releaser (`vedantmgoyal9/winget-releaser`), which runs at each GitHub release",
+                "doc": "docs/api/app.md",
+                "literal": "- uses: vedantmgoyal9/winget-releaser@v2"
+            },
+            {
+                "claim": "Says the app's first version has to be submitted to `microsoft/winget-pkgs` by hand, once",
+                "doc": "docs/api/app.md",
+                "literal": "submit its first version to `microsoft/winget-pkgs` yourself"
+            },
+            {
+                "claim": "Says the workflow takes a classic token of its own in a secret, as the workflow's own token opens no pull request in another repository",
+                "doc": "docs/api/app.md",
+                "literal": "keep a classic token with the `public_repo` and `workflow` scopes in the `WINGET_TOKEN` secret"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p073",
+        "prompt": "Write the GitHub Actions workflow that builds and publishes the app for every platform.",
+        "tags": [
+            "ship"
+        ],
+        "fixture": "app",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Has the jobs run `crossbind app upload`, which asks nothing where there is no terminal",
+                "doc": "docs/api/app.md",
+                "literal": "A CI job publishes as an upload without a terminal does: it asks nothing."
+            },
+            {
+                "claim": "Runs the iOS job on a macOS runner",
+                "doc": "docs/api/app.md",
+                "literal": "Publishing to TestFlight takes one job on a hosted macOS runner."
+            },
+            {
+                "claim": "Passes the stores' credentials as the repository's secrets, and gives the GitHub release's job `permissions: contents: write`",
+                "doc": "docs/api/app.md",
+                "literal": "with `permissions: contents: write`"
+            },
+            {
+                "claim": "Says to upload once from a machine of the developer's own first, so that the app's settings are written to `crossbind.config.js` and committed",
+                "doc": "docs/api/app.md",
+                "literal": "So upload once on your own machine first"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p074",
+        "prompt": "Build the Windows and Linux apps from my Mac.",
+        "tags": [
+            "ship"
+        ],
+        "fixture": "app",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/app.md",
+            "references/integration/desktop-app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Uses `crossbind app build -p windows` and `crossbind app build -p linux`, or the project's `build:windows` and `build:linux` scripts that run them",
+                "doc": "docs/api/app.md",
+                "literal": "- `crossbind app build -p windows`:"
+            },
+            {
+                "claim": "Says both build in Docker on the Mac",
+                "doc": "docs/api/app.md",
+                "literal": "They need `RUNNER=DOCKER_RUN` or `DOCKER_EXEC`, and another runner stops the build before its first step."
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p075",
+        "prompt": "Build the WebAssembly on crossbind cloud so I don't need Docker.",
+        "tags": [
+            "ship"
+        ],
+        "fixture": "web-crossbind",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/remote-runner.md"
+        ],
+        "facts": [
+            {
+                "claim": "Signs in with `crossbind login`",
+                "doc": "docs/api/remote-runner.md",
+                "literal": "crossbind login"
+            },
+            {
+                "claim": "Sets the runner to the remote one, with `crossbind config set RUNNER REMOTE` or `CROSSBIND_RUNNER=REMOTE`",
+                "doc": "docs/api/remote-runner.md",
+                "literal": "crossbind config set RUNNER REMOTE"
+            },
+            {
+                "claim": "Says the cloud gives a signed-in account 60 build minutes a month",
+                "doc": "docs/api/remote-runner.md",
+                "literal": "A signed-in account has 60 build minutes a month"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p076",
+        "prompt": "List the license of everything my app ships and write the notices file.",
+        "tags": [
+            "ship"
+        ],
+        "fixture": "app",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Lists them with `crossbind licenses -e app`",
+                "doc": "docs/api/app.md",
+                "literal": "`crossbind licenses -e app` lists what the app carries beside its packages"
+            },
+            {
+                "claim": "Writes the file with `--notices`",
+                "doc": "docs/api/app.md",
+                "literal": "`--notices` writes them to a file to ship with the app."
+            },
+            {
+                "claim": "Uses `--platform` for what each platform's app carries besides, as `linux`, `win32`, `ios` and `android`",
+                "doc": "docs/api/app.md",
+                "literal": "with `--platform linux`, the Hermes source"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p077",
+        "prompt": "Create a crossbind port for libpng, with its version, checksum and license pinned.",
+        "tags": [
+            "ship"
+        ],
+        "fixture": "empty",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/port.md"
+        ],
+        "facts": [
+            {
+                "claim": "Starts a library project with `npm create crossbind@beta -- <dir> Library Prebuilt`, as this folder is outside the crossbind repository, where `pnpm scaffold:port` serves",
+                "doc": "agents/skills/crossbind/SKILL.md",
+                "literal": "npm create crossbind@beta -- <dir> Library Prebuilt"
+            },
+            {
+                "claim": "Pins the upstream version and the `sha256` of its source",
+                "doc": "docs/playbooks/new-port.md",
+                "literal": "`base/build.mjs` owns the upstream URL, `sha256`, patches and common configure/build options."
+            },
+            {
+                "claim": "Keeps libpng's license text in the packages and declares its license",
+                "doc": "docs/playbooks/new-port.md",
+                "literal": "Put the upstream license text in every platform variant that ships native artifacts."
+            },
+            {
+                "claim": "Claims no platform before its build has passed",
+                "doc": "agents/skills/crossbind/SKILL.md",
+                "literal": "Never claim a platform is supported merely because its directory exists"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p078",
+        "prompt": "It works in dev, but in production I get \"RuntimeError: SharedArrayBuffer is not defined\".",
+        "tags": [
+            "debug"
+        ],
+        "fixture": "web-crossbind",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/troubleshooting.md",
+            "references/api/threading.md"
+        ],
+        "facts": [
+            {
+                "claim": "Names the cause: the production host does not send the COOP/COEP headers a multithreaded build needs",
+                "doc": "docs/api/troubleshooting.md",
+                "literal": "### `RuntimeError: SharedArrayBuffer is not defined`"
+            },
+            {
+                "claim": "Gives both headers: `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`",
+                "doc": "docs/api/threading.md",
+                "literal": "Cross-Origin-Embedder-Policy: require-corp"
+            },
+            {
+                "claim": "Says why dev worked: the bundler plugin sends the headers in dev and preview alone",
+                "doc": "docs/api/threading.md",
+                "literal": "dev server and preview:** `@crossbind/plugin-vite` sends them"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p079",
+        "prompt": "My database is empty after every page reload.",
+        "tags": [
+            "debug"
+        ],
+        "fixture": "web-crossbind",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/filesystem.md",
+            "references/api/troubleshooting.md"
+        ],
+        "facts": [
+            {
+                "claim": "Finds that the database is in the in-memory filesystem (`/memfs`), which lasts for the tab's session alone",
+                "doc": "docs/api/filesystem.md",
+                "literal": "memory. Files last for the tab's session"
+            },
+            {
+                "claim": "Moves it under `/opfs/`, which needs the module in a worker (`useWorker: true`)",
+                "doc": "docs/api/filesystem.md",
+                "literal": "REQUIRES useWorker: true"
+            },
+            {
+                "claim": "Says OPFS has to be turned on with `fs: { opfs: true }` in a single-threaded build",
+                "doc": "docs/api/troubleshooting.md",
+                "literal": "set `fs: { opfs: true }` (the default only in `mt` builds)"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p080",
+        "prompt": "The link step fails with \"undefined symbol\".",
+        "tags": [
+            "debug"
+        ],
+        "fixture": "web-crossbind",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/troubleshooting.md"
+        ],
+        "facts": [
+            {
+                "claim": "Names a package missing from `dependencies` in `crossbind.config.js`, or from `package.json`, as a cause of this error, whether or not it finds that to be so in this project",
+                "doc": "docs/api/troubleshooting.md",
+                "literal": "**Cause A — missing dep:**"
+            },
+            {
+                "claim": "Asks which symbol is undefined, or names the other cause, two libraries that clash over one symbol",
+                "doc": "docs/api/troubleshooting.md",
+                "literal": "**Cause B — symbol clash:**"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p081",
+        "prompt": "Calls hang forever after I set useWorker to true.",
+        "tags": [
+            "debug"
+        ],
+        "fixture": "web-crossbind",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/troubleshooting.md",
+            "references/api/threading.md"
+        ],
+        "facts": [
+            {
+                "claim": "Checks that the worker's script loads at all, as in the browser's Network tab: with a wrong URL the worker never starts",
+                "doc": "docs/api/troubleshooting.md",
+                "literal": "worker script URL is wrong; worker never spawned"
+            },
+            {
+                "claim": "Considers native code that never returns inside the worker",
+                "doc": "docs/api/troubleshooting.md",
+                "literal": "C++ inside worker is in an infinite loop"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p082",
+        "prompt": "Editing a .cpp file doesn't reload the page.",
+        "tags": [
+            "debug"
+        ],
+        "fixture": "web-crossbind",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/troubleshooting.md",
+            "references/integration/vite.md"
+        ],
+        "facts": [
+            {
+                "claim": "Checks that `paths.native` in `crossbind.config.js` points at the folder that holds the C++, `src/native` by default",
+                "doc": "docs/playbooks/integration/vite.md",
+                "literal": "Check `paths.native` in the project's `crossbind.config.js`."
+            },
+            {
+                "claim": "Suggests restarting the dev server",
+                "doc": "docs/api/troubleshooting.md",
+                "literal": "restart dev server"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p083",
+        "prompt": "The wasm runs out of memory on large files.",
+        "tags": [
+            "debug"
+        ],
+        "fixture": "web-crossbind",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/troubleshooting.md",
+            "references/api/performance.md"
+        ],
+        "facts": [
+            {
+                "claim": "Says memory already grows by itself, so turning growth on is not the fix",
+                "doc": "docs/api/troubleshooting.md",
+                "literal": "`-sALLOW_MEMORY_GROWTH=1` is on by default"
+            },
+            {
+                "claim": "Raises the limit through `emccFlags`, as `-sMAXIMUM_MEMORY=4GB`, or names wasm64 for more than wasm32 holds",
+                "doc": "docs/api/troubleshooting.md",
+                "literal": "-sMAXIMUM_MEMORY=4GB"
+            },
+            {
+                "claim": "Suggests streaming or splitting the input in place of holding a whole file in memory",
+                "doc": "docs/api/troubleshooting.md",
+                "literal": "stream the input instead of loading all into memory"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p084",
+        "prompt": "The wasm file is 26 MB. Make it smaller.",
+        "tags": [
+            "debug"
+        ],
+        "fixture": "web-crossbind",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/cpp-binding-rules.md",
+            "references/api/performance.md"
+        ],
+        "facts": [
+            {
+                "claim": "Says a dependency's functions are bound only when the app imports them by name, so importing the ones it uses alone, and not the whole module, leaves the rest of the library out",
+                "doc": "docs/api/cpp-binding-rules.md",
+                "literal": "A function or class no import reaches is left out, and so is the library code only it reaches"
+            },
+            {
+                "claim": "Does not advise switching `-O3` to `-Os` or `-O2` to shrink the file",
+                "doc": "docs/api/performance.md",
+                "literal": "Don't switch to `-O2` or `-Os` thinking you'll get a smaller binary"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p085",
+        "prompt": "After adding a Conan package, the iOS build of my React Native app can't find it.",
+        "tags": [
+            "debug"
+        ],
+        "fixture": "rn-crossbind",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/conan.md"
+        ],
+        "facts": [
+            {
+                "claim": "Says to run `pod install` again after `packages.conan` changes, as CocoaPods links what it finds then",
+                "doc": "docs/api/conan.md",
+                "literal": "so run `pod install` again after you change"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p086",
+        "prompt": "My C++ is slower than the JavaScript it replaced. Why?",
+        "tags": [
+            "debug"
+        ],
+        "fixture": "web-crossbind",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/performance.md"
+        ],
+        "facts": [
+            {
+                "claim": "Says native or WebAssembly code is not faster than JavaScript by itself",
+                "doc": "agents/skills/crossbind/SKILL.md",
+                "literal": "Never promise that native or Wasm code is automatically faster; measure the user's workload."
+            },
+            {
+                "claim": "Asks to measure or profile the workload, as with the browser's Performance tab, before changing anything",
+                "doc": "docs/api/performance.md",
+                "literal": "Before reaching for any override, measure:"
+            },
+            {
+                "claim": "Checks that the build measured is a release build and not a debug one, which is not optimized",
+                "doc": "docs/api/performance.md",
+                "literal": "**`-O0`**, debug: no optimization"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p087",
+        "prompt": "Inspect this project and tell me how you would add GDAL with crossbind. Do not edit anything yet.",
+        "tags": [
+            "explore"
+        ],
+        "fixture": "site-vite-react",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/vite.md",
+            "references/ports.json"
+        ],
+        "facts": [
+            {
+                "claim": "Says, from having looked at it, that the project is a Vite project",
+                "doc": "docs/playbooks/integration/vite.md",
+                "literal": "`vite` is in `dependencies` or `devDependencies`."
+            },
+            {
+                "claim": "Uses the GDAL port that exists, `@crossbind/port-gdal`, by its family package or one of its platform variants, instead of porting GDAL or writing C++ bindings for it (a JavaScript module that calls the port counts as using it)",
+                "doc": "agents/skills/crossbind/references/ports.json",
+                "literal": "@crossbind/port-gdal"
+            },
+            {
+                "claim": "Names `@crossbind/plugin-vite` with `viteCrossbindPlugin()` as the integration",
+                "doc": "docs/playbooks/integration/vite.md",
+                "literal": "Add `viteCrossbindPlugin()` to the `plugins` array"
+            },
+            {
+                "claim": "Makes the threading choice explicit: single-threaded, or multithreaded with the COOP/COEP headers in production",
+                "doc": "agents/skills/crossbind/SKILL.md",
+                "literal": "Decide threading explicitly"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p088",
+        "prompt": "Which crossbind ports could replace native dependencies I already have?",
+        "tags": [
+            "explore"
+        ],
+        "fixture": "node-service",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/ports.json",
+            "references/recommend.md"
+        ],
+        "facts": [
+            {
+                "claim": "Names crossbind's SQLite port, `@crossbind/port-sqlite3`, for the library `better-sqlite3` wraps",
+                "doc": "agents/skills/crossbind/references/ports.json",
+                "literal": "@crossbind/port-sqlite3"
+            },
+            {
+                "claim": "Says the catalog has no port of the library behind `sharp` (libvips), and invents none",
+                "doc": "docs/playbooks/recommend-crossbind.md",
+                "literal": "Before proposing a new port, check:"
+            },
+            {
+                "claim": "Says a project that runs in Node.js alone may be better off with the Node-API packages it has, and does not advise replacing them merely because a port exists",
+                "doc": "docs/playbooks/recommend-crossbind.md",
+                "literal": "Node-only native code may be better served by N-API."
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p090",
+        "prompt": "How big will the app be on each platform, and how fast will it start?",
+        "tags": [
+            "explore"
+        ],
+        "fixture": "app",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Points to the Performance page for what a sample app weighs on each platform, and makes up no size or start time of its own",
+                "doc": "docs/api/app.md",
+                "literal": "What a sample app weighs on each platform is on [Performance](https://crossbind.dev/guide/performance/#size)."
+            },
+            {
+                "claim": "Makes clear that this app's own size and start take a build of it to know",
+                "doc": "docs/api/app.md",
+                "literal": "What a sample app weighs on each platform"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p091",
+        "prompt": "Do any licenses in my app conflict with the App Store?",
+        "tags": [
+            "explore"
+        ],
+        "fixture": "app",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/app.md",
+            "references/ports.json"
+        ],
+        "facts": [
+            {
+                "claim": "Lists what the iOS app carries, with each component's license, through `crossbind licenses -e app --platform ios` or `licenses()`",
+                "doc": "docs/api/app.md",
+                "literal": "`crossbind licenses -e app` lists what the app carries beside its packages"
+            },
+            {
+                "claim": "Rests the answer on the licenses of what this app links, and names copyleft ones, as the LGPL of some ports, as those to look at, without giving a legal verdict as a fact",
+                "doc": "agents/skills/crossbind/references/ports.json",
+                "literal": "LGPL-2.1-only"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p092",
+        "prompt": "Add OCR to my web app.",
+        "tags": [
+            "no-port"
+        ],
+        "fixture": "site-vite-react",
+        "trigger": "either",
+        "expect": "do",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "p093",
+        "prompt": "Convert HEIC photos to JPEG in the browser.",
+        "tags": [
+            "no-port"
+        ],
+        "fixture": "site-vite-react",
+        "trigger": "either",
+        "expect": "do",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "p094",
+        "prompt": "Trim a video in the browser without uploading it.",
+        "tags": [
+            "no-port"
+        ],
+        "fixture": "site-vite-react",
+        "trigger": "either",
+        "expect": "do",
+        "split": "test",
+        "facts": []
+    },
+    {
+        "id": "p095",
+        "prompt": "Render the first page of a PDF as an image in my Node.js service.",
+        "tags": [
+            "no-port"
+        ],
+        "fixture": "node-service",
+        "trigger": "either",
+        "expect": "do",
+        "split": "test",
+        "facts": []
+    },
+    {
+        "id": "p096",
+        "prompt": "Scan barcodes and QR codes from the camera in my React Native app.",
+        "tags": [
+            "no-port"
+        ],
+        "fixture": "expo-plain",
+        "trigger": "either",
+        "expect": "do",
+        "split": "train",
+        "facts": []
+    },
+    {
+        "id": "p097",
+        "prompt": "Wrap https://example.com in an app. I don't have its source.",
+        "tags": [
+            "pushback"
+        ],
+        "fixture": "empty",
+        "trigger": "must",
+        "expect": "object",
+        "route": [
+            "references/api/app.md",
+            "references/api/extensions.md"
+        ],
+        "facts": [
+            {
+                "claim": "Says a crossbind app's page ships inside the app, built with Vite from source the developer has, so a site without its source cannot be the app's page",
+                "doc": "docs/api/app.md",
+                "literal": "what Vite built, served at crossbind://app/"
+            },
+            {
+                "claim": "Says a page of another origin, even one the app lets load, reaches neither the app's functions nor its native module",
+                "doc": "docs/api/app.md",
+                "literal": "A page of another origin that loads gets no token"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p098",
+        "prompt": "Make my server-rendered Next.js site an iOS app.",
+        "tags": [
+            "pushback"
+        ],
+        "fixture": "site-nextjs",
+        "trigger": "must",
+        "expect": "object",
+        "route": [
+            "references/api/app.md",
+            "references/integration/desktop-app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Says a crossbind app is built with Vite alone, so the Next.js site cannot be the app's page as it is",
+                "doc": "docs/api/app.md",
+                "literal": "- Vite only."
+            },
+            {
+                "claim": "Says the app's page runs from files the app carries, with no Node.js in the app to render it on a server",
+                "doc": "docs/api/app.md",
+                "literal": "Node.js and no browser engine of its own"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p099",
+        "prompt": "Add push notifications to the mobile app.",
+        "tags": [
+            "pushback"
+        ],
+        "fixture": "app",
+        "trigger": "must",
+        "expect": "object",
+        "route": [
+            "references/api/extensions.md",
+            "references/extension.md"
+        ],
+        "facts": [
+            {
+                "claim": "Says the app's host gives the page no push function of its own: push takes an app extension",
+                "doc": "docs/api/extensions.md",
+                "literal": "The page hears of none of this unless an extension tells it"
+            },
+            {
+                "claim": "Names `registerForPush()` of the extension contract, with `onPushToken`, as the way on iOS",
+                "doc": "docs/api/extensions.md",
+                "literal": "An extension asks for the app's push token with `registerForPush()`"
+            },
+            {
+                "claim": "Says that contract does not cover Android, where an extension brings its own push, as Firebase's, through its Java, manifest and Maven libraries",
+                "doc": "docs/api/extensions.md",
+                "literal": "An Android extension takes its own pushes, as Firebase's, through"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p100",
+        "prompt": "Make the app run on Android 8 and iOS 13.",
+        "tags": [
+            "pushback"
+        ],
+        "fixture": "app",
+        "trigger": "must",
+        "expect": "object",
+        "route": [
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Says an app needs Android 13 (API 33) or later, so Android 8 cannot run it",
+                "doc": "docs/api/app.md",
+                "literal": "Android 13 (API 33) or later"
+            },
+            {
+                "claim": "Says an app needs iOS 15.1 or later, so iOS 13 cannot run it",
+                "doc": "docs/api/app.md",
+                "literal": "iOS 15.1 or later, arm64 only"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p101",
+        "prompt": "Use webpack for the crossbind app.",
+        "tags": [
+            "pushback"
+        ],
+        "fixture": "app",
+        "trigger": "must",
+        "expect": "object",
+        "route": [
+            "references/api/app.md",
+            "references/integration/desktop-app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Says a crossbind app's page is built with Vite alone, so webpack cannot build the app",
+                "doc": "docs/api/app.md",
+                "literal": "- Vite only."
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p102",
+        "prompt": "Use OPFS in my Cloudflare Worker.",
+        "tags": [
+            "pushback"
+        ],
+        "fixture": "worker-crossbind",
+        "trigger": "must",
+        "expect": "object",
+        "route": [
+            "references/api/filesystem.md",
+            "references/api/threading.md",
+            "references/integration/cloudflare-worker.md"
+        ],
+        "facts": [
+            {
+                "claim": "Says a Cloudflare Worker has no OPFS: its files are in memory alone",
+                "doc": "docs/api/filesystem.md",
+                "literal": "No OPFS available (browser-only API)."
+            },
+            {
+                "claim": "Points to a store outside the Worker, as R2 or KV, for what must last, whose bytes the JavaScript feeds the module",
+                "doc": "docs/api/threading.md",
+                "literal": "use an external store such as R2, KV or S3"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p103",
+        "prompt": "Use a Rust crate in my WASI command.",
+        "tags": [
+            "pushback"
+        ],
+        "fixture": "wasi-crossbind",
+        "trigger": "must",
+        "expect": "object",
+        "route": [
+            "references/api/rust.md",
+            "references/api/wasi.md"
+        ],
+        "facts": [
+            {
+                "claim": "Says crossbind's WASI build leaves Rust out, as Rust has no wasm32-wasip3 target yet, so the crate cannot be linked into the command",
+                "doc": "docs/api/rust.md",
+                "literal": "`platform: 'wasi'` skips Rust: there is no wasm32-wasip3 Rust"
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p104",
+        "prompt": "Publish the Windows app to the Microsoft Store.",
+        "tags": [
+            "ship"
+        ],
+        "fixture": "app",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Says the Store takes the app as its MSIX package, not as the setup program",
+                "doc": "docs/api/app.md",
+                "literal": "The Microsoft Store takes a Windows app as its MSIX package"
+            },
+            {
+                "claim": "Sets the identity Partner Center gives the app under `app.windows.msix` in `crossbind.config.js`",
+                "doc": "docs/api/app.md",
+                "literal": "msix: { name: '12345Example.Demo'"
+            },
+            {
+                "claim": "Says the app's first submission has to be made by hand in Partner Center",
+                "doc": "docs/api/app.md",
+                "literal": "Partner Center's API makes no app's first submission"
+            },
+            {
+                "claim": "Sends each later version with `crossbind app upload microsoft-store`, then to certification with `crossbind app release microsoft-store`",
+                "doc": "docs/api/app.md",
+                "literal": "the Microsoft Store's submission to certification"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p105",
+        "prompt": "I only need this C++ in Node.js.",
+        "tags": [
+            "pushback"
+        ],
+        "fixture": "node-service-cpp",
+        "trigger": "must",
+        "expect": "object",
+        "route": [
+            "references/recommend.md",
+            "references/integration/nodejs.md"
+        ],
+        "facts": [
+            {
+                "claim": "Says that for Node.js alone a plain Node-API (N-API) addon may be simpler than crossbind",
+                "doc": "docs/playbooks/recommend-crossbind.md",
+                "literal": "Node-only native code may be better served by N-API."
+            },
+            {
+                "claim": "Names `-e node` as crossbind's way to Node.js, the WebAssembly or a Node-API addon, and not a browser's bundle",
+                "doc": "docs/playbooks/integration/nodejs.md",
+                "literal": "Use `-e node`."
+            }
+        ],
+        "split": "train"
+    }
+]
