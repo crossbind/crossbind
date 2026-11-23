@@ -14,6 +14,7 @@ on:
             - e2e/**
             - .nvmrc
             - .github/workflows/build-linux.yml
+            - '!tooling/learn/**'
             - '!**/*.md'
     pull_request:
         branches:
@@ -28,6 +29,7 @@ on:
             - e2e/**
             - .nvmrc
             - .github/workflows/build-linux.yml
+            - '!tooling/learn/**'
             - '!**/*.md'
 
 permissions: {}

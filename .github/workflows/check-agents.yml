@@ -15,8 +15,8 @@ concurrency:
     group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
     cancel-in-progress: true
 jobs:
-    # No path filter: the gate reads docs/, ports/, agents/, landing/src and the root
-    # instruction files, so any filter narrow enough to be useful would miss a source.
+    # No path filter: the gate reads docs/, ports/, agents/, landing/src, tooling/learn/src and
+    # the root instruction files, so any filter narrow enough to be useful would miss a source.
     surface:
         runs-on: ubuntu-latest
         steps:
