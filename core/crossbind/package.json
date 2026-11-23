@@ -28,6 +28,7 @@
             "types": "./src/licenses/index.d.ts",
             "default": "./src/licenses/index.js"
         },
+        "./wasi-run": "./src/runtime/wasiRun.mjs",
         "./*": "./*"
     },
     "scripts": {

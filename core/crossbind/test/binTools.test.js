@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'vitest';
 import {
     validateBinConfig, renderBinJson, renderBinNpmignore, renderDispatcher,
-    renderBinCommands, renderCommandStub, multitoolWorkRoot,
+    renderBinCommands, renderCommandStub, multitoolWorkRoot, APP_STUB, appBinTool, missingBinEntries,
 } from '../src/utils/binTools.js';
 
 const bin = (overrides = {}) => ({
@@ -85,6 +85,46 @@ describe('renderCommandStub', () => {
         expect(stub.startsWith('#!/usr/bin/env node\n')).toBe(true);
         expect(stub).toContain("import { run } from 'crossbind/src/runtime/wasiRun.mjs';");
         expect(stub).toContain("await run(import.meta.url, 'cs2cs');");
+    });
+
+    test("an app's stub runs crossbind's documented runner and names the map it comes from", () => {
+        const stub = renderCommandStub('wordfreq', APP_STUB);
+        expect(stub).toContain("import { run } from 'crossbind/wasi-run';");
+        expect(stub).toContain('crossbind.config.js');
+        expect(stub).toContain("await run(import.meta.url, 'wordfreq');");
+    });
+});
+
+describe('appBinTool', () => {
+    test("names the one command of an app's map", () => {
+        expect(appBinTool({ tools: { wordfreq: { kind: 'binary', publish: true } } })).toBe('wordfreq');
+    });
+
+    test('refuses a map of more than one command, or one that is no binary', () => {
+        expect(() => appBinTool({
+            tools: { wordfreq: { kind: 'binary', publish: true }, lines: { kind: 'binary', publish: true } },
+        })).toThrow(/one command/);
+        expect(() => appBinTool({ tools: { wordfreq: { kind: 'multicall-entry', publish: true } } })).toThrow(/one command/);
+        expect(() => appBinTool({ tools: {} })).toThrow(/one command/);
+    });
+});
+
+describe('missingBinEntries', () => {
+    const commands = { 'wordfreq-wasi': 'bin/wordfreq-wasi.mjs' };
+
+    test('finds nothing when package.json points each command at its stub', () => {
+        expect(missingBinEntries({ bin: { 'wordfreq-wasi': 'bin/wordfreq-wasi.mjs', other: 'other.js' } }, commands)).toEqual([]);
+    });
+
+    test('takes a path package.json spells from ./, as npm does', () => {
+        expect(missingBinEntries({ bin: { 'wordfreq-wasi': './bin/wordfreq-wasi.mjs' } }, commands)).toEqual([]);
+    });
+
+    test('names each command package.json leaves out or points elsewhere', () => {
+        const missing = [['wordfreq-wasi', 'bin/wordfreq-wasi.mjs']];
+        expect(missingBinEntries({}, commands)).toEqual(missing);
+        expect(missingBinEntries({ bin: 'bin/other.mjs' }, commands)).toEqual(missing);
+        expect(missingBinEntries({ bin: { 'wordfreq-wasi': 'bin/other.mjs' } }, commands)).toEqual(missing);
     });
 });
 

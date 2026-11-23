@@ -1,7 +1,8 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { configFileOf, writeExtension } from '../utils/configWriter.js';
+import { configFileOf } from '../utils/configFile.js';
+import { writeExtension } from '../utils/configWriter.js';
 import { isUnderBase } from '../utils/replaceBasePathForDocker.js';
 import { ownPackages } from '../utils/appExtensions.js';
 import { packagesOfCrossbind } from '../utils/packageSources.js';

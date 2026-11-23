@@ -168,6 +168,45 @@ field) live in the Bin & License Contract:
 `crossbind licenses --notices --sbom --platform wasi` regenerates the
 third-party notices and the CycloneDX SBOM next to each prebuilt.
 
+## Your own command on npm
+
+A project's own command, the `main()` of its `src/native`, becomes an npm command as the ports' tools do: its config
+names the command in a `bin` map and gives the package an output of its own.
+
+```js
+// crossbind.config.js
+export default {
+    general: { name: 'wordfreq' },
+    paths: { config: import.meta.url, output: 'dist' },
+    bin: { tools: { wordfreq: { kind: 'binary', publish: true } } },
+};
+```
+
+```json
+{
+    "name": "wordfreq",
+    "bin": { "wordfreq-wasi": "bin/wordfreq-wasi.mjs" },
+    "files": ["bin/", "dist/prebuilt/*/bin/*", "dist/prebuilt/*/crossbind-bin.json", "crossbind.config.js"],
+    "scripts": { "prepublishOnly": "crossbind build -p wasi -e wasi -b release" }
+}
+```
+
+`npm i crossbind@beta` puts crossbind in `dependencies`, beside the port packages the config imports, as the command
+runs with them. `crossbind build -p wasi -e wasi -b release` then also writes
+`dist/prebuilt/wasi-wasm32-st-release/bin/wordfreq` with its `crossbind-bin.json`, and `bin/wordfreq-wasi.mjs`, which
+runs the command through `crossbind/wasi-run`, the runner of the `-standalone-wasi` packages: it mounts the working
+directory and the data of the ports the config depends on. Whoever installs the package needs wasmtime 47+ on `PATH`:
+
+```bash
+npm i -g wordfreq
+wordfreq-wasi README.md
+```
+
+- The map names one command, of `kind: 'binary'`, and it becomes `<tool>-wasi`, as the ports' tools do.
+- The build stops, naming the line to add, when `paths.output` is the build directory or when `package.json`'s `bin`
+  lacks the command. It never edits `package.json`.
+- `files` names `dist/prebuilt/*/bin/*`: the folder's own pattern, `dist/prebuilt/*/bin/`, packs none of its files.
+
 ## Limits
 
 No processes, no dynamic loading, single-threaded; sockets exist through

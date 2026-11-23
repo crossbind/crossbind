@@ -36,7 +36,7 @@ import { bindsAppImports, createImportedBridges, findAppNativeImports } from './
 import { nativeExtensions } from './utils/nativeImports.js';
 import { createBridges, createNativeBridges } from './actions/nativeBridges.js';
 import { ENTRY_RUNTIMES } from './utils/runtimeEntries.js';
-import { publishNativeCommand, publishNodeAddon, publishWasiCommand } from './actions/publishBinary.js';
+import { publishNativeCommand, publishNodeAddon, publishWasiBin, publishWasiCommand } from './actions/publishBinary.js';
 import runCrossbindApp from './actions/run.js';
 import { getBuildTargets, getFilteredBuildTargets } from './actions/target.js';
 import { OPT_IN_PLATFORMS, selectRuntimeEnvs } from './utils/targets.js';
@@ -553,10 +553,9 @@ async function createWasiCommands(targetParams) {
     for (const target of targets) {
         const distWasm = `${state.config.paths.output}/${target.wasmName}`;
         const built = await buildWasiCommand(target, { force: !fs.existsSync(distWasm) });
-        if (!built) {
-            continue;
-        }
-        publishWasiCommand(target);
+        if (built) publishWasiCommand(target);
+        // An app's bin map lays its command out on every build, as the map may be newer than a link that is cached.
+        if (fs.existsSync(`${state.config.paths.build}/${target.wasmName}`)) publishWasiBin(target);
     }
 }
 

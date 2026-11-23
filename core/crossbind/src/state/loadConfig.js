@@ -145,6 +145,8 @@ export function getFilledConfig(config, options = { isDepend: false }) {
         target: config.target || {},
         // An app's identity: its bundle id, on iOS the Apple team that signs it, the name it shows and its desktop window.
         app: config.app || {},
+        // An app's own WASI command as an npm command, by the bin map a port's recipe has (see actions/publishBinary.js).
+        bin: config.bin,
         // What an app's host builds in beside its own extensions.
         extensions: config.extensions || [],
         // The license files crossbind licenses writes: sourceTag is the git tag a published package's source is at.

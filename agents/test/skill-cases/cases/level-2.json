@@ -779,14 +779,19 @@
                 "literal": "crossbind build -p wasi -e wasi -b release"
             },
             {
-                "claim": "Says crossbind builds one `.wasm` WASI command with no JavaScript glue; a launcher the npm package adds, if any, is extra",
+                "claim": "Lays the command out for npm with a `bin` map in crossbind.config.js, from which the build writes the `<tool>-wasi` launcher",
                 "doc": "docs/api/wasi.md",
-                "literal": "no JavaScript glue and no bindings"
+                "literal": "bin: { tools: { wordfreq: { kind: 'binary', publish: true } } }"
             },
             {
                 "claim": "Says whoever runs it needs a WASI runtime, wasmtime 47 or later",
                 "doc": "docs/api/wasi.md",
                 "literal": "wasmtime 47+"
+            },
+            {
+                "claim": "Points package.json's `bin` at the launcher the build writes, bin/<tool>-wasi.mjs",
+                "doc": "docs/api/wasi.md",
+                "literal": "\"bin\": { \"wordfreq-wasi\": \"bin/wordfreq-wasi.mjs\" }"
             }
         ],
         "split": "train"

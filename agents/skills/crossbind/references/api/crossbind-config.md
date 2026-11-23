@@ -436,6 +436,16 @@ export default {
     // naming what to update.
 
   // ─────────────────────────────────────────────────────────────
+  // The project's own WASI command as an npm command (see wasi.md)
+  // ─────────────────────────────────────────────────────────────
+  bin: {
+    tools: { wordfreq: { kind: 'binary', publish: true } },
+      // Its one command, the main() of src/native, which crossbind build -p wasi -e wasi also lays out for npm
+      // as wordfreq-wasi. Needs paths: { output: 'dist' } and, in package.json,
+      // "bin": { "wordfreq-wasi": "bin/wordfreq-wasi.mjs" }.
+  },
+
+  // ─────────────────────────────────────────────────────────────
   // Custom helper functions
   // ─────────────────────────────────────────────────────────────
   functions: {
