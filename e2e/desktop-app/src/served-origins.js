@@ -523,6 +523,10 @@ export async function checkPageApi({ pageApi: got }) {
     if (got.role !== 'project' || !got.paths?.includes(refusal)) throw new Error(`app.paths of ${PAGE_API} in a page of the role ${got.role} got ${got.paths}`);
     if (!got.pathsAfter?.includes(refusal)) throw new Error(`app.paths of ${PAGE_API}, once a web build's crossbind.js took globalThis.Crossbind, got ${got.pathsAfter}`);
     if (got.dialog !== 'shown') throw new Error(`dialog.message of a project's page answered at once: ${got.dialog}`);
+    // On Android a close names its dialog: one sent for another call's left the project's up, for the probe to close.
+    if (got.closedAnother !== undefined && got.closed?.isShown !== true) {
+        throw new Error(`a close sent for another call's message dialog closed the project's: ${got.closedAnother}, then ${JSON.stringify(got.closed)}`);
+    }
     if (got.closed?.isShown !== true || !/^answered \d+$/.test(got.dialogClosed)) {
         throw new Error(`no message dialog of the project's page was there to close: ${JSON.stringify(got.closed)}, ${got.dialogClosed}`);
     }

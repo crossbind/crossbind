@@ -1,9 +1,18 @@
 #include "dialog.h"
 
+#include <atomic>
 #include <cstdio>
 #include <stdexcept>
 
 namespace crossbind::dialog {
+
+namespace {
+
+// Each message dialog's number, from 1, which its close names: a call whose dialog was answered just now may cancel as
+// another call's shows.
+std::atomic<int> nextMessage{1};
+
+}  // namespace
 
 // The extension's Java shows the system's picker in the activity in front, then copies what its user picked into the
 // app's cache, where native code opens it by a path. A pick it could not copy goes as a cancel, said in the log.
@@ -32,13 +41,14 @@ void showSaveDialog(uint64_t, SaveOptions, std::function<void(std::optional<std:
 // The extension's Java shows it in the activity in front; a dialog nothing could show, as when the activity is gone,
 // went without a button.
 void showMessageDialog(uint64_t, MessageOptions options, std::function<void(int)> done) {
-    android::callJava("dialog", "message", {{"message", options.message}, {"detail", options.detail}, {"buttons", options.buttons}},
+    const int id = nextMessage++;
+    android::callJava("dialog", "message", {{"id", id}, {"message", options.message}, {"detail", options.detail}, {"buttons", options.buttons}},
         [done = std::move(done)](std::optional<std::string> failure, Value result) {
             if (failure) std::fprintf(stderr, "%s\n", failure->c_str());
             done(failure ? NO_BUTTON : static_cast<int>(result.asNumber()));
         });
     // After the message, on the UI thread, which takes them in turn.
-    if (options.closer) options.closer->shown([] { android::callJava("dialog", "closeMessage", {}, [](std::optional<std::string>, Value) {}); });
+    if (options.closer) options.closer->shown([id] { android::callJava("dialog", "closeMessage", {{"id", id}}, [](std::optional<std::string>, Value) {}); });
 }
 
 }  // namespace crossbind::dialog
