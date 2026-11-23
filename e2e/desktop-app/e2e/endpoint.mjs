@@ -3,6 +3,7 @@
 // drops; under /fetch/ what src/served-origins.js checks the host's fetch() with. Run alone, as
 // `node e2e/endpoint.mjs`, it serves both on every address, for an app on a phone that no run drives, built with
 // VITE_E2E_ENDPOINT=http://<this machine's address>:47831.
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, resolve } from 'node:path';
@@ -122,8 +123,19 @@ export function answerFetch(request, response, counts) {
     if (!path.startsWith('/fetch/')) return false;
     const elsewhere = `http://localhost:${request.socket.localPort}`;
     const routes = {
-        // A redirect within the origin, which the host follows, and one to another, which it gives back.
-        '/fetch/redirect-in': () => response.writeHead(302, { location: '/fetch/count?redirected' }).end(),
+        // A redirect within the origin, which the host follows but for a POST's or a DELETE's, and one to another, which
+        // it gives back.
+        '/fetch/redirect-in': () => request.resume().on('end', () => response.writeHead(302, { location: '/fetch/count?redirected' }).end()),
+        // What a fetch sent: its method, the type its headers named, and its body's length and SHA-256.
+        '/fetch/echo': () => {
+            const chunks = [];
+            request.on('data', (chunk) => chunks.push(chunk)).on('end', () => {
+                const body = Buffer.concat(chunks);
+                const sha256 = createHash('sha256').update(body).digest('hex');
+                response.writeHead(200, { 'content-type': 'application/json' })
+                    .end(JSON.stringify({ method: request.method, type: request.headers['content-type'] ?? null, length: body.length, sha256 }));
+            });
+        },
         '/fetch/redirect-out': () => response.writeHead(302, { location: `${elsewhere}/fetch/count` }).end(),
         '/fetch/redirect-loop': () => response.writeHead(302, { location: '/fetch/redirect-loop' }).end(),
         // What the host sent of a cookie the last answer set.

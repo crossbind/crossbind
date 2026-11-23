@@ -21,7 +21,7 @@
 // The newest version of the contract between crossbind and its extensions this host is built for, which an extension's
 // crossbind.extension.js names: one written for several tells them apart with it, as #if CROSSBIND_EXTENSION_CONTRACT >=
 // 2 does.
-#define CROSSBIND_EXTENSION_CONTRACT 3
+#define CROSSBIND_EXTENSION_CONTRACT 4
 
 namespace crossbind {
 
@@ -760,13 +760,18 @@ struct FetchResponse {
     std::string body;
 };
 
-// Asks a server with the system's own client, from any thread: a GET or a HEAD of an http or https URL with these
-// headers, without cookies, a cache or credentials, for the body uncompressed, as Accept-Encoding: identity asks. A
-// method, a URL or a header the client would not send throws. It follows a redirect within the URL's origin, and gives one
-// elsewhere as its 3xx; an answer over 256 MiB, or one that takes over 60 s, fails. done gets why it failed, in the
-// system's words, or the answer, once, on a thread of the host's. On iOS, on macOS in an app its user opens, and on
-// Android 17 once crossbind targets API 37, an address on the local network answers only once the user allows the app
-// there: until then the fetch fails at once on Apple's platforms and times out on Android.
+// Asks a server with the system's own client, from any thread: a GET, a HEAD, a POST or a DELETE of an http or https URL
+// with these headers, and a POST's or a DELETE's body, 1 MiB at most, of the type their Content-Type names; without
+// cookies, a cache or credentials, for the body uncompressed, as Accept-Encoding: identity asks. A method, a URL or a
+// header the client would not send throws, as does a body of a GET or a HEAD. A GET and a HEAD follow a redirect within
+// the URL's origin, and give one elsewhere as its 3xx; a POST and a DELETE follow none, so their body goes to the URL
+// alone, once. An answer over 256 MiB, or one that takes over 60 s, fails. done gets why it failed, in the system's
+// words, or the answer, once, on a thread of the host's. On iOS, on macOS in an app its user opens, and on Android 17
+// once crossbind targets API 37, an address on the local network answers only once the user allows the app there: until
+// then the fetch fails at once on Apple's platforms and times out on Android.
+void fetch(const std::string &method, const std::string &url, const Request::Headers &headers, std::string body,
+    std::function<void(std::optional<std::string> failure, FetchResponse response)> done);
+// The same without a body.
 void fetch(const std::string &method, const std::string &url, const Request::Headers &headers,
     std::function<void(std::optional<std::string> failure, FetchResponse response)> done);
 

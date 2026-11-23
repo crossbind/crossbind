@@ -216,8 +216,8 @@ void addPageFunctions(crossbind::Registry &registry) {
     });
 }
 
-// The host's fetch() of a URL: its status, headers, size and short text, whether its bytes are those the endpoint makes,
-// and how long it took; or why it failed, and how long that took.
+// The host's fetch() of a URL, with a body where one is given: its status, headers, size and short text, whether its
+// bytes are those the endpoint makes, and how long it took; or why it failed, and how long that took.
 void addFetch(crossbind::Registry &registry) {
     registry.function("probe.fetch", [](Call call) {
         const Value &options = call.options();
@@ -227,7 +227,7 @@ void addFetch(crossbind::Registry &registry) {
         }
         const bool isPatterned = options["pattern"].asBool(false);
         const auto started = std::chrono::steady_clock::now();
-        crossbind::fetch(options["method"].asString("GET"), options["url"].asString(), headers,
+        crossbind::fetch(options["method"].asString("GET"), options["url"].asString(), headers, options["body"].asString(""),
             [call, isPatterned, started](std::optional<std::string> failure, crossbind::FetchResponse answer) {
                 const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
                 if (failure) {

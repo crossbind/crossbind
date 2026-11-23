@@ -48,7 +48,7 @@ export default function probe() {
     const plist = { CrossbindProbe: 'plist', NSAppTransportSecurity: { NSAllowsLocalNetworking: true } };
     return {
         name: 'probe',
-        contract: 3,
+        contract: 4,
         root: import.meta.dirname,
         app: {
             urlSchemes: [PROBE_SCHEME],

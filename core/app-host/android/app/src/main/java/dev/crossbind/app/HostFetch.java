@@ -2,6 +2,7 @@ package dev.crossbind.app;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.SocketTimeoutException;
 import java.net.URL;
@@ -37,10 +38,11 @@ final class HostFetch {
     // How the fetch ended: DONE, or why not, with the system's words in UTF-8 for FAILED.
     private static native void nativeEnd(int id, int reason, byte[] failure);
 
-    // A fetch of native code's, from whichever thread asks: the method, URL and headers' names and values in UTF-8, and
-    // its limits.
-    static void fetch(int id, byte[] method, byte[] url, byte[][] headers, int seconds, int maxRedirects) {
-        FETCHES.execute(() -> run(id, new String(method, StandardCharsets.UTF_8), new String(url, StandardCharsets.UTF_8), headers, seconds, maxRedirects));
+    // A fetch of native code's, from whichever thread asks: the method, URL and headers' names and values in UTF-8, its
+    // body, its limits, and whether it follows a redirect within the URL's origin.
+    static void fetch(int id, byte[] method, byte[] url, byte[][] headers, byte[] payload, int seconds, int maxRedirects, boolean follows) {
+        FETCHES.execute(() -> run(id, new String(method, StandardCharsets.UTF_8), new String(url, StandardCharsets.UTF_8), headers, payload, seconds, maxRedirects,
+                follows));
     }
 
     private static int portOf(URL url) {
@@ -51,7 +53,7 @@ final class HostFetch {
         return from.getProtocol().equalsIgnoreCase(to.getProtocol()) && from.getHost().equalsIgnoreCase(to.getHost()) && portOf(from) == portOf(to);
     }
 
-    private static void run(int id, String method, String address, byte[][] headers, int seconds, int maxRedirects) {
+    private static void run(int id, String method, String address, byte[][] headers, byte[] payload, int seconds, int maxRedirects, boolean follows) {
         final long deadline = System.nanoTime() + seconds * 1_000_000_000L;
         HttpURLConnection connection = null;
         try {
@@ -70,10 +72,17 @@ final class HostFetch {
                 }
                 // Asked for, a body comes as the server sends it, which the client then does not decode.
                 connection.setRequestProperty("Accept-Encoding", "identity");
+                if (payload.length > 0) {
+                    connection.setDoOutput(true);
+                    connection.setFixedLengthStreamingMode(payload.length);
+                    try (OutputStream out = connection.getOutputStream()) {
+                        out.write(payload);
+                    }
+                }
                 final int status = connection.getResponseCode();
                 final String location = status >= 300 && status < 400 ? connection.getHeaderField("Location") : null;
                 final URL next = location == null ? null : new URL(current, location);
-                if (next != null && isSameOrigin(first, next)) {
+                if (next != null && follows && isSameOrigin(first, next)) {
                     redirects += 1;
                     if (redirects > maxRedirects) {
                         nativeEnd(id, REDIRECTED_TOO_OFTEN, null);
