@@ -1045,6 +1045,11 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
         return url.getScheme() + "://" + url.getHost() + (url.getPort() == -1 ? "" : ":" + url.getPort());
     }
 
+    // The origin of the document at a page's URL: a blob: URL's is the origin inside it, of the page that made it.
+    private static String documentOriginOf(String url) {
+        return originOf(Uri.parse(url.startsWith("blob:") ? url.substring(5) : url));
+    }
+
     // The page that asks, by its URL, from the WebView's two accounts of it, on the UI thread: the page it shows names the
     // page that is coming while a load the activity began is on its way, and its history's current page names where a
     // Back goes while one is. Of one origin, they are the page that asks; of two, it is one of them and the WebView does
@@ -1054,7 +1059,7 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
         WebHistoryItem item = view.copyBackForwardList().getCurrentItem();
         String current = item == null ? null : item.getUrl();
         if (shown == null) return current == null ? "" : current;
-        if (current == null || isRedirect || originOf(Uri.parse(shown)).equals(originOf(Uri.parse(current)))) return shown;
+        if (current == null || isRedirect || documentOriginOf(shown).equals(documentOriginOf(current))) return shown;
         return null;
     }
 
