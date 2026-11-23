@@ -1,5 +1,5 @@
-// The tutorial's contents as its panel and its menu list them (Contents.jsx): the steps in reading order, grouped
-// into the parts they name, each numbered by its section and its place in it. Plain data in, plain data out.
+// The tutorial's contents as its panel and its menu list them (the site's Contents.jsx): the steps in reading order,
+// grouped into the parts they name, each numbered by its section and its place in it. Plain data in, plain data out.
 
 const rowsOf = (section) => section.pages.length + 1;
 
