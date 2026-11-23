@@ -2,13 +2,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
     assertImage, checkedText, imageOf, isFolder, languageFolders, metadataObject, metadataTexts, readMetadata,
-    sizeOf, stringList, takenNames,
+    readText, sizeOf, stringList, takenNames,
 } from '../index.js';
 import { creativeAssetProblems, readCreativeAssets } from './appStoreCreativeAssets.js';
 
 const REVIEW = 'review_information';
 const REVIEW_FIELDS = { contactFirstName: {}, contactLastName: {}, contactPhone: {}, contactEmail: {}, demoAccountName: {}, demoAccountPassword: {} };
 const REVIEW_NOTES_MOST = 4000;
+// The folders of review_information with a platform's own App Review notes and files, beside every platform's.
+const REVIEW_PLATFORMS = ['ios', 'macos'];
+const ATTACHMENTS = 'attachments';
 
 // Store settings and localized listings share the same root on iOS and macOS.
 const STORE = {
@@ -116,16 +119,45 @@ function readAgeRating(answers, shown) {
     return answers;
 }
 
-// Private review details can be supplied by CI without committing contact information or credentials.
-function readReview(project, json, source) {
+// The files App Review gets with the version: every platform's, then the platform's own. None without a folder of them,
+// which leaves App Store Connect's as they are.
+function reviewAttachments(project, folders) {
+    const present = folders.filter((folder) => fs.existsSync(folder));
+    if (present.length === 0) return undefined;
+    const files = present.flatMap((folder) => {
+        if (!isFolder(folder)) throw new Error(`crossbind: ${path.relative(project, folder)} must be a folder.`);
+        return takenNames(STORE, project, folder, (name, isDir) => !isDir).map((name) => path.join(folder, name));
+    });
+    files.forEach((file, index) => {
+        const same = files.slice(0, index).find((other) => path.basename(other) === path.basename(file));
+        if (same) throw new Error(`crossbind: ${path.relative(project, same)} and ${path.relative(project, file)} share their name, which App Review would get twice: rename one, or remove it.`);
+        if (fs.statSync(file).size === 0) throw new Error(`crossbind: ${path.relative(project, file)} is empty, and App Store Connect takes no empty file: put the whole file there, or remove it.`);
+    });
+    return files;
+}
+
+// Private review details can be supplied by CI without committing contact information or credentials. A platform's own
+// notes, in review_information/<platform>, take the place of every platform's, and its own files go beside theirs.
+function readReview(project, json, source, platform) {
     const folder = path.join(project, STORE.folder, REVIEW);
     const file = path.join(folder, 'private.json');
     if (fs.existsSync(folder)) {
         if (!isFolder(folder)) throw new Error(`crossbind: ${path.relative(project, folder)} must be a folder.`);
-        takenNames(STORE, project, folder, (name, isDir) => !isDir && ['private.json', 'notes.txt'].includes(name));
+        takenNames(STORE, project, folder, (name, isDir) => (isDir ? [ATTACHMENTS, ...REVIEW_PLATFORMS].includes(name) : ['private.json', 'notes.txt'].includes(name)));
+        REVIEW_PLATFORMS.map((name) => path.join(folder, name)).filter((own) => fs.existsSync(own)).forEach((own) => {
+            if (!isFolder(own)) throw new Error(`crossbind: ${path.relative(project, own)} must be a folder.`);
+            takenNames(STORE, project, own, (name, isDir) => (isDir ? name === ATTACHMENTS : name === 'notes.txt'));
+        });
     }
+    const own = path.join(folder, platform);
+    const notes = [path.join(own, 'notes.txt'), path.join(folder, 'notes.txt')].find((text) => fs.existsSync(text));
+    const attachments = reviewAttachments(project, [path.join(folder, ATTACHMENTS), path.join(own, ATTACHMENTS)]);
     const details = readMetadata(project, file, Object.keys(REVIEW_FIELDS));
-    const texts = metadataTexts(STORE, project, file, details, { ...REVIEW_FIELDS, notes: { file: 'notes.txt', most: REVIEW_NOTES_MOST } });
+    const texts = {
+        ...metadataTexts(STORE, project, file, details, REVIEW_FIELDS),
+        ...(notes ? { notes: readText(STORE, project, notes, { most: REVIEW_NOTES_MOST }) } : {}),
+        ...(attachments ? { attachments } : {}),
+    };
     if ((texts.demoAccountName === undefined) !== (texts.demoAccountPassword === undefined)) {
         throw new Error(`crossbind: ${path.relative(project, file)} must supply demoAccountName and demoAccountPassword together.`);
     }
@@ -169,7 +201,7 @@ export function readAppStoreSettings(project, platform = 'ios') {
     const ageRating = readAgeRating(json.ageRating, `${source}.ageRating`);
     return {
         ...copyright, categories, ...(ageRating === null ? {} : { ageRating }),
-        review: readReview(project, { ...json.review, ...overrides.review }, `${source}.review`),
+        review: readReview(project, { ...json.review, ...overrides.review }, `${source}.review`, platform),
     };
 }
 

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import upath from 'upath';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 vi.mock('../src/state/index.js', () => ({ default: { config: {} } }));
@@ -637,5 +638,89 @@ describe("a version's settings on App Store Connect", () => {
         answers['GET /apps/A1/appInfos'] = { data: [{ id: 'I0', attributes: { state: 'READY_FOR_DISTRIBUTION' } }] };
         await expect(release({ settings: { categories: { primaryCategory: 'UTILITIES' }, review: {} } })).rejects
             .toThrow("crossbind: App Store Connect takes the app's categories and age rating in none of its versions now: remove store.json.primaryCategory, store.json.secondaryCategory and store.json.ageRating from");
+    });
+});
+
+describe("a version's App Review attachments on App Store Connect", () => {
+    const DETAIL = 'GET /appStoreVersions/V1/appStoreReviewDetail';
+    const SHOWN = 'GET /appStoreReviewDetails/R1/appStoreReviewAttachments?limit=200';
+    const md5 = (text) => createHash('md5').update(text).digest('hex');
+    // The files App Store Connect holds of the version's review details, each of a name and a text, processed unless
+    // `state` says otherwise.
+    const attached = (files, state = 'COMPLETE') => ({
+        data: files.map(([fileName, text], index) => ({ id: `OLD${index + 1}`, attributes: { fileName, fileSize: text.length, sourceFileChecksum: md5(text), assetDeliveryState: { state } } })),
+    });
+    const processed = (id, state = 'COMPLETE', errors = []) => {
+        answers[`GET /appStoreReviewAttachments/${id}`] = { data: { id, attributes: { assetDeliveryState: { state, errors } } } };
+    };
+    let dir;
+    const file = (name, text) => {
+        fs.writeFileSync(upath.join(dir, name), text);
+        return upath.join(dir, name);
+    };
+    const changes = () => keys().filter((key) => key.includes('ReviewAttachment') && !key.startsWith('GET'));
+
+    beforeEach(() => {
+        dir = upath.toUnix(fs.mkdtempSync(upath.join(os.tmpdir(), 'crossbind-app-review-files-')));
+        answers[DETAIL] = { data: { id: 'R1', attributes: {} } };
+        let reserved = 0;
+        answers['POST /appStoreReviewAttachments'] = ({ data }) => {
+            reserved += 1;
+            const uploadOperations = [{ method: 'PUT', url: `https://upload.example.test/${reserved}`, offset: 0, length: data.attributes.fileSize }];
+            return { data: { id: `RA${reserved}`, type: 'appStoreReviewAttachments', attributes: { ...data.attributes, uploadOperations } } };
+        };
+        processed('RA1');
+        processed('RA2');
+    });
+
+    afterEach(() => {
+        fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    test('leave the files App Store Connect has processed under the same names and checksums', async () => {
+        answers[SHOWN] = attached([['iphone.mp4', 'video']]);
+        expect((await release({ settings: { review: { attachments: [file('iphone.mp4', 'video')] } } })).settled).toEqual([]);
+        expect(changes()).toEqual([]);
+    });
+
+    test('go up where they differ: the others removed, the new ones reserved, uploaded, committed with their checksum and processed', async () => {
+        answers[SHOWN] = attached([['iphone.mp4', 'old video'], ['terms.pdf', 'terms']]);
+        const files = [file('iphone.mp4', 'new video'), file('terms.pdf', 'terms')];
+
+        expect((await release({ settings: { review: { attachments: files } } })).settled).toEqual(['App Review attachments']);
+
+        expect(changes()).toEqual(['DELETE /appStoreReviewAttachments/OLD1', 'POST /appStoreReviewAttachments', 'PATCH /appStoreReviewAttachments/RA1']);
+        expect(bodyOf('POST /appStoreReviewAttachments').data).toEqual({
+            type: 'appStoreReviewAttachments', attributes: { fileName: 'iphone.mp4', fileSize: 9 }, relationships: { appStoreReviewDetail: { data: { type: 'appStoreReviewDetails', id: 'R1' } } },
+        });
+        expect(parts).toEqual([{ operations: [{ method: 'PUT', url: 'https://upload.example.test/1', offset: 0, length: 9 }], bytes: 'new video', file: files[0] }]);
+        expect(bodyOf('PATCH /appStoreReviewAttachments/RA1').data.attributes).toEqual({ uploaded: true, sourceFileChecksum: md5('new video') });
+        expect(keys().indexOf('GET /appStoreReviewAttachments/RA1')).toBeGreaterThan(keys().indexOf('PATCH /appStoreReviewAttachments/RA1'));
+        expect(keys()).not.toContain('PATCH /appStoreReviewDetails/R1');
+    });
+
+    test("go up anew where App Store Connect holds the same file unprocessed, and go all where the folders hold none", async () => {
+        answers[SHOWN] = attached([['iphone.mp4', 'video']], 'FAILED');
+        await release({ settings: { review: { attachments: [file('iphone.mp4', 'video')] } } });
+        expect(changes()).toEqual(['DELETE /appStoreReviewAttachments/OLD1', 'POST /appStoreReviewAttachments', 'PATCH /appStoreReviewAttachments/RA1']);
+
+        calls = [];
+        builds = [build('B2', 'VALID')];
+        answers[SHOWN] = attached([['iphone.mp4', 'video'], ['terms.pdf', 'terms']]);
+        expect((await release({ settings: { review: { attachments: [] } } })).settled).toEqual(['App Review attachments']);
+        expect(changes()).toEqual(['DELETE /appStoreReviewAttachments/OLD1', 'DELETE /appStoreReviewAttachments/OLD2']);
+    });
+
+    test("leave App Store Connect's files as they are where the settings name no folder of them", async () => {
+        answers[SHOWN] = attached([['iphone.mp4', 'video']]);
+        expect((await release({ settings: { review: { notes: 'Every platform.' } } })).settled).toEqual(['App Review information']);
+        expect(keys().filter((key) => key.includes('ReviewAttachment'))).toEqual([]);
+    });
+
+    test('stop at a file App Store Connect refuses, naming it and what it said', async () => {
+        answers[SHOWN] = { data: [] };
+        processed('RA1', 'FAILED', [{ code: 'INVALID_FILE', description: 'The file type is not supported.' }]);
+        const video = file('iphone.mp4', 'video');
+        await expect(release({ settings: { review: { attachments: [video] } } })).rejects.toThrow(`crossbind: App Store Connect refused ${video}: The file type is not supported.`);
     });
 });

@@ -1635,6 +1635,26 @@ Its optional string fields are `contactFirstName`, `contactLastName`, `contactEm
 `demoAccountName` and `demoAccountPassword`. Supply both demo fields together. They imply required sign-in.
 Omit both when setting `signInRequired` to `false`. Put longer review instructions in `review_information/notes.txt`.
 
+App Review reviews the iOS and macOS versions apart, so each can have its own notes and files, as a screen recording:
+
+```text
+store/app-store/review_information/
+├── private.json        contacts and demo credentials, Git-ignored
+├── notes.txt           every version's notes, at most 4000 characters
+├── attachments/        files every version's App Review gets
+├── ios/
+│   ├── notes.txt       the iOS version's notes, in place of notes.txt
+│   └── attachments/    the iOS version's files, beside those of attachments/
+└── macos/
+    ├── notes.txt
+    └── attachments/
+```
+
+`--send` and a release give a version's App Review Information exactly the files its folders hold: App Store Connect
+keeps one of the same name and contents, and the others go. Without an `attachments/` folder for the version, App
+Store Connect's files stay as they are. Two files of one name for one version, or an empty file, stop the send. Large
+recordings can stay out of Git, as `private.json` does.
+
 An Apple locale can use `"creativeAssets": { "header": { "assetId": "<image UUID>" } }` in `listing.json` to
 reuse a library image. Supported roles are `header`, `searchResults` and `universal`.
 Crossbind discovers local artwork by filename in `creative-assets/`.
