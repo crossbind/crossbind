@@ -457,8 +457,8 @@ extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativ
 }
 
 // The host's navigation rule, and for what it leaves to page-navigation that holder's answer, as the activity's LOAD and
-// OUTSIDE number NavigationAnswer's, for the page that asks, by its URL, as the WebView shows it. The WebView opens no
-// window of the page's: it loads a link of target="_blank" in the page's place.
+// OUTSIDE number NavigationAnswer's, for the page that asks, by its URL, as the activity reads it from the WebView. The
+// WebView opens no window of the page's: it loads a link of target="_blank" in the page's place.
 extern "C" JNIEXPORT jint JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeNavigation(JNIEnv *env, jclass, jbyteArray url,
     jbyteArray page, jboolean isMainFrame, jboolean isUserInitiated) {
     const std::string address = textOf(env, url);

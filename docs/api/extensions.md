@@ -865,8 +865,11 @@ documents show in a frame of the app's own origins alone, the dev server's page 
 (`Content-Security-Policy: frame-ancestors` names them), and a frame of another served origin gets nothing of the app's.
 Every other URL reaches `page-navigation` with the page, whose `role()` tells them apart, a form's POST too. On Android
 the host hears of a page only once its first scripts may have asked, so the rule and `page-navigation` take the page
-that asks from the WebView as each decides, the page it shows: one the host has yet to hear of is a `page()` of id 0,
-of its origin's role. Android's WebView asks no one of a top frame's POST, so the host does before its request, on the
+that asks from the WebView as each decides, from its two accounts of it: the page it shows, which names the page that
+is coming while a load the host began is on its way, and its history's current page, which names where a Back goes
+while one is. Of one origin, they are the page that asks; of two, the request is refused, but a redirect of that load,
+which asks as the page that is coming. One the host has yet to hear of is a `page()` of id 0, of its origin's role.
+Android's WebView asks no one of a top frame's POST, so the host does before its request, on the
 main thread, while the WebView's thread of requests waits 5 s at most: toward the app's origins or a served one, the
 POST loads only where the rule loads it by itself, and a page of another origin's gets 204, so that page stays; toward
 any other origin, `page-navigation` decides it as a link: `load` sends it, `openOutside` opens it outside, and any

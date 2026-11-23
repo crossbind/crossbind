@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>accounts</title>
+</head>
+<body>
+<script>
+// A page of a served origin, which src/served-origins.js opens on Android once the app's page had its user's
+// activation, so that a Back toward that page can be on its way: the probe asks the host's WebView client as the
+// WebView would, with a Back and then a load of the app's page on their way, and that load brings the app's page back.
+(async () => {
+    const APP_ORIGINS = ['https://appassets.androidplatform.net', 'crossbind://app'];
+    const app = APP_ORIGINS.find((origin) => origin === new URLSearchParams(location.search).get('app'));
+    let api;
+    try {
+        api = await import('/__crossbind/app.js');
+    } catch (error) {
+        console.error(`CONFORMANCE ERR: ${location.origin}: page-accounts.html could not import /__crossbind/app.js, ${error?.message ?? error}`);
+        return;
+    }
+    // The load the probe begins replaces this page, whose call then answers nowhere.
+    api.invoke('probe.askAsTheWebView', { app }).catch(() => {});
+})();
+</script>
+</body>
+</html>
