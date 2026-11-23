@@ -1040,6 +1040,12 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
         return url.getScheme() + "://" + url.getHost() + (url.getPort() == -1 ? "" : ":" + url.getPort());
     }
 
+    // Whether a URL is of a served origin's form, http://<name>.localhost, served or not.
+    private static boolean isServedForm(Uri url) {
+        String host = url.getHost();
+        return "http".equals(url.getScheme()) && host != null && host.endsWith(".localhost") && url.getPort() == -1;
+    }
+
     // "<id>|m|<message>" or "<id>|r|<query>", or as an ArrayBuffer "<header length><id>|<query>" and the bytes.
     private static void receive(WebMessagePortCompat from, WebMessageCompat message) {
         try {
@@ -1136,7 +1142,7 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
             String host = url.getHost();
             boolean isApp = "https".equals(url.getScheme()) && HOST.equals(host);
             // Every one of http://<name>.localhost, served or not, as one of them would reach the device's port 80.
-            boolean isServed = "http".equals(url.getScheme()) && host != null && host.endsWith(".localhost") && url.getPort() == -1;
+            boolean isServed = isServedForm(url);
             boolean isTopPost = request.isForMainFrame() && !"GET".equals(request.getMethod());
             if (!isApp && !isServed) return isTopPost ? askOfPost(url, request.hasGesture()) : null;
             // A form's POST of the top frame toward the app's origin or a served one loads only what the rule loads by
@@ -1160,7 +1166,11 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
         @Override
         public void onPageStarted(WebView view, String url, Bitmap favicon) {
             dialogsGone((dialog) -> true);
-            if (url != null && !isOwn(originOf(Uri.parse(url)))) nativeNewPage(url.getBytes(StandardCharsets.UTF_8));
+            if (url == null || isOwn(originOf(Uri.parse(url)))) return;
+            nativeNewPage(url.getBytes(StandardCharsets.UTF_8));
+            // A page of an origin that ended while it was on its way, which endOrigin() did not see, gives way to the
+            // app's first page as well.
+            if (isServedForm(Uri.parse(url))) view.loadUrl(firstUrl);
         }
 
         @Override

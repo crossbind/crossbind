@@ -98,7 +98,13 @@ std::string attach(Core &core, void *webView, const char *devUrl, uint64_t windo
     if (devUrl || std::getenv("CROSSBIND_APP_CONSOLE")) forwardConsole(webView);
     showPageDialogs(webView);
     answerPermissions(webView);
-    restrictNavigation(webView, [&core, window](const std::string &url) { core.reset(window, url); });
+    restrictNavigation(webView, [&core, webView, window](const std::string &url) {
+        core.reset(window, url);
+        // A page of an origin that ended while it was on its way, which originEnded() did not see, gives way to the
+        // app's first page as well.
+        const std::string origin = originOf(url);
+        if (isServedForm(origin) && servedNameOf(origin).empty()) loadOwnPage(webView, firstUrl);
+    });
     takeDownloads(webView);
     takeDrops(webView);
     return firstUrl;

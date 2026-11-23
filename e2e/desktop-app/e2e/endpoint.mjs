@@ -24,6 +24,9 @@ const TYPES = {
     '.json': 'application/json', '.txt': 'text/plain; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml',
 };
 const RANGE = /^bytes=(\d+)-(\d*)$/;
+// How long the endpoint takes to answer a page on its way, and how long that page, once shown, waits before it says so.
+const SLOW_MS = 3000;
+const SHOWN_MS = 3000;
 
 const pathOf = (request) => new URL(request.url, 'http://endpoint').pathname;
 
@@ -61,6 +64,15 @@ export function answerPage(request, response, dist) {
     if (inPage === '/__e2e/headers') {
         response.writeHead(200, { 'content-type': 'text/plain', 'set-cookie': 'e2e-proxy=1; Path=/', 'x-e2e': 'dropped' });
         response.end('headers');
+        return true;
+    }
+    // A page that comes late, as one on its way while its origin ends, which says so if the window shows it.
+    if (inPage === '/__e2e/slow') {
+        const said = "console.error('CONFORMANCE ERR: ' + location.origin + ': the window shows a page of an origin that ended while it was on its way')";
+        setTimeout(() => {
+            response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+            response.end(`<!doctype html><meta charset="utf-8"><script>setTimeout(() => ${said}, ${SHOWN_MS});</script>`);
+        }, SLOW_MS);
         return true;
     }
     // A path of the kind a dev server names, with a colon, as Vite's virtual modules have.
