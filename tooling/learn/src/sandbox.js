@@ -1,12 +1,12 @@
 import { ImportError, prepareModules } from './modules.js';
 
-const SANDBOX_URL = '/playground/sandbox.html';
+export const SANDBOX_URL = '/playground/sandbox.html';
 const RUN_TIMEOUT_MS = 20_000;
 const STREAMS = new Set(['log', 'stdout', 'stderr', 'warn', 'error']);
 
 const randomToken = () => `crossbind-${[...crypto.getRandomValues(new Uint8Array(12))].map((byte) => byte.toString(16).padStart(2, '0')).join('')}`;
 
-// Runs the compiled module and main.js in a fresh frame with an opaque origin (see public/playground/sandbox.html):
+// Runs the compiled module and main.js in a fresh frame with an opaque origin (see sandbox.html):
 // it can reach neither this page, its cookies nor the network. `imports` is the build's import list, which maps
 // main.js's native imports (modules.js); `scripts` are the project's other scripts, by name. `onOutput` gets one
 // { stream, text } per printed line. Returns { done, stop }; `done` settles with 'done', 'error', 'timeout' or

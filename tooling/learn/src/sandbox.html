@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-6ueMHMAPndT2H8rXtZmr1FBIEmzhoKkXFAMOPhgfA+I=' blob: 'unsafe-eval' 'wasm-unsafe-eval'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-vSePJPR4hTWkoFFSbcEZUeL8WGCK4NzYltij0J1+x/s=' blob: 'unsafe-eval' 'wasm-unsafe-eval'; base-uri 'none'; form-action 'none'">
 <title>crossbind playground sandbox</title>
 <script>
 (() => {
@@ -42,7 +42,7 @@
         });
     }
 
-    // main.js comes last in `modules` (src/playground/modules.js); a module names an earlier one as <token>:<index>,
+    // main.js comes last in `modules` (modules.js); a module names an earlier one as <token>:<index>,
     // which becomes that module's URL here, where the frame made it.
     async function run({ js, wasm, modules, token }) {
         if (!TOKEN.test(token) || !Array.isArray(modules) || modules.length === 0) throw new Error('the page sent nothing to run');

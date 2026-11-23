@@ -2,10 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     draftOf, editDraft, parseDrafts, projectOf, replacesEdits,
-} from '../src/playground/drafts.js';
+} from '../src/drafts.js';
 import {
     addFile, addPackage, removeFile, setFile,
-} from '../src/playground/project.js';
+} from '../src/project.js';
 
 const SAMPLES = [
     { id: 'hello', project: { files: { 'main.js': 'js', 'native/native.h': 'h', 'native/native.cpp': 'cpp' }, packages: [] } },

@@ -1,6 +1,6 @@
 import LibraryApps from '../apps/LibraryApps.jsx';
 import Article from '../guide/Article.jsx';
-import { inline } from '../guide/inline.jsx';
+import { inline } from '../../../tooling/learn/src/inline.jsx';
 import { PORTS_INDEX_HREF } from './pages.js';
 
 // /ports/<name>/: what the library is, how to install it on each platform, its live apps, its

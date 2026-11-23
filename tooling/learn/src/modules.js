@@ -13,7 +13,7 @@ const NATIVE = /^(?:cargo|conan):|\.(?:h|hh|hpp|hxx|rs)$/;
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
 // main.js is src/main.js in the project the compiler builds; the list names files from the project's root.
 const MAIN_DIR = 'src';
-// Where the sandbox puts the booted module for the first module to read (public/playground/sandbox.html).
+// Where the sandbox puts the booted module for the first module to read (sandbox.html).
 const NATIVE_KEY = 'crossbind.playground.native';
 
 export class ImportError extends Error {}

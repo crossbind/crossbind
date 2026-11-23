@@ -30,6 +30,7 @@ crossbind/
 │   ├── docker/                       ← pinned build image
 │   ├── bridge-tools/                 ← the image's SWIG as WebAssembly + em++'s headers: macOS and iOS bridges on a Mac without Docker
 │   ├── cloud/                        ← crossbind cloud on api.crossbind.dev: the playground compiler, the accounts `crossbind login` signs in to, a runner per user and image
+│   ├── learn/                        ← the tutorial and the playground that crossbind.dev and the crossbind app share
 │   └── typescript-config/            ← shared tsconfig
 ├── extensions/                       ← extensions: the app's, which app-host has as dependencies, clipboard, and the package source conan, which crossbind has
 ├── plugins/

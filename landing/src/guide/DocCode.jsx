@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { highlight } from '../components/ui.jsx';
+import { highlight } from '../../../tooling/learn/src/highlight.jsx';
 
 // Docs code block. Forty framed windows down a reference page would be noise, so this is the slim bar
 // gdal3.js uses on its doc pages: what file you are looking at, and a copy button.

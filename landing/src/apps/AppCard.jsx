@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { highlight } from '../components/ui.jsx';
+import { highlight } from '../../../tooling/learn/src/highlight.jsx';
 import { appOf } from './appList.js';
 
 // The chrome every library app shares: what it does, the controls, one run button, the result,

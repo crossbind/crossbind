@@ -5,8 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { scriptsOf } from '../../landing/src/playground/project.js';
-import { SAMPLE_LIST } from '../../landing/src/playground/sampleList.js';
+import { scriptsOf } from '../../tooling/learn/src/project.js';
+import { SAMPLE_LIST } from '../../tooling/learn/src/sampleList.js';
+import { SANDBOX_URL } from '../../tooling/learn/src/sandbox.js';
 import { configSource, packagesFor } from '../../tooling/cloud/compiler/packages.js';
 import { deployCli, packModules } from '../../tooling/cloud/scripts/node-modules.mjs';
 import { channelDistTag, distTagSuffix } from '../release/resolve-site-release.mjs';
@@ -77,7 +78,7 @@ export const DEMOS = [
     { id: 'lib-openssl-direct', kind: 'source', source: 'lib-openssl/direct', expect: '=> 5/5 checks passed' },
     { id: 'lib-gdal', kind: 'source', expect: '=> 21/21 checks passed' },
     { id: 'lib-gdal-direct', kind: 'source', source: 'lib-gdal/direct', expect: '=> 5/5 checks passed' },
-    // The playground's samples (landing/src/playground/samples), built ahead of time so an unedited one runs in the
+    // The playground's samples (tooling/learn/src/samples), built ahead of time so an unedited one runs in the
     // tutorial and the playground without a compile. `sample-<name>` builds that sample as the playground compiler
     // would, and its page (landing/demos/sample) runs the sample's main.js in the playground's sandbox.
     { id: 'sample-function', kind: 'sample', expect: '2 + 3 = 5' },
@@ -214,13 +215,15 @@ async function buildSource(project, id, out) {
     return { script: `/examples/${id}/dist/${script}`, path: `/examples/${id}/dist`, bytes, nativeVersions };
 }
 
-const SAMPLES_ROOT = path.join(REPOSITORY_ROOT, 'landing', 'src', 'playground', 'samples');
+const SAMPLES_ROOT = path.join(REPOSITORY_ROOT, 'tooling', 'learn', 'src', 'samples');
 // The playground compiler's template: what every compile starts from, with the locks that pin its Conan recipes and
-// crates. A sample with no native file and no package runs the template's C++, as landing/src/playground/samples.js does.
+// crates. A sample with no native file and no package runs the template's C++, as tooling/learn/src/samples.js does.
 const COMPILER_TEMPLATE = path.join(REPOSITORY_ROOT, 'tooling', 'cloud', 'compiler', 'template');
 const SAMPLE_PAGE = path.join(REPOSITORY_ROOT, 'landing', 'demos', 'sample', 'index.html');
 // The playground's own runner, beside each sample's page, so the page runs the sample as the playground does.
-const PLAYGROUND_RUNNER = ['sandbox.js', 'modules.js'].map((name) => path.join(REPOSITORY_ROOT, 'landing', 'src', 'playground', name));
+const PLAYGROUND_RUNNER = ['sandbox.js', 'modules.js'].map((name) => path.join(REPOSITORY_ROOT, 'tooling', 'learn', 'src', name));
+// The page the runner frames, which the site serves at SANDBOX_URL.
+const SANDBOX_PAGE = path.join(REPOSITORY_ROOT, 'tooling', 'learn', 'src', 'sandbox.html');
 
 const sampleOf = (demo) => demo.id.replace(/^sample-/, '');
 
@@ -272,8 +275,9 @@ const SAMPLE_INPUTS = [
     'tooling/cloud/compiler',
     'tooling/cloud/scripts/node-modules.mjs',
     'landing/demos/sample',
-    'landing/src/playground',
-    ':(exclude)landing/src/playground/samples',
+    'tooling/learn/src/sandbox.js',
+    'tooling/learn/src/modules.js',
+    'tooling/learn/src/project.js',
     'package.json',
     'pnpm-workspace.yaml',
     'pnpm-lock.yaml',
@@ -411,11 +415,12 @@ async function verifyDemo(id) {
         '.svg': 'image/svg+xml',
         '.txt': 'text/plain',
     };
-    // Only this machine's browser asks it, and only for files under root.
+    // Only this machine's browser asks it, and only for files under root and the sandbox page a sample's page frames.
     const server = http.createServer((request, response) => {
-        let file = path.join(root, decodeURIComponent(request.url.split('?')[0]));
+        const url = decodeURIComponent(request.url.split('?')[0]);
+        let file = url === SANDBOX_URL ? SANDBOX_PAGE : path.join(root, url);
         if (fs.existsSync(file) && fs.statSync(file).isDirectory()) file = path.join(file, 'index.html');
-        if (!file.startsWith(`${root}${path.sep}`) || !fs.existsSync(file)) {
+        if ((file !== SANDBOX_PAGE && !file.startsWith(`${root}${path.sep}`)) || !fs.existsSync(file)) {
             response.writeHead(404);
             response.end('404');
             return;

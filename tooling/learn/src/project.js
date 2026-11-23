@@ -1,5 +1,5 @@
-import { PACKAGES } from '../../../tooling/cloud/compiler/packages.js';
-import { FILE_NAME, MAX_FILES, MAX_PACKAGES } from '../../../tooling/cloud/compiler/validate.js';
+import { PACKAGES } from '../../cloud/compiler/packages.js';
+import { FILE_NAME, MAX_FILES, MAX_PACKAGES } from '../../cloud/compiler/validate.js';
 import { importSpecifiers } from './modules.js';
 
 // A project in the shape the playground compiler takes: { files: { 'main.js', 'native/<name>': text }, packages: [id] }.

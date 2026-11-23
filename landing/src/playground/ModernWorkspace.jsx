@@ -1,7 +1,7 @@
 import Tabs from '../components/Tabs.jsx';
 import ProjectPanel, { CONFIG } from './ProjectPanel.jsx';
-import { ConsoleLines, runInfo } from './parts.jsx';
-import { fileNames } from './project.js';
+import { ConsoleLines, runInfo } from '../../../tooling/learn/src/output.jsx';
+import { fileNames } from '../../../tooling/learn/src/project.js';
 import {
     OpenFile, ViewSwitch, shortName,
 } from './workspace.jsx';

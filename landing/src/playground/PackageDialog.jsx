@@ -3,10 +3,10 @@ import { PACKAGES } from '../../../tooling/cloud/compiler/packages.js';
 import { MAX_PACKAGES } from '../../../tooling/cloud/compiler/validate.js';
 import Tabs from '../components/Tabs.jsx';
 import { TURBO, TitlePart, turboTokens } from '../components/turbo.jsx';
-import { highlight } from '../components/ui.jsx';
+import { highlight } from '../../../tooling/learn/src/highlight.jsx';
 import { PORTS } from '../ports/catalog.js';
 import { SOURCE_LABELS } from './ProjectPanel.jsx';
-import { canAddPackage, usageOf } from './project.js';
+import { canAddPackage, usageOf } from '../../../tooling/learn/src/project.js';
 
 // The packages a project may use (tooling/cloud/compiler/packages.js), by where they come from. Adding one that
 // main.js imports writes its import into main.js; one the C++ includes shows the #include to copy. A package leaves

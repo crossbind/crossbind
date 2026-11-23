@@ -1,5 +1,5 @@
 import { configSource } from '../../../tooling/cloud/compiler/packages.js';
-import Editor from './Editor.jsx';
+import Editor from '../../../tooling/learn/src/Editor.jsx';
 import { CONFIG } from './ProjectPanel.jsx';
 
 // What the playground's two looks (ModernWorkspace.jsx, TurboWorkspace.jsx) share: the open file, and on narrow

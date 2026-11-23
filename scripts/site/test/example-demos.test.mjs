@@ -110,7 +110,7 @@ test('a playground sample whose project changed after its build is refused by na
 });
 
 test('every playground sample is prebuilt, and nothing else is', () => {
-    const samplesDir = path.join(REPOSITORY_ROOT, 'landing', 'src', 'playground', 'samples');
+    const samplesDir = path.join(REPOSITORY_ROOT, 'tooling', 'learn', 'src', 'samples');
     const samples = fs.readdirSync(samplesDir).filter((name) => fs.existsSync(path.join(samplesDir, name, 'main.js')));
     const built = DEMOS.filter((demo) => demo.kind === 'sample').map((demo) => demo.id.replace(/^sample-/, ''));
     assert.deepEqual(built.toSorted(), samples.toSorted());

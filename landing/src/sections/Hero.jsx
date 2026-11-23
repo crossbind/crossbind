@@ -6,13 +6,14 @@ import Tabs from '../components/Tabs.jsx';
 import {
     TURBO, TURBO_SYNTAX, TitlePart, TurboMenu, TurboMenuLink, TurboWindow,
 } from '../components/turbo.jsx';
-import { highlight, primaryButtonStyle, secondaryButtonStyle } from '../components/ui.jsx';
+import { primaryButtonStyle, secondaryButtonStyle } from '../components/ui.jsx';
+import { highlight } from '../../../tooling/learn/src/highlight.jsx';
 import {
     CREATE_COMMANDS, HERO_TERMINAL, PLAYGROUND_URL, RUNTIMES,
 } from '../data.js';
-import heroMain from '../playground/samples/hero/main.js?raw';
-import heroGreet from '../playground/samples/hero/native/greet.h?raw';
-import heroMath from '../playground/samples/hero/native/math.rs?raw';
+import heroMain from '../../../tooling/learn/src/samples/hero/main.js?raw';
+import heroGreet from '../../../tooling/learn/src/samples/hero/native/greet.h?raw';
+import heroMath from '../../../tooling/learn/src/samples/hero/native/math.rs?raw';
 import { guideHref } from '../guide/nav.js';
 
 // The band under the hero; the detail of each target is its tooltip.
