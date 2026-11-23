@@ -27,6 +27,8 @@ const ACCOUNTS_PAGE = 'page-accounts.html';
 const BLOB_PAGE = 'page-blob.html';
 // The link elsewhere of public/page-blob.html's blob document.
 const BLOB_ELSEWHERE = 'https://crossbind-e2e.invalid/blob';
+// The first link elsewhere of the second page of no role, which public/no-role.html opens on Android.
+const NO_ROLE_SECOND_ELSEWHERE = 'https://crossbind-e2e.invalid/no-role-second';
 // What arms the app's first page after page-first.html's end to go within the app at once, for the window's session.
 const FIRST_ARMED = 'e2e-first-navigation';
 // Where page-first.html's first script goes first, which page-navigation refuses.
@@ -293,9 +295,10 @@ async function start(isAndroid) {
 
 // 5. The app's page once the page of no role came back by its way back, which page-navigation loads, having stayed
 // through its POSTs toward the app's origin and a served one. Were a POST loaded, the window shows this page at its URL,
-// or at its first once the served origin ended. page-navigation heard both of the app's page's POSTs with its role.
-// Then the project's page opens.
-async function afterNoRole(reports) {
+// or at its first once the served origin ended. page-navigation heard both of the app's page's POSTs with its role. On
+// Android it heard the first link elsewhere of the second page of no role, of another origin, as a page the host had yet
+// to hear of, not as the page of no role before it. Then the project's page opens.
+async function afterNoRole(isAndroid, reports) {
     const back = new URLSearchParams(location.search);
     if (back.get('from') !== 'no-role-back') {
         const loaded = back.get('from') === 'no-role-post' ? 'it' : `a page of ${POSTED}, whose end brought the window back`;
@@ -305,6 +308,10 @@ async function afterNoRole(reports) {
     const page = noRolePage(reports.app.origin, reports.app.posted);
     const unheard = [`${page}&refused=app`, page].filter((url) => !asked.some((one) => one.url === url && one.role === 'app'));
     if (unheard.length > 0) throw new Error(`page-navigation did not hear the app's page's POST of ${unheard.join(' and ')} with the role app`);
+    const second = asked.find(({ url }) => url === NO_ROLE_SECOND_ELSEWHERE);
+    if (isAndroid && (second?.role !== '' || second.isPage !== false)) {
+        throw new Error(`page-navigation heard the first link elsewhere of a second page of no role, of another origin, as ${JSON.stringify(second ?? null)}, not as a page of no role the host had yet to hear of`);
+    }
     const heard = asked.filter(({ url }) => url.includes('no-role')).map(({ url, role }) => ({ url, role }));
     show('no-role', { back: location.href, heard });
     const project = await invoke('probe.serveOrigin', { name: PROJECT, source: SOURCE, label: PROJECT_LABEL });
@@ -532,7 +539,7 @@ export async function runServedRoundTrip(isAndroid) {
     const stage = await invoke('probe.stage');
     const reports = await invoke('probe.reports');
     if (stage === 'start') return start(isAndroid).then(() => false);
-    if (stage === 'no-role') return afterNoRole(reports).then(() => false);
+    if (stage === 'no-role') return afterNoRole(isAndroid, reports).then(() => false);
     if (stage === 'ended') return afterTheEnd(isAndroid, reports).then(() => false);
     if (stage === 'done') return openPageApi(SOURCE).then(() => false);
     if (stage === 'page-api-done') return checkEndClosedMessage(reports).then(openWait).then(() => false);

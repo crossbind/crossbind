@@ -26,6 +26,9 @@ namespace app = crossbind::app;
 constexpr const char *TAG = "Crossbind";
 
 JavaVM *vm;
+// The URL of the page the host heard of last.
+std::mutex heardMutex;
+std::string heardPage;
 jclass activityClass;
 jmethodID onReply;
 jmethodID onReplyBytes;
@@ -422,7 +425,12 @@ extern "C" JNIEXPORT jobject JNICALL Java_dev_crossbind_app_CrossbindActivity_na
 
 // A new page of this URL replaced the one that held the module's objects.
 extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeNewPage(JNIEnv *env, jclass, jbyteArray url) {
-    core->reset(0, textOf(env, url));
+    const std::string page = textOf(env, url);
+    {
+        std::lock_guard<std::mutex> lock(heardMutex);
+        heardPage = page;
+    }
+    core->reset(0, page);
 }
 
 extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeOpenUrl(JNIEnv *env, jclass, jbyteArray url) {
@@ -466,7 +474,12 @@ extern "C" JNIEXPORT jint JNICALL Java_dev_crossbind_app_CrossbindActivity_nativ
     const app::NavigationRule rule = app::navigationRuleAt(asking, address);
     if (rule == app::NavigationRule::load) return static_cast<jint>(app::NavigationAnswer::load);
     if (rule == app::NavigationRule::refuse) return static_cast<jint>(app::NavigationAnswer::refuse);
-    return static_cast<jint>(app::decideNavigation(app::pageAt(asking), address, isMainFrame == JNI_TRUE, isUserInitiated == JNI_TRUE, false));
+    std::string heard;
+    {
+        std::lock_guard<std::mutex> lock(heardMutex);
+        heard = heardPage;
+    }
+    return static_cast<jint>(app::decideNavigation(app::pageAt(asking, heard), address, isMainFrame == JNI_TRUE, isUserInitiated == JNI_TRUE, false));
 }
 
 // The rule alone, for a POST of the top frame toward the app's origins or a served one, which the WebView's thread of

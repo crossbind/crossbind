@@ -1,8 +1,8 @@
 // Every navigation beyond the app's origins is refused, as src/main.js asks for some, but the page of no role that
-// src/served-origins.js opens, without a refused= in its query, and that page's way back to the app's, which load;
-// page-navigation.asked gives what each asked, to a page of the app's and of a project's, whose page src/main.js runs at
-// the probe's origin. On Android, as it loads the page of no role, the UI thread's Java messages wait, so the host hears
-// of that page only after its POSTs, as it may of any page.
+// src/served-origins.js opens, without a refused= in its query, the second it goes to on Android, and their way back to
+// the app's, which load; page-navigation.asked gives what each asked, to a page of the app's and of a project's, whose
+// page src/main.js runs at the probe's origin. On Android, as it loads a page of no role, the UI thread's Java messages
+// wait, so the host hears of that page only after its POSTs and its first link, as it may of any page.
 #include "crossbind/extension.h"
 
 #include <mutex>
@@ -12,7 +12,7 @@
 namespace {
 
 #if defined(__ANDROID__)
-// Past the POSTs of the page of no role, 1.5 s apart.
+// Past the POSTs of the page of no role, 1.5 s apart, and the second's first link.
 constexpr double NO_ROLE_HOLD_MS = 2000;
 #endif
 
@@ -23,7 +23,8 @@ bool isLoaded(const crossbind::Navigation &navigation) {
     const std::string &url = navigation.url();
     const std::string &role = navigation.page().role();
     const bool isNoRolePage = url.find("/page/no-role.html?") != std::string::npos && url.find("&refused=") == std::string::npos;
-    return (role == "app" && isNoRolePage) || (role.empty() && url.find("/?from=no-role-back&") != std::string::npos);
+    const bool isSecond = url.find("&second=1") != std::string::npos;
+    return (isNoRolePage && role == (isSecond ? "" : "app")) || (role.empty() && url.find("/?from=no-role-back&") != std::string::npos);
 }
 
 }  // namespace
@@ -42,7 +43,7 @@ void crossbind_extension_e2e_page_navigation(crossbind::Registry &registry) {
         if (!isLoaded(navigation)) return crossbind::NavigationAnswer::refuse;
 #if defined(__ANDROID__)
         // The UI thread takes this after the answer, before the page's start.
-        if (navigation.page().role() == "app") {
+        if (navigation.url().find("/page/no-role.html?") != std::string::npos) {
             crossbind::android::callJava("probe", "holdUi", Value::Object{{"ms", NO_ROLE_HOLD_MS}}, [](std::optional<std::string>, Value) {});
         }
 #endif
