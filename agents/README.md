@@ -16,7 +16,7 @@ The installation contains no background server, client-specific plugin, slash-co
 agents/
 ├── README.md
 ├── contributor-context.md          canonical contributor instructions
-├── test/                           deterministic inspector, route and scaffolder tests
+├── test/                           deterministic inspector, route and scaffolder tests, and the skill's cases
 └── skills/crossbind/
     ├── SKILL.md                    routing, product-fit and safety rules
     ├── scripts/inspect-project.mjs read-only project inspection

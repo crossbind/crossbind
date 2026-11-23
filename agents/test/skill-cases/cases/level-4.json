@@ -1,0 +1,260 @@
+[
+    {
+        "id": "p106",
+        "prompt": "This repository is the front end of my website: Vite + React with client-side routing, talking to https://api.example.com. Make iOS and Android apps of it with crossbind and keep `vite build` producing the same website. App id `com.example.shop`, name \"Example Shop\", icon from `assets/icon.png`. Use the phone layout when the app runs on a phone, open links to other sites in the system browser, and open the matching route for `exampleshop://` links. Ask for the camera with the reason \"Scan a product barcode\". Run it in the iOS Simulator and on an Android emulator and tell me what you checked there; then tell me exactly what I have to do to reach TestFlight and Google Play's internal track. Do not commit anything.",
+        "tags": [
+            "brief"
+        ],
+        "fixture": "site-vite-react",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/desktop-app.md",
+            "references/api/app.md"
+        ],
+        "facts": [
+            {
+                "claim": "Keeps `vite build` making the website by leaving `target.runtimeEnv` out of the config, with the apps coming from `crossbind app build`",
+                "doc": "docs/api/app.md",
+                "literal": "A project that leaves `target.runtimeEnv` out builds by the command that runs it"
+            },
+            {
+                "claim": "Registers the `exampleshop` scheme under `app.urlSchemes` and takes its links from `app.launchUrls()` and the `open-url` event",
+                "doc": "docs/api/app.md",
+                "literal": "urlSchemes: ['myapp'],"
+            },
+            {
+                "claim": "Lists the camera under `app.permissions` with the reason \"Scan a product barcode\"",
+                "doc": "docs/api/app.md",
+                "literal": "camera: 'To scan barcodes',"
+            },
+            {
+                "claim": "Names both uploads, `crossbind app upload app-store` for TestFlight and `crossbind app upload google-play` for the internal track, and says each store's app has to be created by hand first",
+                "doc": "docs/api/app.md",
+                "literal": "- `crossbind app upload google-play`: Builds the Android app"
+            },
+            {
+                "claim": "Does not say it ran or checked the app in the Simulator or on an emulator when it did not",
+                "doc": "agents/skills/crossbind/SKILL.md",
+                "literal": "Report changed files and validation results."
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p107",
+        "prompt": "Create a new crossbind app: a nonogram puzzle game for iOS, Android, macOS, Windows and Linux, with a web build of the same page. Use React and Vite and draw the board on a canvas. Write the puzzle generator and the solver in Rust and call them from the page; generating a 25×25 puzzle must not freeze the UI. Keep progress and best times on the device across restarts. Lay the board out for phones, tablets and desktops, and add a Game menu (New, Undo, Hint) on desktop. Build the dmg, the Windows setup, the deb and an Android APK, and say which of them you actually ran and which you only built.",
+        "tags": [
+            "brief"
+        ],
+        "fixture": "empty",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/desktop-app.md",
+            "references/api/app.md",
+            "references/api/rust.md"
+        ],
+        "facts": [
+            {
+                "claim": "Starts a crossbind app with a React and Vite page that also builds for the web, with `target.runtimeEnv` left out of the config",
+                "doc": "docs/api/app.md",
+                "literal": "A project that leaves `target.runtimeEnv` out builds by the command that runs it"
+            },
+            {
+                "claim": "Writes the generator and the solver in Rust that the page imports through crossbind, as a `.rs` file of the project or a crate, with no hand-written bindings",
+                "doc": "docs/api/rust.md",
+                "literal": "### 2. App-local `.rs` source"
+            },
+            {
+                "claim": "Sets the Game menu with `menu.set` on the desktop alone, as iOS and Android have no menu bar",
+                "doc": "docs/api/app.md",
+                "literal": "iOS and Android apps have no menu bar, and `menu.set` rejects there."
+            },
+            {
+                "claim": "Names the build of each artifact: `crossbind app build` for the dmg, `-p windows` for the setup, `-p linux` for the deb and `-p android` for the APK",
+                "doc": "docs/api/app.md",
+                "literal": "`dist/<name>-android.apk`"
+            },
+            {
+                "claim": "Says which artifacts it built and which it ran, and claims none it did not",
+                "doc": "agents/skills/crossbind/SKILL.md",
+                "literal": "Report changed files and validation results."
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p108",
+        "prompt": "Build a map app for web, iOS, Android, macOS, Windows and Linux from one Vite + React codebase with crossbind. Render with MapLibre GL JS and use crossbind's GDAL, PROJ and GEOS ports for data: open local GeoTIFF, GeoPackage, zipped Shapefile and GeoJSON files, show them as layers over the base map, reproject them to Web Mercator when needed, and measure distances and areas. For offline use, read a region's tiles from an MBTiles file through the SQLite port. On the web, run the native code in a worker and tell me whether a multithreaded build is worth the COOP/COEP headers. Report the WebAssembly size, each app's size and the licenses the app ships. Search, routing and traffic are out of scope.",
+        "tags": [
+            "brief"
+        ],
+        "fixture": "empty",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/desktop-app.md",
+            "references/api/app.md",
+            "references/api/threading.md",
+            "references/ports.json"
+        ],
+        "facts": [
+            {
+                "claim": "Uses crossbind's GDAL, PROJ and GEOS ports: `@crossbind/port-gdal`, `@crossbind/port-proj` and `@crossbind/port-geos`",
+                "doc": "agents/skills/crossbind/references/ports.json",
+                "literal": "@crossbind/port-geos"
+            },
+            {
+                "claim": "Answers the multithreading question with its cost: `runtime: 'mt'` takes the COOP/COEP headers in production",
+                "doc": "docs/api/threading.md",
+                "literal": "Needs COOP/COEP"
+            },
+            {
+                "claim": "Reports the licenses through `crossbind licenses -e app`, or `licenses()` of `crossbind/licenses`",
+                "doc": "docs/api/app.md",
+                "literal": "`crossbind licenses -e app` lists what the app carries beside its packages"
+            },
+            {
+                "claim": "Says GEOS comes under the LGPL",
+                "doc": "agents/skills/crossbind/references/ports.json",
+                "literal": "LGPL-2.1-only"
+            },
+            {
+                "claim": "Gives no WebAssembly or app size for this app that it did not measure, or marks the sizes as still to be measured",
+                "doc": "agents/skills/crossbind/SKILL.md",
+                "literal": "Report changed files and validation results."
+            }
+        ],
+        "split": "test"
+    },
+    {
+        "id": "p109",
+        "prompt": "`native/` holds my C++ library, built with CMake, with its public headers in `native/include`. Give it one JavaScript API in two apps of this monorepo: `apps/web` (Vite + React) and `apps/mobile` (Expo). Use crossbind: WebAssembly on the web, the native library over JSI on iOS and Android. Do not hand-write bindings; if a declaration cannot be bound as it is, list it and the reason before you change any header. Keep calls off the main thread on the web, and choose single- or multithreaded with your reason. Add one test in each app that calls the same function and compares the result with a value computed by the C++ unit tests. Run the web build and the iOS Simulator build, and tell me what you could not run.",
+        "tags": [
+            "brief"
+        ],
+        "fixture": "monorepo",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/README.md",
+            "references/integration/vite.md",
+            "references/integration/react-native-expo.md",
+            "references/api/cpp-binding-rules.md"
+        ],
+        "facts": [
+            {
+                "claim": "Builds WebAssembly for `apps/web` with `@crossbind/plugin-vite`",
+                "doc": "docs/playbooks/integration/vite.md",
+                "literal": "pnpm add -D @crossbind/plugin-vite@beta"
+            },
+            {
+                "claim": "Builds the native library for `apps/mobile` with `@crossbind/plugin-react-native`, and says the Expo app needs `expo prebuild`, as Expo Go cannot run it",
+                "doc": "docs/playbooks/integration/react-native-expo.md",
+                "literal": "**Expo Go** is **not** supported"
+            },
+            {
+                "claim": "Lists `save`, which takes a `std::unique_ptr` parameter, as a declaration that cannot be bound as it is, before it changes a header",
+                "doc": "docs/api/cpp-binding-rules.md",
+                "literal": "A `std::unique_ptr` parameter, by value, as an rvalue or through a const reference"
+            },
+            {
+                "claim": "Keeps the web's calls off the main thread with the worker, a browser's default, and gives its choice of single- or multithreaded with a reason",
+                "doc": "docs/api/threading.md",
+                "literal": "`useWorker` is on by default in a browser"
+            },
+            {
+                "claim": "Says what it could not run, and does not say it ran the web build or the iOS Simulator build when it did not",
+                "doc": "agents/skills/crossbind/SKILL.md",
+                "literal": "Report changed files and validation results."
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p110",
+        "prompt": "Build TableView, a SQLite database browser for macOS, Windows and Linux, with crossbind and its SQLite port. Open a database from File > Open, by dropping it on the window, or by double-clicking a .sqlite or .db file. List the tables, page through rows 500 at a time, run queries, and export a result as CSV through a save dialog. Keep one instance: a second launch opens its file in the running window. On start, check my GitHub releases for a newer version and offer to install it. Produce the dmg, the Windows setup and the deb, publish them to a GitHub release, and tell me what is still unsigned.",
+        "tags": [
+            "brief"
+        ],
+        "fixture": "empty",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/integration/desktop-app.md",
+            "references/api/app.md",
+            "references/ports.json"
+        ],
+        "facts": [
+            {
+                "claim": "Declares `.sqlite` and `.db` under `app.fileTypes` and takes the files the app is opened with from `app.launchFiles()` and the `open-files` event",
+                "doc": "docs/api/app.md",
+                "literal": "fileTypes: [{ name: 'GeoJSON', extensions: ['geojson'], mimeTypes: ['application/geo+json'] }],"
+            },
+            {
+                "claim": "Keeps one instance with `app.singleInstance`, or says its file types already keep a Windows or Linux app to one",
+                "doc": "docs/api/app.md",
+                "literal": "singleInstance: true,"
+            },
+            {
+                "claim": "Points `app.updater` at the GitHub release's update manifest and asks `updater.check()` as the app starts",
+                "doc": "docs/api/app.md",
+                "literal": "url: 'https://github.com/<owner>/<repo>/releases/latest/download/<name>-{platform}-{arch}.update.json',"
+            },
+            {
+                "claim": "Uploads the installers with `crossbind app upload github`, then takes the release out of its draft with `crossbind app release github`",
+                "doc": "docs/api/app.md",
+                "literal": "into the draft GitHub release of its version"
+            },
+            {
+                "claim": "Says what stays unsigned without keys: the macOS app is signed ad hoc, the Windows app and its setup program are unsigned, and the Debian package is never signed",
+                "doc": "docs/api/app.md",
+                "literal": "The Debian package is not signed"
+            }
+        ],
+        "split": "train"
+    },
+    {
+        "id": "p111",
+        "prompt": "Turn my C++ library (CMake; depends on zlib and SQLite) into npm packages other projects can install with prebuilt binaries: WebAssembly, iOS, Android, and Node.js addons for Linux, macOS and Windows. Start from crossbind's library template and take zlib and SQLite from the existing ports. Pin the upstream version and its checksum, keep the license files, and ship TypeScript types. Add a CI workflow that builds every target and fails when one is missing. Claim a platform only after its build passed, and list the ones you could not build on this machine.",
+        "tags": [
+            "brief"
+        ],
+        "fixture": "lib-cmake",
+        "trigger": "must",
+        "expect": "do",
+        "route": [
+            "references/port.md",
+            "references/integration/nodejs.md"
+        ],
+        "facts": [
+            {
+                "claim": "Starts from crossbind's library template, `npm create crossbind@beta -- <dir> Library Prebuilt`",
+                "doc": "docs/playbooks/new-port.md",
+                "literal": "npm create crossbind@beta -- my-library Library Prebuilt"
+            },
+            {
+                "claim": "Takes zlib and SQLite from the ports, `@crossbind/port-zlib` and `@crossbind/port-sqlite3`, each through the variant of the platform it builds for",
+                "doc": "docs/playbooks/new-port.md",
+                "literal": "Declare every native dependency using its matching platform variant."
+            },
+            {
+                "claim": "Pins the upstream version and its `sha256`, and keeps the license files in the packages",
+                "doc": "docs/playbooks/new-port.md",
+                "literal": "Put the upstream license text in every platform variant that ships native artifacts."
+            },
+            {
+                "claim": "Builds the Node.js addons with `-e node` for `darwin`, `linux`, `linuxmusl` and `win32`",
+                "doc": "docs/playbooks/integration/nodejs.md",
+                "literal": "pnpm crossbind build -p darwin,linux,linuxmusl,win32 -e node -b release"
+            },
+            {
+                "claim": "Lists the platforms it could not build on this machine, and claims none whose build has not passed",
+                "doc": "agents/skills/crossbind/SKILL.md",
+                "literal": "Never claim a platform is supported merely because its directory exists"
+            }
+        ],
+        "split": "train"
+    }
+]
