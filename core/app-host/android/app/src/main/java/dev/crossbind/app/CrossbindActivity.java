@@ -1342,11 +1342,24 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
     // is the request's Range header, or null.
     static WebResourceResponse responseOf(int status, String mime, byte[][] headers, byte[] body, byte[] file, byte[] range) {
         Map<String, String> fields = new HashMap<>();
+        // A HEAD's length, the one header of the host's that names it, which the WebView takes from the stream instead,
+        // as it would add its own beside it.
+        String declared = null;
         for (int i = 0; i + 1 < headers.length; i += 2) {
-            fields.put(new String(headers[i], StandardCharsets.UTF_8), new String(headers[i + 1], StandardCharsets.UTF_8));
+            String name = new String(headers[i], StandardCharsets.UTF_8);
+            String value = new String(headers[i + 1], StandardCharsets.UTF_8);
+            if (name.equalsIgnoreCase("Content-Length")) declared = value;
+            else fields.put(name, value);
         }
         InputStream data = new ByteArrayInputStream(body);
         long length = body.length;
+        if (declared != null && file == null && body.length == 0) {
+            try {
+                length = Long.parseLong(declared);
+            } catch (NumberFormatException none) {
+                length = 0;
+            }
+        }
         if (file != null) {
             String path = new String(file, StandardCharsets.UTF_8);
             try {
