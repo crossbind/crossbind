@@ -89,6 +89,8 @@ UIColor *backgroundColor() {
         core->serve(std::move(request), std::move(respond));
     });
     keepRunningWhenHidden((__bridge void *)configuration);
+    // A video of playsinline plays in the page, as in the system's browser, not in the system's player over the app.
+    configuration.allowsInlineMediaPlayback = YES;
     WKWebView *webView = [[WKWebView alloc] initWithFrame:CGRectZero configuration:configuration];
 #ifdef CROSSBIND_APP_BACKGROUND_COLOR
     // app.window.backgroundColor, which the launch screen shows as well, until the page paints and behind it.

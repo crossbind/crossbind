@@ -1364,6 +1364,9 @@ the app's first page, and its page open more with `windows.open()` ([Windows](#w
 app's, which iOS sizes and places itself, and may let go of in the background and restore later with the page it
 showed, as a new page of the same path. An iPhone shows one window of an app, whatever the key says.
 
+A video the page marks `playsinline` plays in the page, as the iPhone's browser plays it; one without the attribute
+plays full screen in the system's player, over the app.
+
 `app.ios.appGroup` names the App Group the app shares with the app extensions its extensions add, as a widget
 ([iOS app extensions](./extensions.md#ios-app-extensions)), `group.` and the app's id without it. The app and each
 target that asks for it take it in their entitlements, the app's native code finds its folder as
