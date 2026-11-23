@@ -8,6 +8,7 @@
 #import <objc/message.h>
 #if TARGET_OS_IPHONE
 #import <UIKit/UIKit.h>
+#import <WebKit/WebKit.h>
 #else
 #import <AppKit/AppKit.h>
 #endif
@@ -238,6 +239,16 @@ void probePlatform(crossbind::Registry &registry) {
         });
     });
 #if TARGET_OS_IPHONE
+    // A script run in the app's page as its user's tap would run it, which WebKit takes as a gesture of its user's.
+    registry.function("probe.gesture", [](Call call) {
+        NSString *script = @(call.options()["script"].asString().c_str());
+        crossbind::onMainThread([call, script] {
+            [(__bridge WKWebView *)crossbind::appWebView() evaluateJavaScript:script completionHandler:^(id, NSError *error) {
+                if (error) call.reject(error.localizedDescription.UTF8String ?: "the script failed");
+                else call.resolve();
+            }];
+        });
+    });
     // A tap of a quick action of the app's icon while it runs, as iOS hands the scene's delegate one: whether an owner
     // took it.
     registry.function("probe.tapShortcut", [](Call call) {

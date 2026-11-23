@@ -479,6 +479,35 @@ async function checkPageRequests() {
     }
 }
 
+// How long a video has to start, and how long it is watched once it plays: the system's player takes it over after its
+// first frames.
+const PLAY_TIMEOUT_MS = 5000;
+const PLAYER_MS = 2000;
+
+// An iPhone's page plays a video of playsinline in place, as the system's browser does, where its user starts it: not in
+// the system's player, full screen over the app. The probe starts it as its user's tap would.
+async function checkInlineMedia() {
+    const video = document.createElement('video');
+    Object.assign(video, { muted: true, playsInline: true, loop: true, src: '/inline.mp4' });
+    document.body.append(video);
+    let isFullScreen = false;
+    let furthest = 0;
+    video.addEventListener('webkitbeginfullscreen', () => { isFullScreen = true; });
+    video.addEventListener('timeupdate', () => { furthest = Math.max(furthest, video.currentTime); });
+    const playing = new Promise((resolve) => { video.addEventListener('playing', () => resolve(true), { once: true }); });
+    globalThis.e2ePlay = () => video.play();
+    await invoke('probe.gesture', { script: 'e2ePlay(); undefined' });
+    const hasPlayed = await Promise.race([playing, sleep(PLAY_TIMEOUT_MS).then(() => false)]);
+    await sleep(PLAYER_MS);
+    isFullScreen ||= video.webkitDisplayingFullscreen || video.webkitPresentationMode === 'fullscreen';
+    const how = isFullScreen ? 'full screen' : hasPlayed && furthest > 0 ? 'in place' : 'not at all';
+    video.webkitExitFullscreen?.();
+    video.pause();
+    video.remove();
+    if (how !== 'in place') throw new Error(`an iPhone's page played a video of playsinline ${how}, not in place`);
+    console.log(`PAGE GETS inline-media ${JSON.stringify({ how, furthest })}`);
+}
+
 // How often until() asks again.
 const POLL_MS = 100;
 
@@ -1056,6 +1085,7 @@ else initNative().then(async (m) => {
         checkDevice(isDesktop, isAndroid);
         await checkClipboard(!isAndroid && !isDesktop);
         await checkPageRequests();
+        if (device.platform === 'ios') await checkInlineMedia();
         await checkNavigation(isDesktop, isAndroid);
         await checkDownloads();
         await checkCarried();
