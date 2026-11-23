@@ -25,7 +25,7 @@ import { samplePrebuilt } from '../demos.js';
 import { useSession } from '../playground/useSession.js';
 import { shortName } from '../playground/workspace.jsx';
 import Contents from './Contents.jsx';
-import { positionOf } from './sections.js';
+import { positionOf } from '../../../tooling/learn/src/sections.js';
 
 // /tutorial/: one step per page, laid out as a workbench. The contents stay at the left of a wide screen and fold
 // into the step menu on a narrower one. The lesson has Run and the output under it. Beside them the step's playground

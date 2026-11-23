@@ -1,6 +1,6 @@
 import { Fragment } from 'react';
 import { SideHeading, SideLink } from '../components/side.jsx';
-import { contentsColumns } from './sections.js';
+import { contentsColumns } from '../../../tooling/learn/src/sections.js';
 
 // The tutorial's contents: every step under its section, numbered, so a reader sees all there is and jumps to any of
 // it. TutorialPage.jsx puts the list beside the lesson on a wide screen and inside the step menu on a narrower one,
