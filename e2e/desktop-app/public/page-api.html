@@ -10,7 +10,7 @@
 // crossbind/app from /__crossbind/app.js, which the host answers from the app's own files, and tells the app's page what
 // it got. An app's function is refused naming the page's role, also once globalThis.Crossbind is what a web build's
 // crossbind.js makes it; dialog.message, which the role project reaches, shows the system's dialog, which waits for its
-// user until the probe closes it.
+// user until the probe closes it, and which goes as its call is cancelled, also with another dialog of its window.
 (async () => {
     const QUIET_MS = 3000;
     const ANSWER_MS = 10000;
@@ -20,10 +20,15 @@
     const STAYED_MS = 8000;
     const MESSAGE = "crossbind e2e: a project's dialog";
     const ENDED = "crossbind e2e: a project's dialog its end closes";
+    // The probe's dialog of the window, as another holder's, and the message dialogs asked with it up.
+    const OTHER = 'crossbind e2e: another dialog of the window';
+    const BEHIND = "crossbind e2e: a project's dialog asked behind another";
+    const UNDER = "crossbind e2e: a project's dialog under another";
     const name = location.hostname.split('.')[0];
     const failure = (error) => `${error?.name ?? 'Error'}: ${error?.message ?? error}`;
     const answered = (promise) => promise.then((value) => `answered ${JSON.stringify(value)}`, failure);
     const within = (promise, ms, otherwise) => Promise.race([promise, new Promise((resolve) => { setTimeout(() => resolve(otherwise), ms); })]);
+    const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
     let api;
     try {
         api = await import('/__crossbind/app.js');
@@ -31,6 +36,39 @@
         const asked = await fetch('/__crossbind/app.js').then(async (response) => `${response.status} ${(await response.text()).slice(0, 200)}`, failure);
         console.error(`CONFORMANCE ERR: ${location.origin}: /__crossbind/app.js did not import, ${failure(error)}; it answered ${asked}`);
         return;
+    }
+    // Whether a dialog of the message shows, which the probe closes if it does.
+    const isShown = (message) => api.invoke('probe.closeDialog', { message }).then((closed) => closed.isShown, failure);
+    // macOS shows a sheet asked while another shows over the same window once that one ends, and iOS an alert over the
+    // alert on top: a message dialog whose call is cancelled goes, behind the other or under it, and never shows later.
+    // Two message dialogs are never up together: the second is refused.
+    async function withAnother() {
+        const another = {};
+        await api.invoke('probe.sheet', { message: OTHER });
+        const behind = new AbortController();
+        const behindAnswer = answered(api.invoke('dialog.message', { message: BEHIND }, { signal: behind.signal }));
+        // The host takes the calls in order and shows a dialog on the main thread before it answers the next: once this
+        // answers, the message dialog waits behind the other.
+        await api.invoke('probe.role');
+        behind.abort();
+        another.behindAnswer = await within(behindAnswer, ANSWER_MS, 'no answer');
+        // Once what shows settles: an alert of iOS closes as its presentation ends, and a sheet of macOS waits.
+        await sleep(QUIET_MS);
+        another.behind = await isShown(BEHIND);
+        another.other = await isShown(OTHER);
+        await sleep(QUIET_MS);
+        another.behindLater = await isShown(BEHIND);
+        const under = new AbortController();
+        const underAnswer = answered(api.invoke('dialog.message', { message: UNDER }, { signal: under.signal }));
+        another.underShown = await within(underAnswer, QUIET_MS, 'shown');
+        another.second = await answered(api.invoke('dialog.message', { message: 'crossbind e2e: a second message dialog' }));
+        await api.invoke('probe.sheet', { message: OTHER });
+        under.abort();
+        another.underAnswer = await within(underAnswer, ANSWER_MS, 'no answer');
+        await sleep(QUIET_MS);
+        another.under = await isShown(UNDER);
+        another.otherAfter = await isShown(OTHER);
+        return another;
     }
     const got = { names: Object.keys(api).sort() };
     try {
@@ -45,6 +83,7 @@
             got.closed = await api.invoke('probe.closeDialog', { message: MESSAGE }).catch(failure);
             got.dialogClosed = await within(shown, ANSWER_MS, 'no answer once closed');
         }
+        if (['macos', 'ios'].includes(api.device.platform)) got.another = await withAnother();
     } catch (error) {
         got.failure = failure(error);
     }

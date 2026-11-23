@@ -23,10 +23,11 @@ void show(NSAlert *alert, const PageDialog &dialog, void (^done)(NSModalResponse
         [alert beginSheetModalForWindow:window completionHandler:done];
         __weak NSWindow *weakWindow = window;
         __weak NSAlert *weakAlert = alert;
+        // A sheet asked while another shows waits behind it among the window's sheets, which endSheet takes it from.
         dialog.onCancel([weakWindow, weakAlert] {
             dispatch_async(dispatch_get_main_queue(), ^{
               NSWindow *sheet = weakAlert.window;
-              if (sheet && weakWindow.attachedSheet == sheet) [weakWindow endSheet:sheet returnCode:NSModalResponseCancel];
+              if (sheet && [weakWindow.sheets containsObject:sheet]) [weakWindow endSheet:sheet returnCode:NSModalResponseCancel];
             });
         });
     } else {

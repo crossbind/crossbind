@@ -84,10 +84,11 @@ void showMessageDialog(uint64_t window, MessageOptions options, std::function<vo
           __weak NSWindow *weakParent = parent;
           [alert beginSheetModalForWindow:parent completionHandler:^(NSModalResponse response) { done(static_cast<int>(response - NSAlertFirstButtonReturn)); }];
           if (options.closer) {
+              // A sheet asked while another shows waits behind it among the window's sheets, which endSheet takes it from.
               options.closer->shown([weakParent, weakAlert] {
                   dispatch_async(dispatch_get_main_queue(), ^{
                     NSWindow *sheet = weakAlert.window;
-                    if (sheet && weakParent.attachedSheet == sheet) [weakParent endSheet:sheet returnCode:NSModalResponseAbort];
+                    if (sheet && [weakParent.sheets containsObject:sheet]) [weakParent endSheet:sheet returnCode:NSModalResponseAbort];
                   });
               });
           }

@@ -64,12 +64,13 @@ bool showsText(NSView *view, NSString *text) {
 void closeMessageDialog(const std::string &message, std::function<void(bool, const std::string &)> done) {
     NSString *text = @(message.c_str());
 #if TARGET_OS_IPHONE
+    // The alert of the message anywhere in what the window shows, on top or under another, dismissed with what shows over
+    // it.
     crossbind::onMainThread([text, done] {
-        UIViewController *top = ((__bridge UIWindow *)crossbind::appWindow()).rootViewController;
-        while (top.presentedViewController) top = top.presentedViewController;
-        const bool isShown = [top isKindOfClass:UIAlertController.class] && [top.title isEqualToString:text];
-        if (isShown) [top dismissViewControllerAnimated:NO completion:nil];
-        done(isShown, "");
+        UIViewController *shown = ((__bridge UIWindow *)crossbind::appWindow()).rootViewController.presentedViewController;
+        while (shown && !([shown isKindOfClass:UIAlertController.class] && [shown.title isEqualToString:text])) shown = shown.presentedViewController;
+        if (shown) [shown.presentingViewController dismissViewControllerAnimated:NO completion:nil];
+        done(shown != nil, "");
     });
 #else
     // The alert's modal loop runs in a block of the main queue, which holds the queue's next ones, so this runs in the
@@ -262,6 +263,18 @@ void probePlatform(crossbind::Registry &registry) {
             [delegate windowScene:scene performActionForShortcutItem:item completionHandler:^(BOOL isTaken) { call.resolve(static_cast<bool>(isTaken)); }];
         });
     });
+    // An alert over what the app's window shows on top, as another holder's dialog shows one, once it shows: a message
+    // dialog asked after it shows over it, and one asked before it is under it.
+    registry.function("probe.sheet", {"app", "project"}, [](Call call) {
+        NSString *text = @(call.options()["message"].asString().c_str());
+        crossbind::onMainThread([call, text] {
+            UIViewController *top = ((__bridge UIWindow *)crossbind::appWindow()).rootViewController;
+            while (top.presentedViewController) top = top.presentedViewController;
+            UIAlertController *alert = [UIAlertController alertControllerWithTitle:text message:nil preferredStyle:UIAlertControllerStyleAlert];
+            [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+            [top presentViewController:alert animated:NO completion:^{ call.resolve(); }];
+        });
+    });
 #else
     registry.function("probe.close", [](Call call) {
         crossbind::onMainThread([call] {
@@ -288,6 +301,23 @@ void probePlatform(crossbind::Registry &registry) {
             Value::Array titles;
             for (NSMenuItem *item in menu.itemArray) titles.emplace_back(item.title.UTF8String);
             call.resolve(Value(std::move(titles)));
+        });
+    });
+    // A sheet of the page's window, as another holder's dialog shows one: a sheet asked after it waits behind it until it
+    // ends.
+    registry.function("probe.sheet", {"app", "project"}, [](Call call) {
+        NSString *text = @(call.options()["message"].asString().c_str());
+        const uint64_t window = call.page().windowId();
+        crossbind::onMainThread([call, text, window] {
+            const std::optional<crossbind::Window> open = crossbind::windowOf(window);
+            if (!open) {
+                call.reject("crossbind e2e: the page has no window to show a sheet over");
+                return;
+            }
+            NSAlert *alert = [NSAlert new];
+            alert.messageText = text;
+            [alert beginSheetModalForWindow:(__bridge NSWindow *)open->native() completionHandler:^(NSModalResponse) {}];
+            call.resolve();
         });
     });
 #endif

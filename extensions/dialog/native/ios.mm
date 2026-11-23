@@ -89,13 +89,14 @@ struct MessageAnswer {
     ~MessageAnswer() { give(NO_BUTTON); }
 };
 
-// Over whatever the window of this id, or the app's oldest, shows on top; false when it has nothing to show it over.
-bool presentOnTop(UIViewController *controller, uint64_t window) {
+// Over whatever the window of this id, or the app's oldest, shows on top, with presented run once it shows; false when
+// it has nothing to show it over.
+bool presentOnTop(UIViewController *controller, uint64_t window, void (^presented)(void) = nil) {
     const std::optional<Window> open = windowOf(window);
     UIViewController *top = ((__bridge UIWindow *)(open ? open->native() : appWindow())).rootViewController;
     while (top.presentedViewController) top = top.presentedViewController;
     if (!top || top.isBeingDismissed) return false;
-    [top presentViewController:controller animated:YES completion:nil];
+    [top presentViewController:controller animated:YES completion:presented];
     return true;
 }
 
@@ -139,18 +140,19 @@ void showMessageDialog(uint64_t window, MessageOptions options, std::function<vo
           [alert addAction:action];
           if (i == 0) alert.preferredAction = action;
       }
-      if (!presentOnTop(alert, window)) {
-          answer->give(NO_BUTTON);
-          return;
-      }
+      // It closes once it shows, as a dismissal during its presentation does not take, and from what presents it, which
+      // takes what shows over it too: a dialog of the page's, over it, goes with the page.
       __weak UIAlertController *shown = alert;
-      if (options.closer) {
-          options.closer->shown([shown] {
-              dispatch_async(dispatch_get_main_queue(), ^{
-                [shown dismissViewControllerAnimated:NO completion:nil];
-              });
-          });
-      }
+      const std::shared_ptr<Closer> closer = options.closer;
+      void (^presented)(void) = ^{
+        if (!closer) return;
+        closer->shown([shown] {
+            dispatch_async(dispatch_get_main_queue(), ^{
+              [shown.presentingViewController dismissViewControllerAnimated:NO completion:nil];
+            });
+        });
+      };
+      if (!presentOnTop(alert, window, presented)) answer->give(NO_BUTTON);
     });
 }
 
