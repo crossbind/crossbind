@@ -648,7 +648,7 @@
                 "literal": "## TypeScript: `.d.ts` is generated for your imports"
             },
             {
-                "claim": "Sets `dts: 'promise'`, as a browser's calls run in a worker and return promises",
+                "claim": "Makes the types match how the calls run: `dts: 'promise'` with the browser's default worker, or `useWorker: false` with the default synchronous types",
                 "doc": "docs/api/lifecycle-and-types.md",
                 "literal": "set `dts: 'promise'`"
             }

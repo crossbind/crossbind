@@ -962,7 +962,7 @@
                 "literal": "A function or class no import reaches is left out, and so is the library code only it reaches"
             },
             {
-                "claim": "Does not advise switching `-O3` to `-Os`, `-Oz` or `-O2` to shrink the file",
+                "claim": "Keeps `-O3` rather than switching to `-Os`, `-Oz` or `-O2` to shrink the file",
                 "doc": "docs/api/performance.md",
                 "literal": "Don't switch to `-O2` or `-Os` thinking you'll get a smaller binary"
             }
@@ -1211,16 +1211,16 @@
         ],
         "fixture": "empty",
         "trigger": "must",
-        "expect": "object",
+        "expect": "do",
         "route": [
             "references/api/app.md",
             "references/api/extensions.md"
         ],
         "facts": [
             {
-                "claim": "Says a crossbind app's page ships inside the app, built with Vite from source the developer has, so a site without its source cannot be the app's page",
+                "claim": "Keeps the app's own page a Vite page the app carries and opens example.com from it as an origin `app.navigation.load` lists",
                 "doc": "docs/api/app.md",
-                "literal": "what Vite built, served at crossbind://app/"
+                "literal": "the origins `app.navigation.load` lists"
             },
             {
                 "claim": "Says a page of another origin, even one the app lets load, reaches neither the app's functions nor its native module",
@@ -1253,6 +1253,11 @@
                 "claim": "Says the app's page runs from files the app carries, with no Node.js in the app to render it on a server",
                 "doc": "docs/api/app.md",
                 "literal": "Node.js and no browser engine of its own"
+            },
+            {
+                "claim": "Names both ways: a client-rendered Vite page in the app, for native code, or the deployed site opened from the app's own page through `app.navigation.load`, with none of the app's native functions",
+                "doc": "docs/api/app.md",
+                "literal": "the origins `app.navigation.load` lists"
             }
         ],
         "split": "train"
