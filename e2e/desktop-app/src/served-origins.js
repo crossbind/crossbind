@@ -13,16 +13,20 @@ const ENDED = 'e2e-ended';
 const POSTED = 'e2e-posted';
 const SLOW = 'e2e-slow';
 const WAIT = 'e2e-wait';
+const SOON = 'e2e-soon';
 const FRAME_PAGE = 'frame-probe.html';
 const NO_ROLE_PAGE = 'no-role.html';
 const PAGE_API_PAGE = 'page-api.html';
 const WAIT_PAGE = 'page-wait.html';
+const SOON_PAGE = 'page-soon.html';
 // What the project's origin is labelled with, which its pages' dialogs show: but at the stage again, served without one.
 const PROJECT_LABEL = 'Öffnen e2e project';
 // crossbind/app as a served origin's page imports it, which the host answers from the app's own files.
 const PAGE_API = '/__crossbind/app.js';
-// The message dialog page-api.html shows as its origin ends, which closes with it.
+// The message dialog page-api.html shows as its origin ends, which closes with it, and the one page-soon.html asks as
+// its origin ends, which closes as it shows.
 const ENDED_MESSAGE = "crossbind e2e: a project's dialog its end closes";
+const SOON_MESSAGE = "crossbind e2e: a project's dialog its end reached on its way";
 // The run's endpoint, on the device's own loopback, or where a build for a phone names it, as http://<the Mac's
 // address>:47831, which e2e/endpoint.mjs serves when run alone.
 const ENDPOINT = import.meta.env.VITE_E2E_ENDPOINT || `http://127.0.0.1:${REACH_PORT}`;
@@ -51,6 +55,8 @@ const HOLD_MS = 2000;
 const POSTED_END_MS = 20000;
 // When the origin whose first page the run's endpoint answers late ends, while that page is on its way.
 const SLOW_END_MS = 1000;
+// How long an end's dialogs have had to go, a dialog that was on its way among them, as the app's page looks.
+const GONE_MS = 3000;
 
 const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 // A path of an origin, or of a URL whose path is "/".
@@ -362,7 +368,24 @@ async function checkEndCancelledDialog() {
     show('end-dialog', { cancels });
 }
 
-// 13. An origin that ends while its first page is on its way: the window shows the app's first page again, as for one
+// The project's page that asks a message dialog as its origin ends, public/page-soon.html.
+async function openSoon() {
+    const page = under(await invoke('probe.serveOrigin', { name: SOON, source: SOURCE }), SOON_PAGE);
+    await invoke('probe.setStage', { stage: 'soon' });
+    location.href = page;
+    await sleep(ANSWER_MS);
+    throw new Error(`the window did not open ${page}`);
+}
+
+// 13. A message dialog its origin's end reached on its way closed as it showed: none is left.
+async function checkSoonGone() {
+    await sleep(GONE_MS);
+    const left = await invoke('probe.closeDialog', { message: SOON_MESSAGE });
+    if (left.isShown) throw new Error("a message dialog its origin's end reached on its way was left up");
+    show('end-soon', { left: left.isShown });
+}
+
+// 14. An origin that ends while its first page is on its way: the window shows the app's first page again, as for one
 // that ended once its page showed. Were the page shown, it would say so.
 async function openSlowly() {
     const slow = under(await invoke('probe.serveOrigin', { name: SLOW, source: SOURCE }), '__e2e/slow');
@@ -393,7 +416,8 @@ export async function runServedRoundTrip(isAndroid) {
     if (stage === 'ended') return afterTheEnd(isAndroid, reports).then(() => false);
     if (stage === 'done') return openPageApi(SOURCE).then(() => false);
     if (stage === 'page-api-done') return checkEndClosedMessage(reports).then(openWait).then(() => false);
-    if (stage === 'wait-done') return checkEndCancelledDialog().then(openSlowly).then(() => false);
+    if (stage === 'wait-done') return checkEndCancelledDialog().then(openSoon).then(() => false);
+    if (stage === 'soon-done') return checkSoonGone().then(openSlowly).then(() => false);
     if (stage === 'first-load') return afterFirstLoad(reports);
     throw new Error(`the app's page opened at ${location.href} at the stage ${stage}${stage === 'refused' ? ", which the project's page navigated to" : ''}`);
 }
@@ -405,6 +429,19 @@ export async function runPageApiTrip() {
     if (stage === 'start') return openPageApi(location.origin).then(() => false);
     if (stage === 'page-api-done') return invoke('probe.reports');
     throw new Error(`the app's page opened at ${location.href} at the stage ${stage}`);
+}
+
+// macOS and iOS, with the probe's dialog of the window standing for another holder's: a message dialog whose call is
+// cancelled goes, asked behind the other or shown under it, and never shows later; and of two message dialogs the
+// second is refused, so no two are up together.
+function checkAnother(another) {
+    if (!another?.behindAnswer?.includes('AbortError') || another.behind !== false || another.other !== true || another.behindLater !== false) {
+        throw new Error(`a message dialog cancelled as it was asked behind another dialog of its window showed: ${JSON.stringify(another)}`);
+    }
+    if (!another.second?.includes('another dialog is open')) throw new Error(`a second message dialog was not refused: ${another.second}`);
+    if (another.underShown !== 'shown' || !another.underAnswer?.includes('AbortError') || another.under !== false) {
+        throw new Error(`a message dialog cancelled under another dialog of its window stayed: ${JSON.stringify(another)}`);
+    }
 }
 
 // What public/page-api.html got from PAGE_API, which the host answers, so the origin's handler never got it: the names of
@@ -426,6 +463,7 @@ export async function checkPageApi({ pageApi: got }) {
     if (['windows', 'linux'].includes(device.platform) && got.closed.title !== PROJECT_LABEL) {
         throw new Error(`the project's message dialog is titled ${got.closed.title}, not its origin's label ${PROJECT_LABEL}`);
     }
+    if (['macos', 'ios'].includes(device.platform)) checkAnother(got.another);
     const handled = await invoke('probe.handled', { name: PROJECT, path: PAGE_API });
     if (handled !== 0) throw new Error(`the handler of ${PROJECT} got ${PAGE_API} ${handled} times`);
     show('page-api', { ...got, names: got.names.length, handled });

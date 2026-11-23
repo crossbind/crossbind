@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>page soon</title>
+</head>
+<body>
+<script>
+// A page of a project's origin, which src/served-origins.js opens there once page-wait.html's end cancelled its alert():
+// it asks a message dialog and ends its origin with no wait between them, so the end comes as the dialog is on its way,
+// which closes then as it shows.
+(async () => {
+    const SOON = "crossbind e2e: a project's dialog its end reached on its way";
+    const name = location.hostname.split('.')[0];
+    try {
+        const api = await import('/__crossbind/app.js');
+        await api.invoke('probe.setStage', { stage: 'soon-done' });
+        api.dialog.message({ message: SOON }).catch(() => {});
+        api.invoke('probe.endOrigin', { name }).catch(() => {});
+    } catch (error) {
+        console.error(`CONFORMANCE ERR: ${location.origin}: page-soon.html could not end its origin: ${error?.name ?? 'Error'}: ${error?.message ?? error}`);
+    }
+})();
+</script>
+</body>
+</html>

@@ -8,11 +8,11 @@ namespace {
 
 NSString *ns(const std::string &text) { return [NSString stringWithUTF8String:text.c_str()] ?: @""; }
 
-// Over what the page's window shows on top, if it shows anything.
-void presentOnTop(UIViewController *controller, const PageDialog &dialog) {
+// Over what the page's window shows on top, if it shows anything, with presented run once it shows.
+void presentOnTop(UIViewController *controller, const PageDialog &dialog, void (^presented)(void)) {
     UIViewController *top = ((__bridge UIWindow *)windowOf(dialog)).rootViewController;
     while (top.presentedViewController) top = top.presentedViewController;
-    if (top && !top.isBeingDismissed) [top presentViewController:controller animated:YES completion:nil];
+    if (top && !top.isBeingDismissed) [top presentViewController:controller animated:YES completion:presented];
 }
 
 }  // namespace
@@ -33,10 +33,13 @@ void showPageDialog(PageDialog dialog) {
     [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:^(UIAlertAction *) {
                dialog.accept(kind == PageDialog::Kind::prompt ? (shown.textFields.firstObject.text.UTF8String ?: "") : "");
            }]];
-    presentOnTop(alert, dialog);
-    dialog.onCancel([shown] {
-        dispatch_async(dispatch_get_main_queue(), ^{
-          [shown dismissViewControllerAnimated:NO completion:nil];
-        });
+    // It closes once it shows, as a dismissal during its presentation does not take, and from what presents it, which
+    // takes what shows over it too, as the dialog extension's does.
+    presentOnTop(alert, dialog, ^{
+      dialog.onCancel([shown] {
+          dispatch_async(dispatch_get_main_queue(), ^{
+            [shown.presentingViewController dismissViewControllerAnimated:NO completion:nil];
+          });
+      });
     });
 }
