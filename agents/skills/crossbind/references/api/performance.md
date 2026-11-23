@@ -196,6 +196,8 @@ Already optimal for Wasm. Removing it removes a free 2-4× speedup on supported 
 
 `-O3 + bundler-side dead code elimination` already produces smaller binaries than `-Os` for typical apps. Measure before assuming. crossbind's plugins also strip debug symbols / dwarf data in release.
 
+`-Oz` does no better: on the GDAL demo it took 1.5% off the wasm and 0.1% off what brotli sends, since the ports come compiled and `-Oz` reaches only the link.
+
 To make a binary smaller, bind less. A dependency's header binds only the functions the app imports from it and the classes those reach, and the library code only the rest reaches is left out; `import * as` binds the whole header. Import the names the app calls ([`cpp-binding-rules.md`](./cpp-binding-rules.md), rule 9).
 
 ### "I'll disable `ALLOW_MEMORY_GROWTH` for predictable allocation"
