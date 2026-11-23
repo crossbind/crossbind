@@ -49,7 +49,7 @@
     {
       "source": "docs/api/crossbind-config.md",
       "output": "api/crossbind-config.md",
-      "sha256": "dc4ee2356c9b0cee7b644d9cca4b1586346e6005b17cfce8d5a0559aea169c9e"
+      "sha256": "0d680200e62398e8141616b39088a7139678133fe9bfb81235557cb64ef4ab12"
     },
     {
       "source": "docs/api/extensions.md",
@@ -114,7 +114,7 @@
     {
       "source": "docs/api/wasi.md",
       "output": "api/wasi.md",
-      "sha256": "4ad093af70c42d11039420206d33c1ea2e326feff6ed18caccb78b33d5933767"
+      "sha256": "bd15519d4910097d7e477ac266ec6efc2b2fc43100700b69f5b9c0a6838a2de6"
     },
     {
       "source": "docs/playbooks/integration/README.md",

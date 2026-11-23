@@ -3,6 +3,15 @@
     "version": "0.0.0",
     "private": true,
     "description": "Dependency-free WASI command playground: one main.cpp compiled to a single .wasm and executed under wasmtime.",
+    "bin": {
+        "e2e-cli-wasi": "bin/e2e-cli-wasi.mjs"
+    },
+    "files": [
+        "bin/",
+        "dist/prebuilt/*/bin/*",
+        "dist/prebuilt/*/crossbind-bin.json",
+        "crossbind.config.mjs"
+    ],
     "scripts": {
         "build": "crossbind build -p wasi -e wasi -b release",
         "e2e:prod": "node e2e/run.mjs",

@@ -259,7 +259,8 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | Property lists: XML for an Info.plist, the text form for a project.pbxproj | `src/utils/plist.js` |
 | App options: the name an app shows and its desktop window from `crossbind.config.js`, as the header a desktop host compiles; its URL schemes with their owners, the app's and its extensions'; and the options of the host's own extensions, as the instance's where it keeps one and the updater's `app.updater` | `src/utils/appOptions.js` |
 | App icon: each platform's icon files from the PNG `app.icon` names | `src/utils/appIcon.js` |
-| wasi bin command runner (npm shims import this) | `src/runtime/wasiRun.mjs` |
+| wasi bin command runner (npm shims import this; an app's as `crossbind/wasi-run`) | `src/runtime/wasiRun.mjs` |
+| An app's own wasi command on npm: the `bin` map of `crossbind.config.js` laid out as a port's tools, with its stub | `src/actions/publishBinary.js` (`publishWasiBin`) |
 
 ## Plugins (`plugins/`)
 

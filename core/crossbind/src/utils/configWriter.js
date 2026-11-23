@@ -1,9 +1,7 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import { parseAst } from 'rollup/parseAst';
+import { configFileOf } from './configFile.js';
 
-// The kinds of crossbind.config whose default export can be an object literal to write into.
-const CONFIG_EXTENSIONS = ['js', 'mjs', 'cjs'];
 const DEFAULT_INDENT = '    ';
 
 const indentOf = (source, at) => source.slice(source.lastIndexOf('\n', at - 1) + 1).match(/^[ \t]*/)[0];
@@ -142,9 +140,6 @@ export function withExtension(source, specifier, name) {
     const changed = edits.sort((a, b) => b.at - a.at).reduce((text, edit) => insert(text, edit.at, edit.text), source);
     return { source: changed, identifier, isListed: false };
 }
-
-export const configFileOf = (project) => CONFIG_EXTENSIONS.map((extension) => path.join(project, `crossbind.config.${extension}`))
-    .find((candidate) => fs.existsSync(candidate));
 
 // Writes the extension a module gives into the project's crossbind.config, and says under which name and whether the
 // config listed it already, or null where it could not: a config the change would leave unreadable stays as it is.

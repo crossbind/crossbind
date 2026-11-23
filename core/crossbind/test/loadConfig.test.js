@@ -54,6 +54,12 @@ describe('excludedDependencies', () => {
         expect(() => fill({ ...appTree(), licenses: { sourceTag: 3 } })).toThrow('"licenses.sourceTag" must be a string');
     });
 
+    test("keeps the bin map an app's config gives, which its command's npm package is made from", () => {
+        const bin = { tools: { wordfreq: { kind: 'binary', publish: true } } };
+        expect(fill({ ...appTree(), bin }).bin).toEqual(bin);
+        expect(fill(appTree()).bin).toBeUndefined();
+    });
+
     test('keeps every dependency when no exclude is given', () => {
         expect(depNames(fill(appTree()))).toEqual(['geotiff', 'jpeg', 'tiff', 'z']);
     });

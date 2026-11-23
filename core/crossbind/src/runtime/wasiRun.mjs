@@ -6,6 +6,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { TARGETS, targetPathOf, filterTargetSpecs } from '../utils/targets.js';
+import { configFileOf } from '../utils/configFile.js';
 
 const DATA_ROOT = '/data';
 const FORWARDED_ENV = /^(GDAL_|PROJ_|CPL_|OGR_|VSI|CURL_|SSL_)/;
@@ -48,7 +49,12 @@ export async function run(stubUrl, tool) {
         process.exit(127);
     }
 
-    const config = (await import(pathToFileURL(join(pkgDir, 'crossbind.config.js')).href)).default;
+    const configFile = configFileOf(pkgDir);
+    if (!configFile) {
+        console.error(`${tool}-wasi: no crossbind.config.js, .mjs or .cjs in ${pkgDir} - the package has to ship its crossbind config.`);
+        process.exit(1);
+    }
+    const config = (await import(pathToFileURL(configFile).href)).default;
     const wasiTargets = TARGETS.filter((candidate) => candidate.platform === 'wasi');
     const target = wasiTargets.find((candidate) => existsSync(join(pkgDir, config.paths?.output ?? 'dist', 'prebuilt', targetPathOf(candidate))))
         ?? wasiTargets[0];
