@@ -464,8 +464,9 @@ async function checkPageRequests() {
     if (!confirm('confirm') || confirm('cancel')) throw new Error("confirm() did not give page-dialogs' answers");
     const text = 'Öffnen 😀';
     const prompted = JSON.parse(prompt(`prompt ${text}`, `default ${text}`) ?? 'null');
-    if (prompted?.message !== `prompt ${text}` || prompted.defaultText !== `default ${text}`) {
-        throw new Error(`prompt() gave ${JSON.stringify(prompted)}, not what page-dialogs was asked`);
+    const { appName } = await invoke('probe.label');
+    if (prompted?.message !== `prompt ${text}` || prompted.defaultText !== `default ${text}` || prompted.label !== appName) {
+        throw new Error(`prompt() gave ${JSON.stringify(prompted)}, not what page-dialogs was asked with the app's name`);
     }
     if (prompt('cancel') !== null) throw new Error('a prompt() that page-dialogs cancelled gave a text');
     const code = await new Promise((resolve) => {

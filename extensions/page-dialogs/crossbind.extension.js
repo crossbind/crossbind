@@ -1,7 +1,7 @@
 export default function pageDialogs() {
     return {
         name: 'page-dialogs',
-        contract: 1,
+        contract: 4,
         root: import.meta.dirname,
         app: {
             macos: { sources: ['native/dialogs.cpp', 'native/darwin.mm'] },

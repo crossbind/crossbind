@@ -37,6 +37,8 @@ void showMessageDialog(uint64_t, MessageOptions options, std::function<void(int)
             if (failure) std::fprintf(stderr, "%s\n", failure->c_str());
             done(failure ? NO_BUTTON : static_cast<int>(result.asNumber()));
         });
+    // After the message, on the UI thread, which takes them in turn.
+    if (options.closer) options.closer->shown([] { android::callJava("dialog", "closeMessage", {}, [](std::optional<std::string>, Value) {}); });
 }
 
 }  // namespace crossbind::dialog

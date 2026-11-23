@@ -139,7 +139,18 @@ void showMessageDialog(uint64_t window, MessageOptions options, std::function<vo
           [alert addAction:action];
           if (i == 0) alert.preferredAction = action;
       }
-      if (!presentOnTop(alert, window)) answer->give(NO_BUTTON);
+      if (!presentOnTop(alert, window)) {
+          answer->give(NO_BUTTON);
+          return;
+      }
+      __weak UIAlertController *shown = alert;
+      if (options.closer) {
+          options.closer->shown([shown] {
+              dispatch_async(dispatch_get_main_queue(), ^{
+                [shown dismissViewControllerAnimated:NO completion:nil];
+              });
+          });
+      }
     });
 }
 

@@ -55,13 +55,15 @@ std::string errorReply(const std::string &message, const std::string &name = "Er
 // Text as UTF-8, with U+FFFD in place of each run of bytes that makes no character, as every webview would read it.
 std::string validUtf8(const std::string &text);
 // A call of the page's to one of the app's functions: its answer, with how many of its messages went before it, and,
-// where the page takes them, its messages, each from any thread; and the page that made it, in its window, and its role.
+// where the page takes them, its messages, each from any thread; and the page that made it, in its window, its role and
+// its label.
 struct PageCall {
     std::function<void(Failure, Value, double sent)> answer;
     std::function<void(Value)> message;
     uint64_t page = 0;
     uint64_t window = 0;
     std::string role;
+    std::string label;
 };
 // Whether text is a name a served origin or a role takes: lowercase letters and digits, which dashes may join but not
 // start or end, 63 at most, as a host's label is.
@@ -79,19 +81,21 @@ std::string servedNameOf(const std::string &origin);
 std::string nameOfHost(const std::string &host);
 // Whether a request's host is the app's own: app, Android's, or none for an Android page's port.
 bool isAppHost(const std::string &host);
-// A served origin's role and its handler, while it is served.
+// A served origin's role, its handler and its label, while it is served.
 struct ServedOrigin {
     std::string role;
     std::function<void(Request)> handler;
+    std::string label;
 };
 std::optional<ServedOrigin> servedOrigin(const std::string &name);
 // The names of the origins served now.
 std::vector<std::string> servedNames();
 // The origin a page of this URL is of, "app" for the app's own, the name of an origin served now, or "" for another,
-// with its role, "app", the served origin's, or "".
+// with its role, "app", the served origin's, or "", and the label serveOrigin() gave a served one.
 struct PageOrigin {
     std::string origin;
     std::string role;
+    std::string label;
 };
 PageOrigin pageOriginOf(const std::string &url);
 // Whether the app's extensions have all started, which serveOrigin() and invoke() wait for.
@@ -101,6 +105,9 @@ bool hasStarted();
 void answerOriginRequest(const std::string &name, std::function<void(Request)> handler, SchemeRequest request, SchemeRespond respond);
 // The running module cancels each call that waits for its answer of a page of an origin that ended; from any thread.
 void endCallsOf(const std::string &name);
+// The page of this id went, as its origin ended, another page replaced it or its window closed: each dialog of it that
+// waits for its answer answers as cancelled, and its holder hears of it. On the module's thread.
+void pageGone(uint64_t page);
 // Ends the origin of this name that this serveOrigin() of it made, once, from any thread: its pages' calls are cancelled
 // and refused from then on, its windows show the app's first page, and its requests get 404.
 void endOrigin(const std::string &name, uint64_t generation);
@@ -329,9 +336,10 @@ private:
     // cancel. A new page counts anew, and what the one before passed reaches no page.
     struct Channel {
         long long page = 0;
-        // The origin of the page, "app", a served origin's name or "", and its role.
+        // The origin of the page, "app", a served origin's name or "", its role and its label.
         std::string origin;
         std::string role;
+        std::string label;
         std::unordered_map<long long, std::pair<std::weak_ptr<PageFunction>, jsi::WeakObject>> pageFunctions;
         std::unordered_map<long long, OpenCall> openCalls;
         std::unordered_set<long long> cancelledEarly;

@@ -6,8 +6,8 @@ It comes with `@crossbind/core-app-host`: there is nothing to install or list.
 
 ## What it does
 
-The page's `alert()`, `confirm()` and `prompt()` show as the system's own dialogs, under the app's name, and the page
-waits for their answer, as in a browser.
+The page's `alert()`, `confirm()` and `prompt()` show as the system's own dialogs, under the app's name, or for a page
+of an origin an extension serves under that origin's label, and the page waits for their answer, as in a browser.
 
 ## Platforms
 

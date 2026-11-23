@@ -49,11 +49,18 @@ BOOL CALLBACK findDialog(HWND window, LPARAM found) {
 
 // The dialog's modal loop runs in a task of the UI thread's, which holds the next one, so the close goes from here, as
 // Escape closes it.
-void closeMessageDialog(const std::string &, std::function<void(bool)> done) {
+void closeMessageDialog(const std::string &, std::function<void(bool, const std::string &)> done) {
     HWND dialog = nullptr;
     EnumWindows(findDialog, reinterpret_cast<LPARAM>(&dialog));
-    if (dialog) PostMessageW(dialog, WM_CLOSE, 0, 0);
-    done(dialog != nullptr);
+    wchar_t title[256] = {};
+    if (dialog) {
+        GetWindowTextW(dialog, title, 256);
+        PostMessageW(dialog, WM_CLOSE, 0, 0);
+    }
+    std::string text(static_cast<size_t>(WideCharToMultiByte(CP_UTF8, 0, title, -1, nullptr, 0, nullptr, nullptr)), '\0');
+    WideCharToMultiByte(CP_UTF8, 0, title, -1, text.data(), static_cast<int>(text.size()), nullptr, nullptr);
+    text.resize(text.empty() ? 0 : text.size() - 1);
+    done(dialog != nullptr, text);
 }
 
 void probePlatform(crossbind::Registry &registry) {

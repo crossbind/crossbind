@@ -1,3 +1,6 @@
+import served from './extensions/served/crossbind.extension.js';
+import { SERVED } from './e2e/steps.mjs';
+
 export default {
     general: {
         name: 'crossbind-e2e-app-page-requests',
@@ -11,6 +14,7 @@ export default {
         // e2e/run.mjs opens the app from its folder, which an installer would only add to.
         installers: [],
     },
+    extensions: [served({ label: SERVED.label })],
     paths: {
         config: import.meta.url,
         base: '../..',

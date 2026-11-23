@@ -11,11 +11,17 @@ const PROJECT = 'e2e-project';
 const OTHER = 'e2e-other';
 const ENDED = 'e2e-ended';
 const POSTED = 'e2e-posted';
+const WAIT = 'e2e-wait';
 const FRAME_PAGE = 'frame-probe.html';
 const NO_ROLE_PAGE = 'no-role.html';
 const PAGE_API_PAGE = 'page-api.html';
+const WAIT_PAGE = 'page-wait.html';
+// What the project's origin is labelled with, which its pages' dialogs show: but at the stage again, served without one.
+const PROJECT_LABEL = 'Öffnen e2e project';
 // crossbind/app as a served origin's page imports it, which the host answers from the app's own files.
 const PAGE_API = '/__crossbind/app.js';
+// The message dialog page-api.html shows as its origin ends, which closes with it.
+const ENDED_MESSAGE = "crossbind e2e: a project's dialog its end closes";
 // The run's endpoint, on the device's own loopback, or where a build for a phone names it, as http://<the Mac's
 // address>:47831, which e2e/endpoint.mjs serves when run alone.
 const ENDPOINT = import.meta.env.VITE_E2E_ENDPOINT || `http://127.0.0.1:${REACH_PORT}`;
@@ -210,6 +216,14 @@ async function checkTokens(isAndroid, otherUrl, token, owner) {
     show(`tokens-${owner}`, checked);
 }
 
+// The label of the page that calls, which its dialogs are titled with, against what it should be: the app's name where none
+// is given.
+async function checkLabel(wanted) {
+    const { label, appName } = await invoke('probe.label');
+    if (label !== (wanted ?? appName)) throw new Error(`a page of ${location.origin} is labelled ${label}, not ${wanted ?? appName}`);
+    return label;
+}
+
 // The host takes no request of another origin's: on Windows the filter that hands it http://<name>.localhost's matches
 // over the whole URL, as this one's query.
 async function checkOtherRequests() {
@@ -236,6 +250,7 @@ const noRolePage = (app, served) => `${SOURCE}/${NO_ROLE_PAGE}?app=${encodeURICo
 async function start(isAndroid) {
     const otherUrl = await invoke('probe.serveOrigin', { name: OTHER, source: SOURCE });
     checkRefusals(await invoke('probe.refusedOrigins', { served: OTHER }));
+    show('label', { app: await checkLabel() });
     await checkFetch();
     await checkFetchBody();
     if (isWebView2()) await checkOtherRequests();
@@ -269,7 +284,7 @@ async function afterNoRole(reports) {
     if (unheard.length > 0) throw new Error(`page-navigation did not hear the app's page's POST of ${unheard.join(' and ')} with the role app`);
     const heard = asked.filter(({ url }) => url.includes('no-role')).map(({ url, role }) => ({ url, role }));
     show('no-role', { back: location.href, heard });
-    const project = await invoke('probe.serveOrigin', { name: PROJECT, source: SOURCE });
+    const project = await invoke('probe.serveOrigin', { name: PROJECT, source: SOURCE, label: PROJECT_LABEL });
     await invoke('probe.setStage', { stage: 'project' });
     if (isWebView2()) holdUpReplies();
     location.href = project;
@@ -308,11 +323,40 @@ async function afterTheEnd(isAndroid, reports) {
 // The project's page that imports crossbind/app from PAGE_API, public/page-api.html, from source: the run's endpoint, or
 // a development session's dev server. It reports what it got, and ends the origin, which brings the app's page back.
 async function openPageApi(source) {
-    const page = under(await invoke('probe.serveOrigin', { name: PROJECT, source }), PAGE_API_PAGE);
+    const page = under(await invoke('probe.serveOrigin', { name: PROJECT, source, label: PROJECT_LABEL }), PAGE_API_PAGE);
     await invoke('probe.setStage', { stage: 'page-api' });
     location.href = page;
     await sleep(ANSWER_MS);
     throw new Error(`the window did not open ${page}`);
+}
+
+// 11. A project's message dialog held its window alone, which Windows' task dialog holds with the window's thread, as
+// page-api.html found while it waited, and the project's end closed it: it waits for no page that went.
+async function checkEndClosedMessage({ pageApi }) {
+    if (device.platform !== 'windows' && !String(pageApi?.mainThread).startsWith('answered')) {
+        throw new Error(`a project's message dialog held the app's main thread: ${pageApi?.mainThread}`);
+    }
+    await sleep(QUIET_MS);
+    const left = await invoke('probe.closeDialog', { message: ENDED_MESSAGE });
+    if (left.isShown) throw new Error("the project's end left its message dialog up");
+    show('end-message', { mainThread: pageApi.mainThread, left: left.isShown });
+}
+
+// The project's page that leaves its own dialog open as its origin ends, public/page-wait.html.
+async function openWait() {
+    const page = under(await invoke('probe.serveOrigin', { name: WAIT, source: SOURCE }), WAIT_PAGE);
+    await invoke('probe.setStage', { stage: 'wait' });
+    location.href = page;
+    await sleep(ANSWER_MS);
+    throw new Error(`the window did not open ${page}`);
+}
+
+// 12. The end of page-wait.html's origin answered its alert() as cancelled, which its holder of page-dialogs heard once:
+// no page's dialog waits for a page that went.
+async function checkEndCancelledDialog() {
+    const cancels = await invoke('page-dialogs.cancels');
+    if (cancels !== 1) throw new Error(`the holder of page-dialogs heard ${cancels} of a project's page's dialogs answer as cancelled as it went, not 1`);
+    show('end-dialog', { cancels });
 }
 
 // The app's page at the stage the round trip reached: false once it sent the window elsewhere, else what the project's
@@ -328,7 +372,8 @@ export async function runServedRoundTrip(isAndroid) {
     if (stage === 'no-role') return afterNoRole(reports).then(() => false);
     if (stage === 'ended') return afterTheEnd(isAndroid, reports).then(() => false);
     if (stage === 'done') return openPageApi(SOURCE).then(() => false);
-    if (stage === 'page-api-done') return reports;
+    if (stage === 'page-api-done') return checkEndClosedMessage(reports).then(openWait).then(() => false);
+    if (stage === 'wait-done') return checkEndCancelledDialog().then(() => reports);
     throw new Error(`the app's page opened at ${location.href} at the stage ${stage}${stage === 'refused' ? ", which the project's page navigated to" : ''}`);
 }
 
@@ -353,7 +398,13 @@ export async function checkPageApi({ pageApi: got }) {
     if (got.role !== 'project' || !got.paths?.includes(refusal)) throw new Error(`app.paths of ${PAGE_API} in a page of the role ${got.role} got ${got.paths}`);
     if (!got.pathsAfter?.includes(refusal)) throw new Error(`app.paths of ${PAGE_API}, once a web build's crossbind.js took globalThis.Crossbind, got ${got.pathsAfter}`);
     if (got.dialog !== 'shown') throw new Error(`dialog.message of a project's page answered at once: ${got.dialog}`);
-    if (got.closed !== true || !/^answered \d+$/.test(got.dialogClosed)) throw new Error(`no message dialog of the project's page was there to close: ${got.closed}, ${got.dialogClosed}`);
+    if (got.closed?.isShown !== true || !/^answered \d+$/.test(got.dialogClosed)) {
+        throw new Error(`no message dialog of the project's page was there to close: ${JSON.stringify(got.closed)}, ${got.dialogClosed}`);
+    }
+    // Windows and Linux title a message dialog's window, with the label of the page that shows it.
+    if (['windows', 'linux'].includes(device.platform) && got.closed.title !== PROJECT_LABEL) {
+        throw new Error(`the project's message dialog is titled ${got.closed.title}, not its origin's label ${PROJECT_LABEL}`);
+    }
     const handled = await invoke('probe.handled', { name: PROJECT, path: PAGE_API });
     if (handled !== 0) throw new Error(`the handler of ${PROJECT} got ${PAGE_API} ${handled} times`);
     show('page-api', { ...got, names: got.names.length, handled });
@@ -365,6 +416,7 @@ export function checkServedReports(reports, features) {
     if (mark !== 'kept') throw new Error(`the project's origin, served again, did not find its storage: ${JSON.stringify(reports.again)}`);
     if (!waited?.includes('AbortError') || !waited.includes('probe.projectWait was cancelled')) throw new Error(`the project's open call ended as ${waited}, as its origin ended`);
     if (!after?.includes(`the origin ${PROJECT} has ended`)) throw new Error(`the project's call after its origin ended got ${after}`);
+    if (reports.again.label !== reports.again.appName) throw new Error(`the project's origin served without a label labels its page ${reports.again.label}, not the app's name`);
     const ratio = reports.projectLoop / features['js-loop'].best;
     show('loop', { project: reports.projectLoop, app: features['js-loop'].best, ratio: Math.round(ratio * 100) / 100 });
     if (!(ratio < MAX_LOOP_RATIO)) throw new Error(`the project's page ran the loop ${ratio.toFixed(1)} times as long as the app's own`);
@@ -550,15 +602,17 @@ async function projectStage(m, isAndroid) {
     await checkNavigation(app);
     await checkProxy();
     if (isAndroid && device.isVirtual) checkPlainHttp(got);
+    show('label', { project: await checkLabel(PROJECT_LABEL) });
     const prompted = JSON.parse(prompt('role', '') ?? 'null');
-    if (prompted?.role !== 'project') throw new Error(`page-dialogs heard a project's prompt() as ${JSON.stringify(prompted)}`);
+    if (prompted?.role !== 'project' || prompted.label !== PROJECT_LABEL) throw new Error(`page-dialogs heard a project's prompt() as ${JSON.stringify(prompted)}`);
     localStorage.setItem('e2e-mark', 'kept');
     await endFromWithin();
 }
 
 // The project's origin served again finds what its page kept, and ends once more.
 async function againStage() {
-    const again = { mark: localStorage.getItem('e2e-mark'), waited: localStorage.getItem('e2e-waited'), after: localStorage.getItem('e2e-after') };
+    const again = { mark: localStorage.getItem('e2e-mark'), waited: localStorage.getItem('e2e-waited'), after: localStorage.getItem('e2e-after'),
+        ...await invoke('probe.label') };
     await invoke('probe.report', { key: 'again', value: again });
     await invoke('probe.setStage', { stage: 'done' });
     await invoke('probe.endOrigin', { name: PROJECT }).catch(() => {});

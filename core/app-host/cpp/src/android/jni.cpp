@@ -334,7 +334,7 @@ extern "C" JNIEXPORT jobjectArray JNICALL Java_dev_crossbind_app_CrossbindActivi
         answerHttpAuthentication = env->GetStaticMethodID(type, "answerHttpAuthentication", "(I[B[B)V");
         answerDownload = env->GetStaticMethodID(type, "answerDownload", "(II[B)V");
         stopDownload = env->GetStaticMethodID(type, "stopDownload", "(I)V");
-        serveOriginMethod = env->GetStaticMethodID(type, "serveOrigin", "([B[B[B[B)V");
+        serveOriginMethod = env->GetStaticMethodID(type, "serveOrigin", "([B[B[B[B[B)V");
         endOriginMethod = env->GetStaticMethodID(type, "endOrigin", "([B)V");
         fetchClass = static_cast<jclass>(env->NewGlobalRef(env->FindClass("dev/crossbind/app/HostFetch")));
         fetchMethod = env->GetStaticMethodID(fetchClass, "fetch", "(I[B[B[[B[BIIZ)V");
@@ -483,8 +483,10 @@ void crossbind::app::originServed(const std::string &name) {
     jbyteArray named = bytesOf(env, name);
     jbyteArray role = bytesOf(env, served->role);
     jbyteArray token = bytesOf(env, core->tokenOf(0, name));
-    env->CallStaticVoidMethod(activityClass, serveOriginMethod, origin, named, role, token);
+    jbyteArray label = bytesOf(env, served->label);
+    env->CallStaticVoidMethod(activityClass, serveOriginMethod, origin, named, role, token, label);
     clearException(env);
+    env->DeleteLocalRef(label);
     env->DeleteLocalRef(token);
     env->DeleteLocalRef(role);
     env->DeleteLocalRef(named);

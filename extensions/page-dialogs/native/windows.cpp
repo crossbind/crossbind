@@ -4,6 +4,8 @@
 #include <commctrl.h>
 
 #include <algorithm>
+#include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
@@ -29,6 +31,33 @@ std::wstring wide(const std::string &text) {
     return out;
 }
 
+// A dialog its page's end closes: its window, once shown, which the message given closes as its Cancel would.
+class Closable {
+public:
+    Closable(UINT message, WPARAM w) : message_(message), w_(w) {}
+    void shown(HWND window) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        window_ = window;
+        if (isClosed_) PostMessageW(window_, message_, w_, 0);
+    }
+    void gone() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        window_ = nullptr;
+    }
+    void close() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        isClosed_ = true;
+        if (window_) PostMessageW(window_, message_, w_, 0);
+    }
+
+private:
+    std::mutex mutex_;
+    UINT message_;
+    WPARAM w_;
+    HWND window_ = nullptr;
+    bool isClosed_ = false;
+};
+
 std::string utf8(const std::wstring &text) {
     const int length = WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
     std::string out(static_cast<size_t>(length), '\0');
@@ -38,7 +67,7 @@ std::string utf8(const std::wstring &text) {
 
 // An alert or a confirm as the system's task dialog, modal to the page's window, as a message box is.
 bool confirmed(const PageDialog &dialog) {
-    const std::wstring title = wide(crossbind::appName());
+    const std::wstring title = wide(dialog.page().label());
     const std::wstring message = wide(dialog.message());
     TASKDIALOGCONFIG config{};
     config.cbSize = sizeof config;
@@ -48,6 +77,15 @@ bool confirmed(const PageDialog &dialog) {
     config.dwCommonButtons = dialog.kind() == PageDialog::Kind::alert ? TDCBF_OK_BUTTON : TDCBF_OK_BUTTON | TDCBF_CANCEL_BUTTON;
     config.pszWindowTitle = title.c_str();
     config.pszContent = message.c_str();
+    auto closable = std::make_shared<Closable>(TDM_CLICK_BUTTON, IDCANCEL);
+    dialog.onCancel([closable] { closable->close(); });
+    config.lpCallbackData = reinterpret_cast<LONG_PTR>(closable.get());
+    config.pfCallback = [](HWND window, UINT notification, WPARAM, LPARAM, LONG_PTR data) -> HRESULT {
+        auto *shown = reinterpret_cast<Closable *>(data);
+        if (notification == TDN_CREATED) shown->shown(window);
+        if (notification == TDN_DESTROYED) shown->gone();
+        return S_OK;
+    };
     int clicked = IDCANCEL;
     return SUCCEEDED(TaskDialogIndirect(&config, &clicked, nullptr, nullptr)) && clicked == IDOK;
 }
@@ -86,8 +124,10 @@ private:
 };
 
 struct Prompt {
+    std::wstring title;
     std::wstring message;
     std::wstring text;
+    std::shared_ptr<Closable> closable;
     bool isAnswered = false;
 };
 
@@ -141,9 +181,10 @@ INT_PTR CALLBACK promptProc(HWND box, UINT message, WPARAM w, LPARAM l) {
     case WM_INITDIALOG:
         SetWindowLongPtrW(box, DWLP_USER, l);
         prompt = reinterpret_cast<Prompt *>(l);
-        SetWindowTextW(box, wide(crossbind::appName()).c_str());
+        SetWindowTextW(box, prompt->title.c_str());
         SetDlgItemTextW(box, MESSAGE_ID, prompt->message.c_str());
         SetDlgItemTextW(box, TEXT_ID, prompt->text.c_str());
+        prompt->closable->shown(box);
         fit(box);
         SendDlgItemMessageW(box, TEXT_ID, EM_SETSEL, 0, -1);
         SetFocus(GetDlgItem(box, TEXT_ID));
@@ -191,8 +232,10 @@ std::optional<std::string> prompted(const PageDialog &dialog) {
     layout.item(ES_AUTOHSCROLL | WS_BORDER | WS_TABSTOP, MARGIN, TEXT_Y, WIDTH - 2 * MARGIN, EDIT_HEIGHT, TEXT_ID, 0x0081, L"");
     layout.item(BS_DEFPUSHBUTTON | WS_TABSTOP, WIDTH - MARGIN - 2 * BUTTON_WIDTH - 4, BUTTONS_Y, BUTTON_WIDTH, BUTTON_HEIGHT, IDOK, 0x0080, L"OK");
     layout.item(BS_PUSHBUTTON | WS_TABSTOP, WIDTH - MARGIN - BUTTON_WIDTH, BUTTONS_Y, BUTTON_WIDTH, BUTTON_HEIGHT, IDCANCEL, 0x0080, L"Cancel");
-    Prompt prompt{wide(dialog.message()), wide(dialog.defaultText())};
+    Prompt prompt{wide(dialog.page().label()), wide(dialog.message()), wide(dialog.defaultText()), std::make_shared<Closable>(WM_COMMAND, IDCANCEL)};
+    dialog.onCancel([closable = prompt.closable] { closable->close(); });
     DialogBoxIndirectParamW(GetModuleHandleW(nullptr), layout.data(), static_cast<HWND>(windowOf(dialog)), promptProc, reinterpret_cast<LPARAM>(&prompt));
+    prompt.closable->gone();
     if (!prompt.isAnswered) return std::nullopt;
     return utf8(prompt.text);
 }

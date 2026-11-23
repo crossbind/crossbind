@@ -8,3 +8,7 @@ export const STEPS = [
     { ask: 'prompt', answer: 'cancel', expected: null },
     { ask: 'alert', answer: 'ok', expected: null },
 ];
+
+// Then the page of an origin the app serves, as a project's, whose alert its label titles; the origin ends while the
+// alert waits, which closes it unanswered, and the app's page comes back.
+export const SERVED = { label: 'crossbind e2e served' };

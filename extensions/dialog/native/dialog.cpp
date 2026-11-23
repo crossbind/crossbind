@@ -89,7 +89,11 @@ void showMessage(uint64_t window, MessageOptions options, std::function<void(int
         throw std::invalid_argument("crossbind: a message dialog takes three buttons at most, each with a label");
     }
     const int last = std::max(static_cast<int>(options.buttons.size()) - 1, 0);
-    showDialog(showMessageDialog, window, std::move(options), [last, done = std::move(done)](int button) { done(button < 0 ? last : button); });
+    const std::shared_ptr<Closer> closer = options.closer;
+    showDialog(showMessageDialog, window, std::move(options), [last, closer, done = std::move(done)](int button) {
+        if (closer) closer->answered();
+        done(button < 0 ? last : button);
+    });
 }
 
 }  // namespace
@@ -111,10 +115,16 @@ void crossbind_extension_dialog(crossbind::Registry &registry) {
                                          filters(options)};
         showFileDialog(showSaveDialog, call.page().windowId(), std::move(save), [call](std::optional<std::string> file) { call.resolve(file ? Value(*file) : Value()); });
     });
-    // A page of a served origin's of the role project shows a message too, which reaches no path of the app's.
+    // A page of a served origin's of the role project shows a message too, which reaches no path of the app's and holds
+    // its own window alone. A dialog whose call is cancelled, as when its page goes, closes.
     registry.function("dialog.message", {"app", "project"}, [](Call call) {
         const Value &options = call.options();
-        showMessage(call.page().windowId(), {options["message"].asString(""), options["detail"].asString(""), kindOf(options["kind"].asString("")), texts(options["buttons"])},
-                    [call](int button) { call.resolve(button); });
+        const crossbind::Page page = call.page();
+        auto closer = std::make_shared<Closer>();
+        call.onCancel([closer] { closer->close(); });
+        showMessage(page.windowId(),
+            {page.label(), options["message"].asString(""), options["detail"].asString(""), kindOf(options["kind"].asString("")), texts(options["buttons"]),
+                !call.isFromPage() || page.role() == "app", closer},
+            [call](int button) { call.resolve(button); });
     });
 }

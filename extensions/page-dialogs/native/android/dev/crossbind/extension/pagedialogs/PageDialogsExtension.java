@@ -10,7 +10,8 @@ import dev.crossbind.app.Extension;
 import dev.crossbind.app.ExtensionHost;
 
 // The host's page-dialogs on Android: the page's alert(), confirm() and prompt() as the system's dialog in the activity,
-// titled with the app's name. A dialog its user dismisses answers as cancelled.
+// titled with its page's label, the app's name for the app's own pages. A dialog its user dismisses answers as cancelled,
+// and one whose page goes first closes.
 public final class PageDialogsExtension implements Extension {
     @Override
     public void call(ExtensionHost host, String function, JSONObject options, Call call) {
@@ -31,12 +32,12 @@ public final class PageDialogsExtension implements Extension {
             field.selectAll();
         }
         AlertDialog.Builder builder = new AlertDialog.Builder(activity)
-                .setTitle(activity.getApplicationInfo().loadLabel(activity.getPackageManager()))
+                .setTitle(dialog.label())
                 .setMessage(dialog.message())
                 .setPositiveButton(android.R.string.ok, (shown, which) -> dialog.accept(field == null ? "" : field.getText().toString()))
                 .setOnCancelListener((shown) -> dialog.cancel());
         if (field != null) builder.setView(field);
         if (dialog.kind() != PageDialog.Kind.ALERT) builder.setNegativeButton(android.R.string.cancel, (shown, which) -> dialog.cancel());
-        builder.show();
+        dialog.onCancel(builder.show()::dismiss);
     }
 }

@@ -14,7 +14,12 @@
 (async () => {
     const QUIET_MS = 3000;
     const ANSWER_MS = 10000;
+    // When the origin ends, from a thread of the probe's, as its message dialog waits, and how long the page waits for
+    // the app's page before it says it did not come.
+    const END_AFTER_MS = 1000;
+    const STAYED_MS = 8000;
     const MESSAGE = "crossbind e2e: a project's dialog";
+    const ENDED = "crossbind e2e: a project's dialog its end closes";
     const name = location.hostname.split('.')[0];
     const failure = (error) => `${error?.name ?? 'Error'}: ${error?.message ?? error}`;
     const answered = (promise) => promise.then((value) => `answered ${JSON.stringify(value)}`, failure);
@@ -36,6 +41,7 @@
         const shown = answered(api.dialog.message({ message: MESSAGE }));
         got.dialog = await within(shown, QUIET_MS, 'shown');
         if (got.dialog === 'shown') {
+            got.mainThread = await within(answered(api.invoke('probe.onMainThread')), QUIET_MS, 'held');
             got.closed = await api.invoke('probe.closeDialog', { message: MESSAGE }).catch(failure);
             got.dialogClosed = await within(shown, ANSWER_MS, 'no answer once closed');
         }
@@ -45,7 +51,9 @@
     try {
         await api.invoke('probe.report', { key: 'pageApi', value: got });
         await api.invoke('probe.setStage', { stage: 'page-api-done' });
-        await api.invoke('probe.endOrigin', { name });
+        setTimeout(() => console.error(`CONFORMANCE ERR: ${location.origin}: the window still shows the project ${STAYED_MS} ms after its origin ended`), STAYED_MS);
+        api.dialog.message({ message: ENDED }).catch(() => {});
+        await api.invoke('probe.endOrigin', { name, afterMs: END_AFTER_MS });
     } catch (error) {
         console.error(`CONFORMANCE ERR: ${location.origin}: /__crossbind/app.js could not tell the app's page what it got, ${failure(error)}: ${JSON.stringify(got)}`);
     }

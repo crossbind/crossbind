@@ -73,8 +73,9 @@ Version 3 added [origins](#origins) an extension serves, the roles of the pages 
 `cleartext`, and changed nothing else: the app's own pages are of the role `app`, which every function and event of an
 extension written for 1 or 2 reaches as before, and one that gives `app.android.cleartext` names 3.
 
-Version 4 added a body to `fetch()`, which takes `POST` and `DELETE` as well, and changed nothing else: `fetch()`
-without a body is as before.
+Version 4 added a body to `fetch()`, which takes `POST` and `DELETE` as well, a label of an origin an extension
+serves, which `Page::label()` gives and the host's dialogs are titled with, and a dialog's `onCancel()`, and changed
+nothing else: `fetch()` without a body and `serveOrigin()` without a label are as before.
 
 A change that every extension written for the contract keeps working with raises only the newest version: a new
 function, hook, member of a struct or of a request, key of the descriptor or member of the api, and a role a new
@@ -276,7 +277,8 @@ void crossbind_extension_clipboard(crossbind::Registry &registry) {
   within the run, never 0, the `windowId()` of the window it is in, and its `role()`: `"app"` for a page of the app's
   own origins, the role of an origin an extension serves for a page of it, and `""` for a page of any other origin; a
   call of the app's own code is of none, 0 for both and the role `""`, and an Android page of no window an extension
-  reaches, 0. A window of the app's, for the main thread while it is
+  reaches, 0. Its `label()` is what its dialogs are titled with: the label of the origin an extension serves, for a
+  page of one that has one, and the app's name for any other. A window of the app's, for the main thread while it is
   open: its `id()` within the run, from 1, the platform's `native()` window, as `appWindow()` gives the oldest one's,
   its `webView()`, as `appWebView()` does, and from any thread the `page()` it shows now, which a reload replaces, of id
   0 once it closed.
@@ -573,9 +575,10 @@ registry.function("acme.open", [](crossbind::Call call) {
 });
 ```
 
-- `serveOrigin(name, role, handler)`: From any thread, once the app's extensions have all started, as from `onStart`
-  or a function. `name`, its host: lowercase letters and digits, which dashes may join, 63 at most, neither `app` nor a
-  name served now; `role`, what its pages are, of the same letters, not `app`. What it refuses throws, saying why.
+- `serveOrigin(name, role, handler)` and `serveOrigin(name, role, handler, label)`: From any thread, once the app's
+  extensions have all started, as from `onStart` or a function. `name`, its host: lowercase letters and digits, which
+  dashes may join, 63 at most, neither `app` nor a name served now; `role`, what its pages are, of the same letters,
+  not `app`. What it refuses throws, saying why.
   `handler` gets each GET and HEAD of the origin as a route gets its own (a `Request`, as [Routes](#routes) tells), its
   path from the origin's `/`, on the thread the webview asks on, which it must not hold up. Unlike a route's, its
   `path()` holds the colons, backslashes and empty parts a dev server's URLs have, as Vite's `/@id/__x00__virtual:…` or
@@ -583,11 +586,13 @@ registry.function("acme.open", [](crossbind::Call call) {
   method with 405, what `handler` throws with 500, and two kinds of path itself: those under `/__crossbind/b/`, the
   bytes its pages' calls send and take, with their token, and `/__crossbind/app.js`, `crossbind/app` for its pages,
   below. A request's `page()` is the page its window shows as the request arrives, which a frame, a worker or a page on
-  its way out asks for as well, so a handler decides nothing by it.
+  its way out asks for as well, so a handler decides nothing by it. `label`, as a project's name, is what its pages'
+  dialogs are titled with, the host's own `page-dialogs`' and `dialog`'s, where the app's own pages' show the app's
+  name: its pages' `label()` gives it, and the app's name without one.
 - `Origin`: Any thread may hold a copy. `url()`, its URL with the path `/`, as `crossbind://acme-notes/`. `end()`, from
   any thread, once: its pages' calls fail from then on, saying it ended, and those that wait for their answers are
-  cancelled; each window that shows one of its pages shows the app's first page again; and its requests get 404
-  without its handler. The last copy that lets it go ends it as well.
+  cancelled, as are its pages' dialogs; each window that shows one of its pages shows the app's first page again; and
+  its requests get 404 without its handler. The last copy that lets it go ends it as well.
 
 What its pages reach:
 
@@ -729,7 +734,10 @@ void crossbind_extension_acme_dialogs(crossbind::Registry &registry) {
 ```
 
 - `PageDialog`: `kind()`, `alert`, `confirm` or `prompt`; its `message()` and a prompt's `defaultText()`.
-  `accept(text)` is OK, with a prompt's text, and `cancel()` Cancel.
+  `accept(text)` is OK, with a prompt's text, and `cancel()` Cancel. `onCancel(fn)` runs `fn` once, on the module's
+  thread, as the page goes before its answer: as the origin it is of ends, another page replaces it or its window
+  closes. The dialog has answered as cancelled then, and `fn` closes what its holder shows of it, as no page waits for
+  it any more; for one answered, `fn` never runs.
 - `PagePermission`: `kinds()`, what it asks for together, as `camera` and `microphone`; the `origin()` of the frame
   that asks, as `crossbind://app`, on Linux the page's, as WebKitGTK names no frame; and `isListed()`, whether
   `app.permissions` lists each of them, false for a kind that is no device. `allow()` or `deny()` answers it.
@@ -782,7 +790,8 @@ each by the name crossbind gives it:
   - `page-permissions`: Through the Java, from a frame of the app's origins alone.
   - `page-files`: Through the Java.
 
-The host's own `page-dialogs` shows the system's dialog, titled with the app's name; `page-permissions` allows what
+The host's own `page-dialogs` shows the system's dialog, titled with its page's `label()`, the app's name but for a
+page of an origin served with a label, and closes it as the page goes before its answer; `page-permissions` allows what
 `app.permissions` lists, which the system may then ask its user for, and a clipboard read, and denies the rest; and
 `page-files` shows macOS's open panel and Android's picker. Where the holder of the role has no native code, as one an
 app lists for macOS alone, the webview does as it would without crossbind:
@@ -994,7 +1003,8 @@ The Java of the holder of `page-dialogs`, `page-permissions` or `page-files` get
 `onPageDialog(host, dialog)`, `onPagePermission(host, request)` and `onFileInput(host, input)`, defaults of
 `Extension`'s, on the UI thread, and answers each once, from any thread. `useDefault()` leaves a dialog or a file input
 to the WebView, which shows its own dialog or no picker, where the hook calls it before it returns, and else cancels it;
-for a permission it denies, as the WebView would.
+for a permission it denies, as the WebView would. A `PageDialog` has the `label()` a native page's has, and
+`onCancel(fn)` runs `fn` on the UI thread as the native one's does, as its origin ends or another page replaces it.
 
 - One that is never answered keeps the page waiting, as Java tells the host of no copy let go.
 - One the hook throws on is cancelled, and a frame of another origin, which Android lets the page hold, gets no dialog

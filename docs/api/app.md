@@ -263,8 +263,9 @@ and the page may set its own ([Menus](#menus)). The host's extensions answer the
 take their roles:
 
 - `alert()`, `confirm()` and `prompt()` show as the system's own dialogs, titled with the app's name, and the page waits
-  for their answer, as in a browser; `beforeunload` never asks, and the page leaves at once. A file input shows the
-  system's picker. The host's `page-dialogs` and `page-files` show them
+  for their answer, as in a browser; a page of an origin an extension serves gets them titled with that origin's label,
+  as a project's name, and they close as the origin ends; `beforeunload` never asks, and the page leaves at once. A file
+  input shows the system's picker. The host's `page-dialogs` and `page-files` show them
   ([extensions.md](./extensions.md#the-pages-requests)).
 - A download the page starts, such as an `<a download>` link, asks where to save: in a save panel on macOS, in the
   system's export sheet on iOS and in its save picker on Android. On Linux it goes to the user's Downloads folder, and
@@ -601,7 +602,9 @@ std::string databasePath() { return crossbind::app::paths().data + "/notes.sqlit
 - `dialog.save({ title, defaultPath, defaultName, filters })` (desktop): The path its user chooses to save to, or
   `null`.
 - `dialog.message({ message, detail, kind, buttons })` (every platform): The index of the button its user clicks; a
-  page of an origin an extension serves of the role `project` calls it too ([Origins](./extensions.md#origins)).
+  page of an origin an extension serves of the role `project` calls it too ([Origins](./extensions.md#origins)), whose
+  dialog is titled with the origin's label where a window shows a title, holds that page's window alone, as a sheet of
+  it on macOS, and closes as the page goes. The app's own pages' dialog holds the app, as a macOS app's panels do.
 - `shell.openExternal(url)` (desktop, iOS): An http, https or mailto address in the default browser or mail app.
 - `shell.openPath(path)` (desktop): A file in the app the system opens its kind with.
 - `shell.revealInFolder(path)` (desktop): A file, selected, in the system's file manager, or on Linux without one its

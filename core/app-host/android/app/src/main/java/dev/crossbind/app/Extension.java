@@ -222,14 +222,21 @@ public interface Extension {
         private final String defaultText;
         private final JsResult result;
         private final String role;
+        private final String label;
         private final AnswerOnce once = new AnswerOnce();
+        // The origin of the page that opened it, whose end cancels it, and what its holder closes it with then.
+        final String origin;
+        private final List<Runnable> cancels = new ArrayList<>();
+        private boolean isGone;
 
-        PageDialog(Kind kind, String message, String defaultText, JsResult result, String role) {
+        PageDialog(Kind kind, String message, String defaultText, JsResult result, String role, String label, String origin) {
             this.kind = kind;
             this.message = message;
             this.defaultText = defaultText;
             this.result = result;
             this.role = role;
+            this.label = label;
+            this.origin = origin;
         }
 
         public Kind kind() {
@@ -240,6 +247,12 @@ public interface Extension {
         // extension serves.
         public String role() {
             return role;
+        }
+
+        // What it is titled with, as a native page's label() names it: the label an extension gave the origin it serves,
+        // for a page of that origin, and the app's name for any other.
+        public String label() {
+            return label;
         }
 
         public String message() {
@@ -271,8 +284,36 @@ public interface Extension {
             if (!once.leaves()) cancel();
         }
 
+        // Runs fn once, on the UI thread, as the page that opened the dialog goes before its answer: as the origin it is
+        // of ends, or another page replaces it. The dialog has answered as cancelled then, and its holder closes what it
+        // shows of it. For a dialog whose page went already, fn runs at once; for one answered, never.
+        public void onCancel(Runnable fn) {
+            if (once.isAnswered()) return;
+            synchronized (cancels) {
+                if (!isGone) {
+                    cancels.add(fn);
+                    return;
+                }
+            }
+            fn.run();
+        }
+
         boolean isLeft() {
             return once.isLeft();
+        }
+
+        // Its page went, on the UI thread: unanswered, it answers as cancelled, and its holder hears of it.
+        void gone() {
+            final List<Runnable> closing;
+            synchronized (cancels) {
+                if (isGone) return;
+                isGone = true;
+                closing = new ArrayList<>(cancels);
+                cancels.clear();
+            }
+            if (!once.gives()) return;
+            CrossbindActivity.MAIN.post(result::cancel);
+            for (Runnable fn : closing) fn.run();
         }
     }
 
