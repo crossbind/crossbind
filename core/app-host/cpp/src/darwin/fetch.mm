@@ -35,6 +35,7 @@ BOOL isSameOrigin(NSURL *from, NSURL *to) {
     std::optional<std::string> failure;
     std::string body;
     int redirects;
+    BOOL follows;
     NSURL *first;
     // A redirect within the first URL's origin, which the fetch asks for once the answer that named it has ended.
     NSURLRequest *next;
@@ -44,13 +45,13 @@ BOOL isSameOrigin(NSURL *from, NSURL *to) {
 
 @implementation CBFetch
 
-// NSURLSession follows none: one elsewhere comes back as its 3xx.
+// NSURLSession follows none: one elsewhere, and a POST's or a DELETE's, comes back as its 3xx.
 - (void)URLSession:(NSURLSession *)session
                           task:(NSURLSessionTask *)task
     willPerformHTTPRedirection:(NSHTTPURLResponse *)response
                     newRequest:(NSURLRequest *)request
              completionHandler:(void (^)(NSURLRequest *))completion {
-    if (isSameOrigin(first, request.URL)) {
+    if (follows && isSameOrigin(first, request.URL)) {
         redirects += 1;
         if (redirects > app::MAX_FETCH_REDIRECTS) failure = app::redirectedTooOften();
         else next = request;
@@ -128,7 +129,8 @@ BOOL isSameOrigin(NSURL *from, NSURL *to) {
 
 @end
 
-void crossbind::app::fetchOnPlatform(const std::string &method, const std::string &url, const crossbind::Request::Headers &headers, FetchDone done) {
+void crossbind::app::fetchOnPlatform(const std::string &method, const std::string &url, const crossbind::Request::Headers &headers, std::string body,
+    FetchDone done) {
     @autoreleasepool {
         NSURL *address = [NSURL URLWithString:[NSString stringWithUTF8String:url.c_str()]];
         if (!address) {
@@ -146,10 +148,12 @@ void crossbind::app::fetchOnPlatform(const std::string &method, const std::strin
         configuration.timeoutIntervalForResource = FETCH_SECONDS;
         CBFetch *fetch = [CBFetch new];
         fetch->done = std::move(done);
+        fetch->follows = followsRedirects(method);
         fetch->first = address;
         NSURLSession *session = [NSURLSession sessionWithConfiguration:configuration delegate:fetch delegateQueue:nil];
         NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:address];
         request.HTTPMethod = [NSString stringWithUTF8String:method.c_str()];
+        if (!body.empty()) request.HTTPBody = [NSData dataWithBytes:body.data() length:body.size()];
         for (const auto &[name, value] : headers) {
             [request setValue:[NSString stringWithUTF8String:value.c_str()] forHTTPHeaderField:[NSString stringWithUTF8String:name.c_str()]];
         }

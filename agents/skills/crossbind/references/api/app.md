@@ -1308,8 +1308,9 @@ and a Java side that R8, off by default, would shrink. What a sample app weighs 
   file inputs, downloads, drops and device requests reach their holders with its role, and the host's own
   `page-permissions` allows `app.permissions`' devices to pages of the role `app` alone.
 - The host's `fetch()`, with which such an origin's handler asks its source, sends no cookies or credentials, keeps no
-  cache, checks TLS as the system does, and follows no redirect out of the URL's origin. On Android an app sends plain
-  http to `localhost` and `127.0.0.1` alone, unless an extension of its asks for `app.android.cleartext`
+  cache, checks TLS as the system does, and follows no redirect out of the URL's origin, nor any of a `POST` or a
+  `DELETE`, whose body goes to the URL alone. On Android an app sends plain http to `localhost` and `127.0.0.1` alone,
+  unless an extension of its asks for `app.android.cleartext`
   ([What an extension is](./extensions.md#what-an-extension-is)), which lets it send plain http to any address.
 - An extension's route serves URLs of its own, under `crossbind://app/ext/<extension>/`, which any of the app's pages
   and markup load without the token, as the page's files: it serves what the page may see, and the host refuses a path

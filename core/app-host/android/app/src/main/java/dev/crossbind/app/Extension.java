@@ -31,7 +31,7 @@ import org.json.JSONStringer;
 public interface Extension {
     // The version of crossbind's extension contract this host is built for, as CROSSBIND_EXTENSION_CONTRACT is to native
     // code.
-    int CONTRACT = 3;
+    int CONTRACT = 4;
 
     // One of the extension's functions, which answers call once, from any thread. What it throws fails the call.
     void call(ExtensionHost host, String function, JSONObject options, Call call);

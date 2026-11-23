@@ -28,6 +28,7 @@ const FRAME_MS = 4000;
 const ANSWER_MS = 10000;
 const POLL_MS = 100;
 const MAX_FETCH_BYTES = 256 * 1024 * 1024;
+const MAX_FETCH_BODY_BYTES = 1024 * 1024;
 const LARGE_BYTES = 64 * 1024 * 1024;
 const FETCH_MS = 60000;
 // A length declared over the limit fails before the body comes, far within the time an answer may take.
@@ -150,6 +151,43 @@ async function checkFetch() {
     show('fetch-limits', { over, slow });
 }
 
+const hex = (bytes) => [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+
+// What the endpoint got of a fetch, and what it should have: the method, the type its headers named, and the body's
+// length and SHA-256.
+async function echoOf(method, body, type) {
+    const answer = await fetchOf('echo', { method, body, headers: { 'Content-Type': type } });
+    if (answer.status !== 200) throw new Error(`a ${method} of a body got ${JSON.stringify(answer)}`);
+    const bytes = new TextEncoder().encode(body);
+    return { got: JSON.parse(answer.text), sent: { method, type, length: bytes.length, sha256: hex(await crypto.subtle.digest('SHA-256', bytes)) } };
+}
+
+// 8. A POST and a DELETE send their body, of the type their headers name, a body of 1 MiB among them, and follow no
+// redirect, so the body goes to the URL alone; a GET's body, another method and a body over 1 MiB are refused.
+async function checkFetchBody() {
+    const text = JSON.stringify({ text: 'Öffnen 😀' });
+    const full = 'x'.repeat(MAX_FETCH_BODY_BYTES);
+    const echoes = [await echoOf('POST', text, 'application/json'), await echoOf('DELETE', text, 'application/json'), await echoOf('POST', full, 'text/plain'),
+        await echoOf('POST', '', 'text/plain')];
+    const wrong = echoes.filter(({ got, sent }) => JSON.stringify(got) !== JSON.stringify(sent));
+    if (wrong.length > 0) throw new Error(`the endpoint got ${wrong.map(({ got, sent }) => `${JSON.stringify(got)}, not ${JSON.stringify(sent)}`).join('; ')}`);
+    const counted = async () => Number((await fetchOf('count')).text);
+    const before = await counted();
+    const redirected = await fetchOf('redirect-in', { method: 'POST', body: text, headers: { 'Content-Type': 'application/json' } });
+    const after = await counted();
+    if (redirected.status !== 302 || redirected.headers?.location !== '/fetch/count?redirected' || after !== before + 1) {
+        throw new Error(`a POST's redirect within the origin was followed: ${redirected.status}, the endpoint counted ${after - before} fetches, not 1`);
+    }
+    const refused = (options) => fetchOf('echo', options).then((answer) => `answered ${answer.status}`, failure);
+    const refusals = [await refused({ method: 'GET', body: 'x' }), await refused({ method: 'PUT' }), await refused({ method: 'POST', body: `${full}x` })];
+    const words = ['sends a body with POST and DELETE alone, not with GET', 'takes GET, HEAD, POST or DELETE, not PUT',
+        `sends a body of ${MAX_FETCH_BODY_BYTES} bytes at most, not ${MAX_FETCH_BODY_BYTES + 1}`];
+    if (words.some((word, i) => !refusals[i].includes(word))) throw new Error(`fetch() did not refuse as it should: ${JSON.stringify(refusals)}`);
+    // The type a system's client names for a body its headers give none, which the run shows.
+    const untyped = JSON.parse((await fetchOf('echo', { method: 'POST', body: text })).text).type;
+    show('fetch-body', { echoes: echoes.map(({ got }) => ({ ...got, sha256: got.sha256.slice(0, 12) })), redirected: redirected.status, refusals, untyped });
+}
+
 // 3. The app's token at a served origin's calls, and a served origin's at the app's and at another served origin's.
 async function checkTokens(isAndroid, otherUrl, token, owner) {
     const { frame, said } = await frameAt(otherUrl, ANSWER_MS);
@@ -199,6 +237,7 @@ async function start(isAndroid) {
     const otherUrl = await invoke('probe.serveOrigin', { name: OTHER, source: SOURCE });
     checkRefusals(await invoke('probe.refusedOrigins', { served: OTHER }));
     await checkFetch();
+    await checkFetchBody();
     if (isWebView2()) await checkOtherRequests();
     await checkTokens(isAndroid, otherUrl, globalThis.__crossbind_token, 'app');
     const posted = await invoke('probe.serveOrigin', { name: POSTED, source: SOURCE });

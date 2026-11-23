@@ -361,7 +361,7 @@ export function checkedExtension(extension, root, where) {
 // extension written for any of them builds. A minor version that adds to the contract raises the newest, and a major
 // version that breaks it the oldest.
 export const OLDEST_EXTENSION_CONTRACT = 1;
-export const EXTENSION_CONTRACT = 3;
+export const EXTENSION_CONTRACT = 4;
 // What a later version added to an extension, by its path in the extension and the version that did.
 const ADDED_IN = { packageSource: 2, 'app.android.cleartext': 3 };
 const valueAt = (extension, key) => key.split('.').reduce((value, part) => (isObject(value) ? value[part] : undefined), extension);

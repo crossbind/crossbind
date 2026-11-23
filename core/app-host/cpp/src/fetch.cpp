@@ -23,9 +23,14 @@ std::string redirectedTooOften() { return "crossbind: the server redirected the 
 
 }  // namespace app
 
-void fetch(const std::string &method, const std::string &url, const Request::Headers &headers,
+void fetch(const std::string &method, const std::string &url, const Request::Headers &headers, std::string body,
     std::function<void(std::optional<std::string> failure, FetchResponse response)> done) {
-    if (method != "GET" && method != "HEAD") throw std::invalid_argument("crossbind: fetch() takes GET or HEAD, not " + method);
+    const bool takesBody = method == "POST" || method == "DELETE";
+    if (!takesBody && method != "GET" && method != "HEAD") throw std::invalid_argument("crossbind: fetch() takes GET, HEAD, POST or DELETE, not " + method);
+    if (!takesBody && !body.empty()) throw std::invalid_argument("crossbind: fetch() sends a body with POST and DELETE alone, not with " + method);
+    if (body.size() > app::MAX_FETCH_BODY_BYTES) {
+        throw std::invalid_argument("crossbind: fetch() sends a body of " + std::to_string(app::MAX_FETCH_BODY_BYTES) + " bytes at most, not " + std::to_string(body.size()));
+    }
     const size_t at = url.find("://");
     std::string scheme = url.substr(0, at);
     std::transform(scheme.begin(), scheme.end(), scheme.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -42,7 +47,12 @@ void fetch(const std::string &method, const std::string &url, const Request::Hea
         if (!app::isToken(name) || app::breaksHeaders(value)) throw std::invalid_argument("crossbind: fetch()'s header " + name + " is no header's name and value");
     }
     if (!done) throw std::invalid_argument("crossbind: fetch() takes a function that gets its answer");
-    app::fetchOnPlatform(method, url, headers, std::move(done));
+    app::fetchOnPlatform(method, url, headers, std::move(body), std::move(done));
+}
+
+void fetch(const std::string &method, const std::string &url, const Request::Headers &headers,
+    std::function<void(std::optional<std::string> failure, FetchResponse response)> done) {
+    fetch(method, url, headers, {}, std::move(done));
 }
 
 }  // namespace crossbind

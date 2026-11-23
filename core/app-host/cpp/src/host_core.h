@@ -115,16 +115,22 @@ void originEnded(const std::string &name);
 // name is a token of RFC 9110's.
 bool breaksHeaders(const std::string &text);
 bool isToken(const std::string &name);
-// What a fetch() takes at most: an answer of so many bytes, within so many seconds, after so many redirects.
+// What a fetch() takes at most: a body of so many bytes, and an answer of so many, within so many seconds, after so many
+// redirects.
+constexpr std::uint64_t MAX_FETCH_BODY_BYTES = 1024 * 1024;
 constexpr std::uint64_t MAX_FETCH_BYTES = 256ull * 1024 * 1024;
 constexpr int FETCH_SECONDS = 60;
 constexpr int MAX_FETCH_REDIRECTS = 20;
 using FetchDone = std::function<void(std::optional<std::string> failure, FetchResponse response)>;
-// Asks a server with the platform's own client, as fetch() checked the request: it asks for the body uncompressed, keeps
-// no cookie, cache or credential, follows a redirect within the URL's origin and gives one elsewhere as its 3xx, and
-// fails an answer over MAX_FETCH_BYTES or FETCH_SECONDS. done gets why it failed, or the answer, its headers' names in
-// lower case, once, on a thread of the platform's.
-void fetchOnPlatform(const std::string &method, const std::string &url, const Request::Headers &headers, FetchDone done);
+// Whether a fetch of this method follows a redirect within the URL's origin: a GET and a HEAD do, and a POST or a DELETE,
+// whose body would go again, gives it back.
+inline bool followsRedirects(const std::string &method) { return method == "GET" || method == "HEAD"; }
+// Asks a server with the platform's own client, as fetch() checked the request: it sends the body, where there is one,
+// asks for the answer's uncompressed, keeps no cookie, cache or credential, follows a redirect within the URL's origin
+// where followsRedirects() has it and gives every other as its 3xx, and fails an answer over MAX_FETCH_BYTES or
+// FETCH_SECONDS. done gets why it failed, or the answer, its headers' names in lower case, once, on a thread of the
+// platform's.
+void fetchOnPlatform(const std::string &method, const std::string &url, const Request::Headers &headers, std::string body, FetchDone done);
 // Why a fetch failed, in the same words on every platform: an answer that declares more bytes than it takes, one that
 // passes them without declaring it, one that takes too long, and one that redirects too often.
 std::string declaredTooLarge(std::uint64_t declared);

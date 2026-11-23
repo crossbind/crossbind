@@ -108,7 +108,7 @@ void setTimeouts(HINTERNET handle, Clock::time_point deadline) {
     WinHttpSetTimeouts(handle, ms, ms, ms, ms);
 }
 
-void fetchNow(const std::string &method, const std::string &url, const crossbind::Request::Headers &headers, const app::FetchDone &done) {
+void fetchNow(const std::string &method, const std::string &url, const crossbind::Request::Headers &headers, const std::string &body, const app::FetchDone &done) {
     const Clock::time_point deadline = Clock::now() + std::chrono::seconds(app::FETCH_SECONDS);
     std::wstring current = wide(url);
     const std::optional<Target> first = targetOf(current);
@@ -143,7 +143,10 @@ void fetchNow(const std::string &method, const std::string &url, const crossbind
         WinHttpSetOption(request.handle, WINHTTP_OPTION_DISABLE_FEATURE, &features, sizeof features);
         DWORD logon = WINHTTP_AUTOLOGON_SECURITY_LEVEL_HIGH;
         WinHttpSetOption(request.handle, WINHTTP_OPTION_AUTOLOGON_POLICY, &logon, sizeof logon);
-        if (!WinHttpSendRequest(request.handle, sent.c_str(), static_cast<DWORD>(-1), WINHTTP_NO_REQUEST_DATA, 0, 0, 0)
+        // WinHTTP reads the body as it sends it, from a buffer it does not change.
+        LPVOID data = body.empty() ? WINHTTP_NO_REQUEST_DATA : const_cast<char *>(body.data());
+        const DWORD length = static_cast<DWORD>(body.size());
+        if (!WinHttpSendRequest(request.handle, sent.c_str(), static_cast<DWORD>(-1), data, length, length, 0)
             || !WinHttpReceiveResponse(request.handle, nullptr)) {
             done(reasonOf(GetLastError()), {});
             return;
@@ -158,7 +161,7 @@ void fetchNow(const std::string &method, const std::string &url, const crossbind
             const bool isResolved = SUCCEEDED(UrlCombineW(current.c_str(), location.c_str(), resolved.data(), &length, 0));
             resolved.resize(isResolved ? length : 0);
             const std::optional<Target> next = isResolved ? targetOf(resolved) : std::nullopt;
-            if (next && isSameOrigin(*first, *next)) {
+            if (next && app::followsRedirects(method) && isSameOrigin(*first, *next)) {
                 redirects += 1;
                 if (redirects > app::MAX_FETCH_REDIRECTS) {
                     done(app::redirectedTooOften(), {});
@@ -208,10 +211,11 @@ void fetchNow(const std::string &method, const std::string &url, const crossbind
 
 }  // namespace
 
-void crossbind::app::fetchOnPlatform(const std::string &method, const std::string &url, const crossbind::Request::Headers &headers, FetchDone done) {
-    std::thread([method, url, headers, done = std::move(done)] {
+void crossbind::app::fetchOnPlatform(const std::string &method, const std::string &url, const crossbind::Request::Headers &headers, std::string body,
+    FetchDone done) {
+    std::thread([method, url, headers, body = std::move(body), done = std::move(done)] {
         try {
-            fetchNow(method, url, headers, done);
+            fetchNow(method, url, headers, body, done);
         } catch (const std::exception &error) {
             done(std::string("crossbind: the fetch failed: ") + error.what(), {});
         }

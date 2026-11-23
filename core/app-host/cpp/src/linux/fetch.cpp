@@ -18,6 +18,7 @@ const GUriFlags URI_FLAGS = static_cast<GUriFlags>(SOUP_HTTP_URI_FLAGS);
 struct Fetch {
     std::string method;
     crossbind::Request::Headers headers;
+    std::string body;
     app::FetchDone done;
     SoupSession *session = nullptr;
     SoupMessage *message = nullptr;
@@ -110,7 +111,7 @@ void onSent(GObject *session, GAsyncResult *result, gpointer data) {
     SoupMessageHeaders *headers = soup_message_get_response_headers(fetch->message);
     const char *location = SOUP_STATUS_IS_REDIRECTION(status) ? soup_message_headers_get_one(headers, "Location") : nullptr;
     GUri *next = location ? g_uri_parse_relative(fetch->current, location, URI_FLAGS, nullptr) : nullptr;
-    if (next && isSameOrigin(fetch->first, next)) {
+    if (next && app::followsRedirects(fetch->method) && isSameOrigin(fetch->first, next)) {
         fetch->redirects += 1;
         if (fetch->redirects > app::MAX_FETCH_REDIRECTS) {
             g_uri_unref(next);
@@ -150,13 +151,20 @@ void ask(Fetch *fetch) {
     SoupMessageHeaders *headers = soup_message_get_request_headers(fetch->message);
     for (const auto &[name, value] : fetch->headers) soup_message_headers_replace(headers, name.c_str(), value.c_str());
     soup_message_headers_replace(headers, "Accept-Encoding", "identity");
+    if (!fetch->body.empty()) {
+        // No type of libsoup's: the one the headers give stays.
+        GBytes *body = g_bytes_new(fetch->body.data(), fetch->body.size());
+        soup_message_set_request_body_from_bytes(fetch->message, nullptr, body);
+        g_bytes_unref(body);
+    }
     soup_session_send_async(fetch->session, fetch->message, G_PRIORITY_DEFAULT, fetch->cancellable, onSent, fetch);
 }
 
 }  // namespace
 
-void crossbind::app::fetchOnPlatform(const std::string &method, const std::string &url, const crossbind::Request::Headers &headers, FetchDone done) {
-    onMainThread([method, url, headers, done = std::move(done)]() mutable {
+void crossbind::app::fetchOnPlatform(const std::string &method, const std::string &url, const crossbind::Request::Headers &headers, std::string body,
+    FetchDone done) {
+    onMainThread([method, url, headers, body = std::move(body), done = std::move(done)]() mutable {
         GError *error = nullptr;
         GUri *uri = g_uri_parse(url.c_str(), URI_FLAGS, &error);
         if (!uri) {
@@ -165,7 +173,7 @@ void crossbind::app::fetchOnPlatform(const std::string &method, const std::strin
             done("crossbind: fetch() cannot read the URL " + url + ": " + reason, {});
             return;
         }
-        auto *fetch = new Fetch{method, headers, std::move(done)};
+        auto *fetch = new Fetch{method, headers, std::move(body), std::move(done)};
         fetch->session = soup_session_new();
         soup_session_remove_feature_by_type(fetch->session, SOUP_TYPE_CONTENT_DECODER);
         soup_session_set_timeout(fetch->session, FETCH_SECONDS);

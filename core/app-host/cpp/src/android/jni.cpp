@@ -337,7 +337,7 @@ extern "C" JNIEXPORT jobjectArray JNICALL Java_dev_crossbind_app_CrossbindActivi
         serveOriginMethod = env->GetStaticMethodID(type, "serveOrigin", "([B[B[B[B)V");
         endOriginMethod = env->GetStaticMethodID(type, "endOrigin", "([B)V");
         fetchClass = static_cast<jclass>(env->NewGlobalRef(env->FindClass("dev/crossbind/app/HostFetch")));
-        fetchMethod = env->GetStaticMethodID(fetchClass, "fetch", "(I[B[B[[BII)V");
+        fetchMethod = env->GetStaticMethodID(fetchClass, "fetch", "(I[B[B[[B[BIIZ)V");
         resources = asciiOf(env, files);
         dataDir = asciiOf(env, data);
         cacheDir = asciiOf(env, cache);
@@ -527,7 +527,8 @@ void fetched(jint id, std::optional<std::string> failure) {
 
 }  // namespace
 
-void crossbind::app::fetchOnPlatform(const std::string &method, const std::string &url, const crossbind::Request::Headers &headers, FetchDone done) {
+void crossbind::app::fetchOnPlatform(const std::string &method, const std::string &url, const crossbind::Request::Headers &headers, std::string body,
+    FetchDone done) {
     jint id = 0;
     {
         std::lock_guard<std::mutex> lock(fetchesMutex);
@@ -543,9 +544,12 @@ void crossbind::app::fetchOnPlatform(const std::string &method, const std::strin
     jbyteArray asked = bytesOf(env, method);
     jbyteArray address = bytesOf(env, url);
     jobjectArray sent = byteArraysOf(env, fields);
-    env->CallStaticVoidMethod(fetchClass, fetchMethod, id, asked, address, sent, static_cast<jint>(FETCH_SECONDS), static_cast<jint>(MAX_FETCH_REDIRECTS));
+    jbyteArray given = bytesOf(env, body);
+    env->CallStaticVoidMethod(fetchClass, fetchMethod, id, asked, address, sent, given, static_cast<jint>(FETCH_SECONDS), static_cast<jint>(MAX_FETCH_REDIRECTS),
+        static_cast<jboolean>(followsRedirects(method)));
     const bool hasFailed = env->ExceptionCheck();
     clearException(env);
+    env->DeleteLocalRef(given);
     env->DeleteLocalRef(sent);
     env->DeleteLocalRef(address);
     env->DeleteLocalRef(asked);

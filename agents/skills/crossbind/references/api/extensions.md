@@ -59,7 +59,7 @@ keys and Android manifests, as it writes each platform's project (see [crossbind
 ## Versions
 
 An extension names the versions of the contract it is written for: `contract: 1`, or a list, as `[1, 2]` for one
-written for both. Each crossbind takes a range of them, from the oldest it still builds to the newest, `1` to `3`
+written for both. Each crossbind takes a range of them, from the oldest it still builds to the newest, `1` to `4`
 in this one: a build stops on an extension that names none of them, saying what to update, crossbind where the
 extension names newer ones alone, else the extension's package, or `@crossbind/core-app-host` where the host's own
 extensions are of another crossbind. Native code tells the versions apart with `CROSSBIND_EXTENSION_CONTRACT`, the
@@ -72,6 +72,9 @@ did, and one that gives a `packageSource` names 2, or a build stops, saying so.
 Version 3 added [origins](#origins) an extension serves, the roles of the pages that call, `fetch()` and Android's
 `cleartext`, and changed nothing else: the app's own pages are of the role `app`, which every function and event of an
 extension written for 1 or 2 reaches as before, and one that gives `app.android.cleartext` names 3.
+
+Version 4 added a body to `fetch()`, which takes `POST` and `DELETE` as well, and changed nothing else: `fetch()`
+without a body is as before.
 
 A change that every extension written for the contract keeps working with raises only the newest version: a new
 function, hook, member of a struct or of a request, key of the descriptor or member of the api, and a role a new
@@ -608,17 +611,22 @@ What its pages reach:
 - It stays on its origin: the app's own origins and the other served ones are refused it, as [Navigation](#navigation)
   tells.
 
-`fetch(method, url, headers, done)` is the host's fetch, which a handler asks its pages' source with, from any thread:
+`fetch(method, url, headers, done)` and `fetch(method, url, headers, body, done)` are the host's fetch, which a handler
+asks its pages' source with, and an extension a server of its own, from any thread:
 
-- `GET` or `HEAD` of an http or https URL with these headers, without cookies, a cache or credentials, and with
-  `Accept-Encoding: identity`, so a body comes as the server sent it. It follows a redirect within the URL's origin, 20
-  at most, and gives back one elsewhere as its 3xx, which no webview follows for an app's origin. TLS is checked as the
-  system checks it, with no trust of the host's own.
+- `GET`, `HEAD`, `POST` or `DELETE` of an http or https URL with these headers, without cookies, a cache or
+  credentials, and with `Accept-Encoding: identity`, so a body comes as the server sent it. TLS is checked as the system
+  checks it, with no trust of the host's own.
+- `body`, a `POST`'s or a `DELETE`'s, 1 MiB at most, goes as it is given, of the type the headers' `Content-Type`
+  names: a system's client may name one of its own for a body sent without it.
+- A `GET` and a `HEAD` follow a redirect within the URL's origin, 20 at most, and give back one elsewhere as its 3xx,
+  which no webview follows for an app's origin. A `POST` and a `DELETE` follow none and give back each as its 3xx, so
+  their body goes to the URL alone, once.
 - `done` gets once, on a thread of the fetch's, the main thread on Linux, why it failed, in the system's words or as one
   of the host's limits — a length declared over 256 MiB, at once; an answer past 256 MiB; over 60 s in all — or the
   answer: a `FetchResponse` of its `status`, its `headers`, their names in lower case, and its `body`.
 - Another method, another scheme, a URL with a user's name or a password, with spaces or with bytes outside ASCII, a
-  header that would end its line, and no `done`, throw.
+  header that would end its line, a body of a `GET` or a `HEAD` or one over 1 MiB, and no `done`, throw.
 - Plain http goes where the platform lets the app send it: on Apple's platforms App Transport Security decides, which
   lets it through to a local address in an app whose Info.plist gives
   `NSAppTransportSecurity: { NSAllowsLocalNetworking: true }` (an extension's `plist` on `macos` and `ios`); on Android
@@ -1783,9 +1791,10 @@ The host's core does what every extension stands on, and no extension takes its 
 - **Package sources** give static libraries alone, as `lib<name>.a`, for every target but WASI, and a package's header
   binds as far as a port's does ([`cpp-binding-rules.md`](./cpp-binding-rules.md)). Web and React Native builds link a
   package's own archives only: the system libraries and Apple frameworks it asks for are not added there.
-- **Origins** take GET and HEAD alone, as routes do, and `fetch()` no other method, no request's body and no answer
-  read in parts. On Windows a served origin is `http://<name>.localhost`, which WebView2 gives OPFS, while the app's
-  own `crossbind://app` has none; on Linux no page has it, as WebKitGTK keeps it off ([known issues](../known-issues.md)).
+- **Origins** take GET and HEAD alone, as routes do; `fetch()` sends a body of 1 MiB at most, with `POST` and `DELETE`
+  alone, and reads no answer in parts. On Windows a served origin is `http://<name>.localhost`, which WebView2 gives
+  OPFS, while the app's own `crossbind://app` has none; on Linux no page has it, as WebKitGTK keeps it off
+  ([known issues](../known-issues.md)).
   On Android and Windows every `http://<label>.localhost/` on port 80 is the host's, in every app, served or not, which
   keeps an ended origin's requests from the machine's port 80: a page that asks a local server of such a name gets the
   host's 404, and one of another port, as `http://<label>.localhost:5173/`, goes to the network.
