@@ -62,6 +62,7 @@ const currentSurface = [
     'README.md',
     'core/crossbind/README.md',
     'landing/src',
+    'tooling/learn/src',
     'AGENTS.md',
     'GEMINI.md',
     '.github/copilot-instructions.md',

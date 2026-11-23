@@ -14,6 +14,7 @@ on:
             - e2e/**
             - .nvmrc
             - .github/workflows/test-android-sample.yml
+            - '!tooling/learn/**'
             - '!**/*.md'
     pull_request:
         branches:
