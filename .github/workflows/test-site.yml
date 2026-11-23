@@ -1,0 +1,57 @@
+name: test site
+# No path filter: the site's tests read the docs, the extensions, the cloud's worker, the release scripts and the
+# repository's own files, and @crossbind/learn's read the compiler's, so any filter narrow enough to be useful would
+# miss a source.
+on:
+    workflow_dispatch:
+    push:
+        branches:
+            - main
+    pull_request:
+        branches:
+            - main
+
+permissions: {}
+concurrency:
+    # A newer push to the same pull request or branch supersedes the running checks.
+    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: true
+jobs:
+    tested:
+        uses: ./.github/workflows/tested-tree.yml
+        permissions:
+            actions: read
+            contents: read
+            pull-requests: read
+        with:
+            workflow: test-site.yml
+    # The tutorial's and the playground's package, which the site and the crossbind app share, then the site's own pages.
+    unit:
+        needs: tested
+        if: needs.tested.outputs.tested != 'true'
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  # The site's prepare step reads every release from the tags and the history between them.
+                  fetch-depth: 0
+            - name: Install pnpm
+              uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+            - name: Use Node.js
+              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+              with:
+                  node-version-file: .nvmrc
+                  cache: 'pnpm'
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+            - name: Unit tests of @crossbind/learn
+              run: pnpm --filter @crossbind/learn test
+            # The site's tests load the modules its prepare step writes, here from the offline release fixture.
+            - name: Prepare the site from the offline release fixture
+              working-directory: landing
+              env:
+                  CROSSBIND_SITE_RELEASE_FIXTURE: ${{ github.workspace }}/scripts/release/test/fixtures/site-release/beta.json
+              run: node ../scripts/site/prepare-site.mjs --config ./release.config.js --out-dir ./generated
+            - name: Unit tests of the site
+              run: pnpm --filter @crossbind/landing test

@@ -32,6 +32,7 @@ on:
             - tooling/docker/*.sh
             - tooling/docker/VERSION
             - landing/**
+            - tooling/learn/**
     pull_request:
         branches:
             - main
@@ -62,6 +63,7 @@ on:
             - tooling/docker/*.sh
             - tooling/docker/VERSION
             - landing/**
+            - tooling/learn/**
 
 permissions:
     contents: read
