@@ -207,15 +207,21 @@ void Request::respond(int status, const Headers &headers, std::string body) cons
     }
     if (!state_->answers()) return;
     SchemeResponse response{status, "application/octet-stream", {}};
+    // A body's length is its own, which the platform writes; a HEAD's, which has no body, is the one the route gives, as
+    // a proxy passes its source's.
+    std::string length = std::to_string(body.size());
     for (const auto &[name, value] : headers) {
-        if (lower(name) == "content-type") {
+        const std::string key = lower(name);
+        if (key == "content-type") {
             response.mime = value;
+        } else if (key == "content-length") {
+            length = value;
         } else {
             response.headers.emplace_back(name, value);
         }
     }
     if (state_->method == "HEAD") {
-        response.headers.emplace_back("Content-Length", std::to_string(body.size()));
+        response.headers.emplace_back("Content-Length", length);
     } else {
         response.body = bytesOf(body);
     }

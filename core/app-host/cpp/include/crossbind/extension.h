@@ -186,8 +186,9 @@ public:
     // The page that asks; of a served origin's request, the page its window shows as the request arrives, which a frame,
     // a worker or a page on its way out asks for as well, so a handler decides nothing by it.
     Page page() const;
-    // Answers with body, of the type a Content-Type header names, application/octet-stream without one; a HEAD gets the
-    // headers alone. A webview follows no redirect of an app's URLs, so status is not 3xx.
+    // Answers with body, of the type a Content-Type header names, application/octet-stream without one, and of its own
+    // length, whatever Content-Length the headers give; a HEAD gets the headers alone, with the Content-Length they give,
+    // as of the body a GET would get. A webview follows no redirect of an app's URLs, so status is not 3xx.
     void respond(int status, const Headers &headers = {}, std::string body = {}) const;
     // Answers with the file at path, which the host reads on a thread of its own, of the type its extension names, as
     // for the page's files: the part a Range header asks for, as 206, up to 4 MiB of it, from where the webview asks

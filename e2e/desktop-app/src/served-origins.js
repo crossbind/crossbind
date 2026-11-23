@@ -559,6 +559,10 @@ async function checkProxy() {
     const ranged = await fetch('/index.html', { headers: { Range: 'bytes=0-14' } });
     const range = { status: ranged.status, contentRange: ranged.headers.get('content-range'), text: await ranged.text() };
     if (range.status !== 206 || !/^bytes 0-14\/\d+$/.test(range.contentRange ?? '') || range.text !== '<!doctype html>') throw new Error(`a Range came back as ${JSON.stringify(range)}`);
+    // A HEAD has the length the source gave, as the proxy passes it, and no other.
+    const head = await fetch('/index.html', { method: 'HEAD' });
+    const length = head.headers.get('content-length');
+    if (head.status !== 200 || length !== range.contentRange.split('/')[1]) throw new Error(`a HEAD came back as ${head.status} of the length ${length}, not ${range.contentRange}'s`);
     const headed = await fetch('/__e2e/headers');
     if (headed.status !== 200 || headed.headers.has('x-e2e') || document.cookie.includes('e2e-proxy')) throw new Error('the proxy passed a header it drops, or the cookie');
     const down = await fetch('/down/page');
@@ -573,7 +577,7 @@ async function checkProxy() {
     const named = await fetch('/__e2e/id:virtual');
     const namedText = await named.text();
     if (named.status !== 200 || namedText !== 'id:virtual') throw new Error(`a path with a colon, as a dev server names, got ${named.status} ${namedText}`);
-    show('proxy', { range, down: `${down.status} ${reason}`, ext: `${routed.status} ${routeText}`, post: `${posted.status} ${refusal}`, colon: namedText });
+    show('proxy', { range, head: length, down: `${down.status} ${reason}`, ext: `${routed.status} ${routeText}`, post: `${posted.status} ${refusal}`, colon: namedText });
 }
 
 // 10. On an Android emulator, plain http and ws from a project's page reach the run's machine, as the probe's cleartext
