@@ -905,6 +905,10 @@ async function runOtherWindow(role) {
         await events.held('probe.later');
         const own = await windows.current();
         localStorage.setItem('e2e-windows', role);
+        // A dialog the first asks this page for, which its holder keeps till the page goes.
+        channel.onmessage = ({ data }) => {
+            if (data.kind === 'ask' && data.to === role) alert(data.message);
+        };
         post('ready', { id: own.id, name: own.name, title: own.title, area: await box.area() });
     } catch (error) {
         post('failed', { message: error?.message ?? String(error) });
@@ -1022,8 +1026,16 @@ async function checkWindows(m, isDesktop, isAndroid) {
         await windows.focus(own.id);
         await waitUntil(() => windows.current(), ({ isFocused }) => isFocused, 'this window did not take the front again');
     }
+    // On the desktop the second's page leaves a dialog up, which its holder keeps: its window's close answers it as
+    // cancelled, which the holder hears.
+    const heardDialogs = () => invoke('page-dialogs.heard');
+    if (isDesktop) {
+        channel.postMessage({ kind: 'ask', to: 'second', message: 'wait closed' });
+        await waitUntil(heardDialogs, ({ handed }) => handed.includes('wait closed'), "the second window's page's dialog did not reach its holder");
+    }
     await windows.close(second);
     await waitFor(told, ({ name, value }) => name === 'window-closed' && value.id === second && value.name === 'second', 'window-closed');
+    if (isDesktop) await waitUntil(heardDialogs, ({ cancelled }) => cancelled.includes('wait closed'), "the dialog of the second window's page did not go as the window closed");
     if (!isDesktop) {
         // A window in front hands the front to the app's window used last as it closes.
         const third = await windows.open({ path: '/?window=third', name: 'third' });
