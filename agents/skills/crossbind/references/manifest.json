@@ -84,7 +84,7 @@
     {
       "source": "docs/api/performance.md",
       "output": "api/performance.md",
-      "sha256": "d322914b06d26e623314555e7e897fd46d18e19fc055fc3d3310d65e685d2486"
+      "sha256": "7410fcdccea3da6657c814d0310969bf4acc8c3b9c05be60390009f20dfa67ed"
     },
     {
       "source": "docs/api/remote-runner.md",
