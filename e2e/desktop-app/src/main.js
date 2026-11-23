@@ -17,7 +17,7 @@ import {
 import { Counter } from './native/counter.rs';
 import { reportWebFeatures } from './web-features.js';
 import {
-    checkPageApi, checkServedReports, isServedPage, runPageApiTrip, runProjectPage, runServedRoundTrip,
+    checkPageApi, checkServedReports, goWithinTheAppFirst, isServedPage, runPageApiTrip, runProjectPage, runServedRoundTrip,
 } from './served-origins.js';
 import { runPreview } from './preview.js';
 import {
@@ -1064,7 +1064,7 @@ async function checkWindows(m, isDesktop, isAndroid) {
 const otherWindow = new URLSearchParams(location.search).get('window');
 if (otherWindow) runOtherWindow(otherWindow);
 else if (isServedPage()) runProjectPage();
-else initNative().then(async (m) => {
+else if (!goWithinTheAppFirst()) initNative().then(async (m) => {
     try {
         // A launch of e2e/preview.mjs opens a preview in place of the suite.
         if (await runPreview()) return;

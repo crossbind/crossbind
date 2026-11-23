@@ -457,21 +457,22 @@ extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativ
 }
 
 // The host's navigation rule, and for what it leaves to page-navigation that holder's answer, as the activity's LOAD and
-// OUTSIDE number NavigationAnswer's. The WebView opens no window of the page's: it loads a link of target="_blank" in the
-// page's place.
+// OUTSIDE number NavigationAnswer's, for the page that asks, by its URL, as the WebView shows it. The WebView opens no
+// window of the page's: it loads a link of target="_blank" in the page's place.
 extern "C" JNIEXPORT jint JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeNavigation(JNIEnv *env, jclass, jbyteArray url,
-    jboolean isMainFrame, jboolean isUserInitiated) {
+    jbyteArray page, jboolean isMainFrame, jboolean isUserInitiated) {
     const std::string address = textOf(env, url);
-    const app::NavigationRule rule = app::navigationRule(nullptr, address);
+    const std::string asking = textOf(env, page);
+    const app::NavigationRule rule = app::navigationRuleAt(asking, address);
     if (rule == app::NavigationRule::load) return static_cast<jint>(app::NavigationAnswer::load);
     if (rule == app::NavigationRule::refuse) return static_cast<jint>(app::NavigationAnswer::refuse);
-    return static_cast<jint>(app::decideNavigation(nullptr, address, isMainFrame == JNI_TRUE, isUserInitiated == JNI_TRUE, false));
+    return static_cast<jint>(app::decideNavigation(app::pageAt(asking), address, isMainFrame == JNI_TRUE, isUserInitiated == JNI_TRUE, false));
 }
 
-// The rule alone, from the WebView's thread of requests, as a POST of the top frame comes there and nowhere else: whether
-// it loads the URL by itself, as page-navigation, which decides the rest, answers on the UI thread.
-extern "C" JNIEXPORT jboolean JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeLoads(JNIEnv *env, jclass, jbyteArray url) {
-    return app::navigationRule(nullptr, textOf(env, url)) == app::NavigationRule::load ? JNI_TRUE : JNI_FALSE;
+// The rule alone, for a POST of the top frame toward the app's origins or a served one, which the WebView's thread of
+// requests hands the UI thread: whether it loads the URL by itself for the page of that URL.
+extern "C" JNIEXPORT jboolean JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeLoads(JNIEnv *env, jclass, jbyteArray url, jbyteArray page) {
+    return app::navigationRuleAt(textOf(env, page), textOf(env, url)) == app::NavigationRule::load ? JNI_TRUE : JNI_FALSE;
 }
 
 // The activity's WebView takes a served origin: its scripts and objects, with the origin's token, from now on.

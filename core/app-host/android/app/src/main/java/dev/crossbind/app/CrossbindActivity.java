@@ -80,6 +80,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
@@ -207,8 +208,9 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
     // nativeNavigation()'s answers, in the order of the host's NavigationAnswer.
     private static final int LOAD = 0;
     private static final int OUTSIDE = 1;
-    // How long the WebView's thread of requests waits for page-navigation's answer to a POST: as long as Android waits for
-    // a UI thread before it calls the app not responding.
+    private static final int REFUSE = 2;
+    // How long the WebView's thread of requests waits for the UI thread's answer to a POST: as long as Android waits for a
+    // UI thread before it calls the app not responding.
     private static final int POST_ANSWER_MS = 5000;
     // The authentications page-navigation has yet to answer, by their ids.
     private static final Map<Integer, HttpAuthHandler> authentications = new ConcurrentHashMap<>();
@@ -321,12 +323,14 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
     // none, which names its owner before its name does.
     private static native void nativeOpenFiles(byte[][] paths, byte[][] mimeTypes);
 
-    // A navigation beyond the app's origins, which the extension page-navigation decides on the UI thread, in UTF-8:
-    // LOAD loads it, OUTSIDE opens it in the browser or the mail app, and any other answer refuses it.
-    private static native int nativeNavigation(byte[] url, boolean isMainFrame, boolean isUserInitiated);
+    // A navigation of the page of this URL, the one the WebView shows, in UTF-8: the host's rule, and the extension
+    // page-navigation on the UI thread for what the rule leaves. LOAD loads it, OUTSIDE opens it in the browser or the mail
+    // app, and any other answer refuses it.
+    private static native int nativeNavigation(byte[] url, byte[] page, boolean isMainFrame, boolean isUserInitiated);
 
-    // Whether the host's navigation rule loads this URL, in UTF-8, by itself, from any thread, page-navigation unasked.
-    private static native boolean nativeLoads(byte[] url);
+    // Whether the host's navigation rule loads this URL by itself for the page of this URL, in UTF-8, on the UI thread,
+    // page-navigation unasked.
+    private static native boolean nativeLoads(byte[] url, byte[] page);
 
     // A server's ask for a name and password, in UTF-8, which page-navigation answers through answerHttpAuthentication()
     // under the same id.
@@ -1086,11 +1090,14 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
 
         // What the host's navigation rule loads goes on, what it refuses loads nothing, and the extension
         // page-navigation decides every other URL, as native code answers. A page of another origin gets no token, so
-        // it reaches none of the app's functions.
+        // it reaches none of the app's functions. The page that asks is the one the WebView shows, which the host hears
+        // of only after its first scripts may have asked.
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
             Uri url = request.getUrl();
-            int answer = nativeNavigation(url.toString().getBytes(StandardCharsets.UTF_8), request.isForMainFrame(), request.hasGesture());
+            String page = view.getUrl();
+            int answer = nativeNavigation(url.toString().getBytes(StandardCharsets.UTF_8), (page == null ? "" : page).getBytes(StandardCharsets.UTF_8),
+                    request.isForMainFrame(), request.hasGesture());
             if (answer == LOAD) return false;
             if (answer == OUTSIDE) openOutside(url);
             return true;
@@ -1104,22 +1111,31 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
             }
         }
 
-        // A top frame's POST toward an origin the host does not answer, which Android asks shouldOverrideUrlLoading
-        // nothing of: page-navigation decides it on the UI thread all the same, for POST_ANSWER_MS at most. One it loads
-        // goes on to the network, one it opens outside opens there, and any other, or one it does not answer in time,
-        // loads nothing.
-        private WebResourceResponse askOfPost(Uri url, boolean isUserInitiated) {
+        // A top frame's POST, which Android asks shouldOverrideUrlLoading nothing of, is decided on the UI thread all the
+        // same, for the page the WebView shows there, which the host may hear of only after the POST, and for
+        // POST_ANSWER_MS at most: one not answered in time is refused.
+        private int decidePost(WebView view, Uri url, BiFunction<byte[], byte[], Integer> decide) {
             CompletableFuture<Integer> answer = new CompletableFuture<>();
-            MAIN.post(() -> answer.complete(nativeNavigation(url.toString().getBytes(StandardCharsets.UTF_8), true, isUserInitiated)));
+            MAIN.post(() -> {
+                String page = view.getUrl();
+                answer.complete(decide.apply(url.toString().getBytes(StandardCharsets.UTF_8), (page == null ? "" : page).getBytes(StandardCharsets.UTF_8)));
+            });
             try {
-                int decided = answer.get(POST_ANSWER_MS, TimeUnit.MILLISECONDS);
-                if (decided == LOAD) return null;
-                if (decided == OUTSIDE) MAIN.post(() -> openOutside(url));
+                return answer.get(POST_ANSWER_MS, TimeUnit.MILLISECONDS);
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             } catch (ExecutionException | TimeoutException unanswered) {
-                Log.w(TAG, "crossbind: page-navigation gave no answer to a POST of " + url + " in " + POST_ANSWER_MS + " ms", unanswered);
+                Log.w(TAG, "crossbind: the UI thread gave no answer to a POST of " + url + " in " + POST_ANSWER_MS + " ms", unanswered);
             }
+            return REFUSE;
+        }
+
+        // A top frame's POST toward an origin the host does not answer, which page-navigation decides as a link: one it
+        // loads goes on to the network, one it opens outside opens there, and any other loads nothing.
+        private WebResourceResponse askOfPost(WebView view, Uri url, boolean isUserInitiated) {
+            int decided = decidePost(view, url, (address, page) -> nativeNavigation(address, page, true, isUserInitiated));
+            if (decided == LOAD) return null;
+            if (decided == OUTSIDE) MAIN.post(() -> openOutside(url));
             return noContent();
         }
 
@@ -1144,10 +1160,10 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
             // Every one of http://<name>.localhost, served or not, as one of them would reach the device's port 80.
             boolean isServed = isServedForm(url);
             boolean isTopPost = request.isForMainFrame() && !"GET".equals(request.getMethod());
-            if (!isApp && !isServed) return isTopPost ? askOfPost(url, request.hasGesture()) : null;
+            if (!isApp && !isServed) return isTopPost ? askOfPost(view, url, request.hasGesture()) : null;
             // A form's POST of the top frame toward the app's origin or a served one loads only what the rule loads by
             // itself: a page of another origin's, which the rule leaves to page-navigation, loads nothing as well.
-            if (isTopPost && !nativeLoads(url.toString().getBytes(StandardCharsets.UTF_8))) return noContent();
+            if (isTopPost && decidePost(view, url, (address, page) -> nativeLoads(address, page) ? LOAD : REFUSE) != LOAD) return noContent();
             String path = url.getEncodedPath() == null ? "/" : url.getEncodedPath();
             // The host decodes the path, as Uri does here.
             if (isApp && url.getPath() != null && url.getPath().startsWith("/b/")) return responseOf(404, "text/plain", new byte[0][], new byte[0], null, null);

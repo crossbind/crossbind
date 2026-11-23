@@ -98,6 +98,9 @@ struct PageOrigin {
     std::string label;
 };
 PageOrigin pageOriginOf(const std::string &url);
+// The origin the navigation rule takes a page of this URL to be of: "app" for the app's own, the name of a served
+// origin's form, served now or not, or "" for another.
+std::string pageNameOf(const std::string &page);
 // Whether the app's extensions have all started, which serveOrigin() and invoke() wait for.
 bool hasStarted();
 // Answers a request of a served origin's with its handler, as a route answers its own, but /__crossbind/app.js, which the

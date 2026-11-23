@@ -120,19 +120,32 @@ PageOrigin pageOriginOf(const std::string &url) {
     return {name, found->second.role, found->second.label};
 }
 
-NavigationRule navigationRule(const void *webView, const std::string &url) {
+namespace {
+
+// The rule for a page of this origin, as newPage() names it: "app", a served origin's name, or "" for any other.
+NavigationRule ruleOf(const std::string &page, const std::string &url) {
     if (url.rfind("about:", 0) == 0) return NavigationRule::load;
     // A blob URL carries the origin of the page that made it.
-    if (url.rfind("blob:", 0) == 0) return navigationRule(webView, url.substr(5));
+    if (url.rfind("blob:", 0) == 0) return ruleOf(page, url.substr(5));
     const std::string origin = originOf(url);
     const bool isApp = isAppOrigin(origin);
     const std::string name = isApp ? "" : servedNameOf(origin);
     if (!isApp && name.empty()) return NavigationRule::ask;
-    const std::string page = originOfPage(webView);
     if (page == "app" || (!name.empty() && page == name)) return NavigationRule::load;
     // Such a URL means nothing outside the app, where page-navigation could send it.
     return page.empty() ? NavigationRule::ask : NavigationRule::refuse;
 }
+
+}  // namespace
+
+NavigationRule navigationRule(const void *webView, const std::string &url) { return ruleOf(originOfPage(webView), url); }
+
+std::string pageNameOf(const std::string &page) {
+    const std::string origin = originOf(page);
+    return isAppOrigin(origin) ? "app" : nameInOrigin(origin);
+}
+
+NavigationRule navigationRuleAt(const std::string &page, const std::string &url) { return ruleOf(pageNameOf(page), url); }
 
 void endOrigin(const std::string &name, uint64_t generation) {
     {

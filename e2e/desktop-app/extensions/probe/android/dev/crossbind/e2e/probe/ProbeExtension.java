@@ -7,6 +7,8 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ShortcutInfo;
 import android.content.pm.ShortcutManager;
+import android.os.Handler;
+import android.os.SystemClock;
 import android.view.View;
 import android.view.inspector.WindowInspector;
 import android.widget.TextView;
@@ -25,8 +27,8 @@ import org.jsoup.Jsoup;
 
 // The probe's Java: what the app took of the probe's manifest, permissions and resources, the page's WebView, the
 // activity's resumes, of which the e2e app's page-permissions, before the probe, fails as each, and the words of its Kotlin
-// and of its library from Maven; the app's static shortcuts and their taps; and calls with messages, cancels and bytes,
-// as probe.cpp's.
+// and of its library from Maven; the app's static shortcuts and their taps; calls with messages, cancels and bytes, as
+// probe.cpp's; and a hold of the UI thread's Java messages.
 public final class ProbeExtension implements Extension {
     private int resumes;
     private int cancels;
@@ -74,6 +76,19 @@ public final class ProbeExtension implements Extension {
                     call.resolve(tap != null);
                 }
                 case "echo" -> call.resolve(options);
+                // The UI thread's Java messages wait ms behind a task that puts itself at the front of its queue again,
+                // while the WebView's own work goes on, so the host hears of a page that starts meanwhile only then.
+                case "holdUi" -> {
+                    long until = SystemClock.uptimeMillis() + options.getLong("ms");
+                    Handler main = new Handler(activity.getMainLooper());
+                    main.postAtFrontOfQueue(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (SystemClock.uptimeMillis() < until) main.postAtFrontOfQueue(this);
+                        }
+                    });
+                    call.resolve(null);
+                }
                 // Messages before the answer, each with a byte of its own, from a thread of the probe's.
                 case "count" -> {
                     int count = options.getInt("count");
