@@ -6,13 +6,14 @@ import {
 import {
     STORE_LISTING, readStoreListing, readStoreSettings, storeListingProblems,
 } from './src/msStoreListing.js';
-import { msStoreGuide } from './src/msStoreGuide.js';
+import { firstSubmissionFinish, msStoreGuide } from './src/msStoreGuide.js';
 
 const PARTNER_CENTER = 'https://partner.microsoft.com/dashboard/apps-and-games/overview';
 const NO_IDENTITY = "crossbind: the Microsoft Store takes the package of the app Partner Center reserved, whose identity app.windows.msix gives: copy { name, publisher, publisherDisplayName } from the app's Product identity page in Partner Center into crossbind.config.js.";
 const NO_CREDENTIALS = `crossbind: Partner Center's submission API takes an Entra ID application its account has with the Manager role: set ${STORE_ENV.tenant}, ${STORE_ENV.client} and ${STORE_ENV.secret} to its tenant id, client id and key, or upload once on a terminal, which asks for them; app.md's Microsoft Store says how to make one.`;
-const FIRST_SUBMISSION = "Partner Center's API makes no app's first submission, which takes the age ratings questionnaire: make it in Partner Center, with the packages crossbind app build -p windows makes; crossbind app store microsoft-store names each step. Later versions go with an upload.";
 const VERSION = /^\d+\.\d+\.\d+$/;
+const firstWaits = (app, pending) => `crossbind: Partner Center has ${app.primaryName}'s first submission, ${pending.id}, in progress: one that waits for its age ratings is finished and submitted there, as crossbind app store microsoft-store lists, and later versions go with an upload and a release once it is out.`;
+const noFirst = (app) => `crossbind: Partner Center has no submission of ${app.primaryName} yet: crossbind app upload microsoft-store makes its first, with the build's packages and the page.`;
 
 // How Partner Center's statuses of a submission read, as crossbind app store says what the Microsoft Store has.
 const STATUSES = {
@@ -36,7 +37,7 @@ const lacks = (credentials) => Object.values(credentials).some((value) => !value
 // The application's credentials, asked for on a terminal where this machine lacks them: its tenant and client ids,
 // which this machine's settings keep, and its key, which its keychain keeps.
 async function askCredentials(api, credentials) {
-    api.log("crossbind: Partner Center's submission API takes an Entra ID application its account has with the Manager role. In Partner Center, Account settings › User management › Microsoft Entra applications adds one, shows its tenant and client ids, and makes a key.");
+    api.log("crossbind: Partner Center's submission API takes an Entra ID application its account has with the Manager role. In Partner Center, the account's owner associates the application's tenant under Account settings › Tenants; then Account settings › User management › Microsoft Entra applications adds the application, shows its tenant and client ids, and makes a key.");
     if (!await api.askYesNo('Enter its ids and key now? [Y/n] ')) return credentials;
     const tenant = credentials.tenant ?? (await api.ask('Tenant id: ')).trim();
     const client = credentials.client ?? (await api.ask('Client id: ')).trim();
@@ -92,22 +93,31 @@ async function accessOf(api, problems) {
     return { call, identity, app: await reservedApp(api, call, identity) };
 }
 
-// Stops an upload, before its build, that Partner Center's API would take no submission of: an app with no first
-// submission, or one another submission is in progress of, which a terminal may delete.
+// Stops an upload, before its build, that Partner Center's API would take no submission of: one of another publisher's
+// app, or of an app another submission is in progress of, which a terminal may delete unless it is the app's first.
 async function assertSubmittable(api, call, app, identity) {
     if (app.publisherName && app.publisherName !== identity.publisher) {
         throw new Error(`crossbind: app.windows.msix names the publisher ${identity.publisher}, and Partner Center's app ${app.primaryName} has ${app.publisherName}: copy its Product identity into app.windows.msix again.`);
     }
-    if (!app.lastPublishedApplicationSubmission && !app.pendingApplicationSubmission) throw new Error(`crossbind: ${FIRST_SUBMISSION}`);
     const pending = app.pendingApplicationSubmission;
     if (!pending) return;
-    if (!app.lastPublishedApplicationSubmission) throw new Error(`crossbind: Partner Center has the app's first submission in progress, ${pending.id}; upload once it is out. ${FIRST_SUBMISSION}`);
+    if (!app.lastPublishedApplicationSubmission) throw new Error(firstWaits(app, pending));
     const question = `Partner Center has submission ${pending.id} of ${app.primaryName} in progress, and takes one at a time. Delete it, for this upload to make its own? [y/N] `;
     if (api.isGuided && /^\s*y/i.test(await api.ask(question))) {
         await deleteSubmission(call, app.id, pending.id);
         return;
     }
     throw new Error(`crossbind: Partner Center has submission ${pending.id} of ${app.primaryName} in progress, and takes one at a time: submit or delete it there, then upload again.`);
+}
+
+// What an app's first submission lacks of its page, a language of which Partner Center makes no listing of without a
+// description and desktop screenshots.
+function firstPageLacks({ listings }) {
+    if (listings.length === 0) return [`${STORE_LISTING} holds none, as en-US/description.txt and en-US/images/screenshots would`];
+    return listings.flatMap(({ language, texts, images }) => {
+        const lacks = [...(texts.description === undefined ? ['description.txt'] : []), ...(images.Screenshot === undefined ? ['images/screenshots'] : [])];
+        return lacks.length > 0 ? [`${path.join(STORE_LISTING, language)} lacks ${lacks.join(' and ')}`] : [];
+    });
 }
 
 // Stops a page sent alone where a submission not submitted yet holds an upload's packages, which the release sends the
@@ -122,8 +132,9 @@ async function assertNoUploadLeft(call, app) {
 }
 
 // The publisher of a Windows app's MSIX packages, x64 and arm64, to the Microsoft Store through Partner Center's
-// submission API, once the app's first submission was made there: an upload leaves them in a submission, which the
-// release submits for certification with the app's page in store/microsoft-store, which also goes alone.
+// submission API: an upload leaves them, with the app's page in store/microsoft-store, in a submission the release
+// submits for certification, and the page also goes alone. The app's first submission goes up the same way, committed
+// for Partner Center to take its files, and is finished in Partner Center, which alone takes its age ratings.
 export default function microsoftStore() {
     return {
         name: 'microsoft-store',
@@ -138,7 +149,8 @@ export default function microsoftStore() {
             build: () => ({ app: { updater: null, installers: ['msix'] } }),
 
             async check(api) {
-                const missing = [];
+                const page = pageOf(api.project.root);
+                const missing = [...page.problems];
                 const identity = api.config.app.windows?.msix;
                 if (!isIdentity(identity)) missing.push(NO_IDENTITY);
                 if (!VERSION.test(api.app.version)) {
@@ -150,19 +162,30 @@ export default function microsoftStore() {
                 const call = partnerCenterCaller(credentials);
                 const app = await reservedApp(api, call, identity);
                 await assertSubmittable(api, call, app, identity);
+                const lacks = app.lastPublishedApplicationSubmission ? [] : firstPageLacks(page);
+                if (lacks.length > 0) throw new Error(`crossbind: an app's first submission takes a page, of which Partner Center makes its listing: ${lacks.join('; ')}.`);
                 api.log(`crossbind: publishing ${app.primaryName} ${api.app.version} to the Microsoft Store; building the app first.`);
-                return { session: { call, app } };
+                return { session: { call, app, page } };
             },
 
-            async upload(api, { call, app }, { apps }) {
+            async upload(api, { call, app, page }, { apps }) {
                 const packages = apps.flatMap(({ installers }) => installers.filter(({ name }) => name === 'msix').flatMap(({ files }) => files));
                 if (packages.length === 0) throw new Error('crossbind: the build made no MSIX package, so nothing went to the Microsoft Store.');
                 fs.mkdirSync(api.workDir, { recursive: true });
-                api.log(`crossbind: uploading ${packages.map((file) => path.basename(file)).join(' and ')} to Partner Center.`);
+                const isFirst = !app.lastPublishedApplicationSubmission;
+                api.log(`crossbind: uploading ${packages.map((file) => path.basename(file)).join(' and ')}${page.isPaged ? `, with the page ${STORE_LISTING} holds,` : ''} to Partner Center.`);
                 const { id, status } = await submitPackages(call, {
-                    appId: app.id, packages, isDraft: true, zip: path.join(api.workDir, 'submission.zip'),
+                    appId: app.id, packages, listings: page.listings, settings: page.settings, isDraft: !isFirst, isFirst, zip: path.join(api.workDir, 'submission.zip'),
                 });
-                api.log(`crossbind: Partner Center has ${app.primaryName} ${api.app.version} as submission ${id}, not submitted yet: crossbind app release microsoft-store submits it for certification, with the page in ${STORE_LISTING}.`);
+                const name = `${app.primaryName} ${api.app.version}`;
+                if (!isFirst) {
+                    api.log(`crossbind: Partner Center has ${name} as submission ${id}, not submitted yet: crossbind app release microsoft-store submits it for certification, with the page in ${STORE_LISTING}.`);
+                } else if (status === 'CommitFailed') {
+                    api.log(`crossbind: Partner Center took ${name}'s first submission, ${id}, with the build's packages and the page, and stopped it at its age ratings, which its API takes none of. In Partner Center, finish it and submit it:`);
+                    firstSubmissionFinish(api, page.settings).forEach((step) => api.log(`crossbind: - ${step}`));
+                } else {
+                    api.log(`crossbind: Partner Center took ${name}'s first submission, ${id}, ${status}: once certified, it waits for Publish now in Partner Center.`);
+                }
                 return {
                     published: {
                         appId: app.id, version: api.app.version, submission: id, status,
@@ -178,7 +201,7 @@ export default function microsoftStore() {
                 if (access.missing) return access;
                 const { call, app } = access;
                 const pending = app.pendingApplicationSubmission;
-                if (!app.lastPublishedApplicationSubmission) throw new Error(`crossbind: ${FIRST_SUBMISSION}`);
+                if (!app.lastPublishedApplicationSubmission) throw new Error(pending ? firstWaits(app, pending) : noFirst(app));
                 if (!pending) {
                     throw new Error(`crossbind: Partner Center has no submission of ${app.primaryName} in progress to release: crossbind app upload microsoft-store leaves one, with the build's packages.`);
                 }
@@ -204,6 +227,7 @@ export default function microsoftStore() {
                 const access = await accessOf(api, page.problems);
                 if (access.missing) return access;
                 const { call, app, identity } = access;
+                if (!app.lastPublishedApplicationSubmission && !app.pendingApplicationSubmission) throw new Error(noFirst(app));
                 await assertNoUploadLeft(call, app);
                 await assertSubmittable(api, call, app, identity);
                 fs.mkdirSync(api.workDir, { recursive: true });
@@ -229,7 +253,8 @@ export default function microsoftStore() {
                 const pending = app.pendingApplicationSubmission;
                 if (pending) {
                     const { status } = await call('GET', `applications/${app.id}/submissions/${pending.id}/status`);
-                    lines.push(`submission ${pending.id}: ${STATUSES[status] ?? status}`);
+                    const isFirstLeft = !app.lastPublishedApplicationSubmission && status === 'CommitFailed';
+                    lines.push(`submission ${pending.id}: ${isFirstLeft ? 'the first, to finish in Partner Center' : STATUSES[status] ?? status}`);
                 }
                 if (app.lastPublishedApplicationSubmission) lines.push(`submission ${app.lastPublishedApplicationSubmission.id}: out`);
                 return lines.length > 0 ? lines : ['no submission yet'];

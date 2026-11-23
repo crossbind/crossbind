@@ -1411,9 +1411,9 @@
                 "literal": "msix: { name: '12345Example.Demo'"
             },
             {
-                "claim": "Says the app's first submission has to be made by hand in Partner Center",
+                "claim": "Makes the app's first submission with `crossbind app upload microsoft-store` too, and finishes it in Partner Center, which alone takes its age ratings",
                 "doc": "docs/api/app.md",
-                "literal": "Partner Center's API makes no app's first submission"
+                "literal": "The app's first submission goes with an upload too"
             },
             {
                 "claim": "Sends each later version with `crossbind app upload microsoft-store`, then to certification with `crossbind app release microsoft-store`",
