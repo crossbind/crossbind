@@ -538,8 +538,9 @@ registry.route([folder = registry.options()["folder"].asString()](crossbind::Req
 - `page()`: The page that asks.
 - `respond(status, headers, body)`: Answers with the whole body, of the type its `Content-Type` header names,
   `application/octet-stream` without one, and of the body's own length, whatever `Content-Length` the headers give; a
-  HEAD gets the headers alone, with the `Content-Length` they give, as a proxy passes its source's. A webview follows
-  no redirect of an app's URLs, so `status` is no 3xx one.
+  HEAD gets the headers alone, with the `Content-Length` they give where it is a number of bytes, as a proxy passes its
+  source's, and the body's own length otherwise. A webview follows no redirect of an app's URLs, so `status` is no 3xx
+  one.
 - `respondFile(path)`: Answers with a file, which the host reads on a thread of its own, of the type its extension
   names, as for the page's files: the part a `Range` header asks for, as 206, up to 4 MiB of it, from where the webview
   asks for more, as a video's player does; 416 for a range past its end; the whole file otherwise; 404 for no regular

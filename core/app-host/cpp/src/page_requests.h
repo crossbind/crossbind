@@ -183,12 +183,14 @@ public:
     AnswerOnce &operator=(const AnswerOnce &) = delete;
     ~AnswerOnce() { give(std::move(fallback_)); }
 
-    void give(Answer value) {
+    // Whether it gave this answer: false for one that had its answer, or that the webview took.
+    bool give(Answer value) {
         Phase was = phase_.load();
         do {
-            if (was == Phase::given || was == Phase::left) return;
+            if (was == Phase::given || was == Phase::left) return false;
         } while (!phase_.compare_exchange_weak(was, Phase::given));
         onMainThread([answer = std::move(answer_), value = std::move(value)] { answer(value); });
+        return true;
     }
     void giveDefault() {
         Phase offered = Phase::offered;

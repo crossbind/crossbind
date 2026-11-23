@@ -617,6 +617,9 @@ async function checkProxy() {
     const head = await fetch('/index.html', { method: 'HEAD' });
     const length = head.headers.get('content-length');
     if (head.status !== 200 || length !== range.contentRange.split('/')[1]) throw new Error(`a HEAD came back as ${head.status} of the length ${length}, not ${range.contentRange}'s`);
+    // One whose handler gives a Content-Length that is no number has the length of the body it would get, none.
+    const unsized = await fetch('/__e2e/head-length', { method: 'HEAD' }).then((answer) => `${answer.status} ${answer.headers.get('content-length')}`, failure);
+    if (unsized !== '200 0') throw new Error(`a HEAD whose handler gave the length -5 came back as ${unsized}, not 200 of the length 0`);
     const headed = await fetch('/__e2e/headers');
     if (headed.status !== 200 || headed.headers.has('x-e2e') || document.cookie.includes('e2e-proxy')) throw new Error('the proxy passed a header it drops, or the cookie');
     const down = await fetch('/down/page');
@@ -631,7 +634,7 @@ async function checkProxy() {
     const named = await fetch('/__e2e/id:virtual');
     const namedText = await named.text();
     if (named.status !== 200 || namedText !== 'id:virtual') throw new Error(`a path with a colon, as a dev server names, got ${named.status} ${namedText}`);
-    show('proxy', { range, head: length, down: `${down.status} ${reason}`, ext: `${routed.status} ${routeText}`, post: `${posted.status} ${refusal}`, colon: namedText });
+    show('proxy', { range, head: length, unsized, down: `${down.status} ${reason}`, ext: `${routed.status} ${routeText}`, post: `${posted.status} ${refusal}`, colon: namedText });
 }
 
 // 10. On an Android emulator, plain http and ws from a project's page reach the run's machine, as the probe's cleartext

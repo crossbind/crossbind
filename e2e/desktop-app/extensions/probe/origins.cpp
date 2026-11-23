@@ -69,6 +69,11 @@ void proxy(const std::string &name, const std::string &source, const std::string
         handled[name] += 1;
         handledPaths[{name, request.path()}] += 1;
     }
+    // A Content-Length that is no number of bytes, which respond() passes on for no answer.
+    if (request.path() == "/__e2e/head-length") {
+        request.respond(200, {{"Content-Length", "-5"}});
+        return;
+    }
     const bool isDown = request.path().rfind("/down/", 0) == 0;
     const std::string url = (isDown ? DOWN_SOURCE : source) + escaped(request.path()) + (request.query().empty() ? "" : "?" + request.query());
     crossbind::Request::Headers headers;
