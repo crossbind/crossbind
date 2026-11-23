@@ -339,8 +339,17 @@ async function openPageApi(source) {
     throw new Error(`the window did not open ${page}`);
 }
 
+// Whether the holder of page-dialogs was handed a dialog of this message a page left open, and heard it answer as
+// cancelled as its page went.
+async function heardOf(message) {
+    const { handed, cancelled } = await invoke('page-dialogs.heard');
+    return { handed: handed.includes(message), cancelled: cancelled.includes(message) };
+}
+
 // 11. A project's message dialog held its window alone, which Windows' task dialog holds with the window's thread, as
-// page-api.html found while it waited, and the project's end closed it: it waits for no page that went.
+// page-api.html found while it waited, and the project's end closed it and the alert() its page asked over it: none
+// waits for a page that went. On Windows that alert() waited in the queue the task dialog held, through which a page's
+// dialog reaches its holder, and is never handed over once its origin has ended; elsewhere its holder heard it go.
 async function checkEndClosedMessage({ pageApi }) {
     if (device.platform !== 'windows' && !String(pageApi?.mainThread).startsWith('answered')) {
         throw new Error(`a project's message dialog held the app's main thread: ${pageApi?.mainThread}`);
@@ -348,7 +357,12 @@ async function checkEndClosedMessage({ pageApi }) {
     await sleep(QUIET_MS);
     const left = await invoke('probe.closeDialog', { message: ENDED_MESSAGE });
     if (left.isShown) throw new Error("the project's end left its message dialog up");
-    show('end-message', { mainThread: pageApi.mainThread, left: left.isShown });
+    const over = await heardOf('wait over');
+    if (device.platform === 'windows' && over.handed) throw new Error("the alert() a project's page asked over its message dialog reached its holder once its origin had ended");
+    if (device.platform !== 'windows' && !(over.handed && over.cancelled)) {
+        throw new Error(`the holder of page-dialogs ${over.handed ? 'did not hear' : 'was never handed'} the alert() a project's page asked over its message dialog${over.handed ? ' go as its origin ended' : ''}`);
+    }
+    show('end-message', { mainThread: pageApi.mainThread, left: left.isShown, over });
 }
 
 // The project's page that leaves its own dialog open as its origin ends, public/page-wait.html.
@@ -360,12 +374,14 @@ async function openWait() {
     throw new Error(`the window did not open ${page}`);
 }
 
-// 12. The end of page-wait.html's origin answered its alert() as cancelled, which its holder of page-dialogs heard once:
-// no page's dialog waits for a page that went.
+// 12. The end of page-wait.html's origin answered its alert() as cancelled, which its holder of page-dialogs heard: no
+// page's dialog waits for a page that went.
 async function checkEndCancelledDialog() {
-    const cancels = await invoke('page-dialogs.cancels');
-    if (cancels !== 1) throw new Error(`the holder of page-dialogs heard ${cancels} of a project's page's dialogs answer as cancelled as it went, not 1`);
-    show('end-dialog', { cancels });
+    const wait = await heardOf('wait');
+    if (!(wait.handed && wait.cancelled)) {
+        throw new Error(`the holder of page-dialogs ${wait.handed ? "did not hear a project's page's alert() go as its origin ended" : "was never handed a project's page's alert()"}`);
+    }
+    show('end-dialog', wait);
 }
 
 // The project's page that asks a message dialog as its origin ends, public/page-soon.html.

@@ -10,14 +10,16 @@
 // crossbind/app from /__crossbind/app.js, which the host answers from the app's own files, and tells the app's page what
 // it got. An app's function is refused naming the page's role, also once globalThis.Crossbind is what a web build's
 // crossbind.js makes it; dialog.message, which the role project reaches, shows the system's dialog, which waits for its
-// user until the probe closes it, and which goes as its call is cancelled, also with another dialog of its window.
+// user until the probe closes it, and which goes as its call is cancelled, also with another dialog of its window. At
+// its end the page leaves a message dialog up, and its own alert() over it.
 (async () => {
     const QUIET_MS = 3000;
     const ANSWER_MS = 10000;
-    // When the origin ends, from a thread of the probe's, as its message dialog waits, and how long the page waits for
-    // the app's page before it says it did not come.
-    const END_AFTER_MS = 1000;
-    const STAYED_MS = 8000;
+    // When the origin ends, from a thread of the probe's, as its dialogs wait; how long the page gives the end's call to go
+    // out where its answer is held; and how long it waits for the app's page before it says it did not come.
+    const END_AFTER_MS = 3000;
+    const SENT_MS = 500;
+    const STAYED_MS = 10000;
     const MESSAGE = "crossbind e2e: a project's dialog";
     const ENDED = "crossbind e2e: a project's dialog its end closes";
     // The probe's dialog of the window, as another holder's, and the message dialogs asked with it up.
@@ -92,7 +94,13 @@
         await api.invoke('probe.setStage', { stage: 'page-api-done' });
         setTimeout(() => console.error(`CONFORMANCE ERR: ${location.origin}: the window still shows the project ${STAYED_MS} ms after its origin ended`), STAYED_MS);
         api.dialog.message({ message: ENDED }).catch(() => {});
-        await api.invoke('probe.endOrigin', { name, afterMs: END_AFTER_MS });
+        // Once the message dialog shows, which on Windows holds the queue of the window's thread through which the page's
+        // dialog reaches its holder: one asked then waits in it, and the end comes first.
+        await within(answered(api.invoke('probe.onMainThread')), QUIET_MS, 'held');
+        // The end's call goes out before alert() holds the page's script, which would hold it too: answered at once, or a
+        // moment on where the task dialog holds its answer.
+        await within(answered(api.invoke('probe.endOrigin', { name, afterMs: END_AFTER_MS })), SENT_MS, 'held');
+        alert('wait over');
     } catch (error) {
         console.error(`CONFORMANCE ERR: ${location.origin}: /__crossbind/app.js could not tell the app's page what it got, ${failure(error)}: ${JSON.stringify(got)}`);
     }
