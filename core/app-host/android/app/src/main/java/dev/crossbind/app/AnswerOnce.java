@@ -27,4 +27,10 @@ final class AnswerOnce {
         phase.compareAndSet(ASKING, OPEN);
         return phase.get() == LEFT;
     }
+
+    // Whether it has its answer, or the WebView took it.
+    boolean isAnswered() {
+        final int now = phase.get();
+        return now == GIVEN || now == LEFT;
+    }
 }

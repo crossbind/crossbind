@@ -54,6 +54,11 @@ public final class DialogExtension implements Extension {
                 for (int i = 0; i < labels.length; i += 1) labels[i] = buttons.optString(i);
                 showMessageDialog(host.activity(), options.optString("message"), options.optString("detail"), labels, call);
             }
+            // The message dialog shown closes, as its call was cancelled.
+            case "closeMessage" -> {
+                if (messageDialog != null) messageDialog.dismiss();
+                call.resolve(null);
+            }
             default -> call.reject("crossbind: the dialog extension's Java has no function " + function);
         }
     }

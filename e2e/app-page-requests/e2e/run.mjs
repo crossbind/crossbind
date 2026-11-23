@@ -3,11 +3,12 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import config from '../crossbind.config.mjs';
-import { STEPS } from './steps.mjs';
+import { SERVED, STEPS } from './steps.mjs';
 
 // Opens the app `pnpm build` made, whose page opens STEPS' dialogs through the host's own page-dialogs, and answers each
 // as the app's user would: on Linux under X with xdotool, and on Windows with the messages a dialog's buttons and text box
-// take. A dialog is found by the app's name, which it shows. The page then logs what it got.
+// take. A dialog is found by the app's name, which it shows. Then the page of a served origin shows its alert, found by
+// the origin's label, which nobody answers: it closes as the origin ends, and the page logs what it got.
 const RUN_TIMEOUT_MS = 180000;
 // How long a dialog takes to show: the first comes once the app has opened and, on Windows, PowerShell has compiled.
 const DIALOG_TIMEOUT_MS = 60000;
@@ -34,10 +35,10 @@ async function until(find, what) {
 
 const tool = (program, args) => execFileSync(program, args, { encoding: 'utf8', timeout: TOOL_TIMEOUT_MS });
 
-// The app's dialogs: its visible windows of its name that another window of the app's is transient for. One that closes
-// between the search and the look at it, as an answered dialog does, is none.
-function linuxDialogs() {
-    const listed = spawnSync('xdotool', ['search', '--onlyvisible', '--name', `^${title}$`], { encoding: 'utf8', timeout: TOOL_TIMEOUT_MS });
+// The app's dialogs: its visible windows of this title that another window of the app's is transient for. One that
+// closes between the search and the look at it, as an answered dialog does, is none.
+function linuxDialogs(named = title) {
+    const listed = spawnSync('xdotool', ['search', '--onlyvisible', '--name', `^${named}$`], { encoding: 'utf8', timeout: TOOL_TIMEOUT_MS });
     return (listed.stdout ?? '').split('\n').filter(Boolean).filter((window) => {
         const transient = spawnSync('xprop', ['-id', window, 'WM_TRANSIENT_FOR'], { encoding: 'utf8', timeout: TOOL_TIMEOUT_MS });
         return transient.status === 0 && transient.stdout.includes('window id');
@@ -62,6 +63,11 @@ async function answerOnLinux() {
         for (const args of keys) tool('xdotool', args);
         await until(() => !linuxDialogs().includes(dialog), `the close of the page's ${step.ask}() dialog`);
     }
+    const [served] = await until(() => {
+        const dialogs = linuxDialogs(SERVED.label);
+        return dialogs.length > 0 && dialogs;
+    }, `a dialog titled ${SERVED.label} for the served page's alert()`);
+    await until(() => !linuxDialogs(SERVED.label).includes(served), `the close of the served page's alert() as its origin ended`);
 }
 
 // A task dialog's button is clicked through TDM_CLICK_BUTTON; a prompt takes its text through WM_SETTEXT and its button
@@ -119,13 +125,23 @@ foreach ($step in ($env:CROSSBIND_E2E_STEPS | ConvertFrom-Json)) {
     [PageDialogs]::Answer($dialog, $step.answer, [string]$step.typed)
     while ([PageDialogs]::IsWindow($dialog)) { Start-Sleep -Milliseconds ${POLL_MS} }
 }
+$deadline = (Get-Date).AddMilliseconds(${DIALOG_TIMEOUT_MS})
+while (($served = [PageDialogs]::Find($process, $env:CROSSBIND_E2E_SERVED)) -eq [IntPtr]::Zero) {
+    if ((Get-Date) -gt $deadline) { throw "a dialog titled $env:CROSSBIND_E2E_SERVED for the served page's alert() never came" }
+    Start-Sleep -Milliseconds ${POLL_MS}
+}
+$deadline = (Get-Date).AddMilliseconds(${DIALOG_TIMEOUT_MS})
+while ([PageDialogs]::IsWindow($served)) {
+    if ((Get-Date) -gt $deadline) { throw "the served page's alert() stayed up once its origin ended" }
+    Start-Sleep -Milliseconds ${POLL_MS}
+}
 `;
 
 async function answerOnWindows(pid) {
     // Windows PowerShell started from PowerShell 7, as a CI step is, would look for its modules in 7's folders.
     const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toLowerCase() !== 'psmodulepath'));
     await promisify(execFile)('powershell', ['-NoProfile', '-NonInteractive', '-Command', WINDOWS_SCRIPT], {
-        env: { ...env, CROSSBIND_E2E_PID: String(pid), CROSSBIND_E2E_TITLE: title, CROSSBIND_E2E_STEPS: JSON.stringify(STEPS) },
+        env: { ...env, CROSSBIND_E2E_PID: String(pid), CROSSBIND_E2E_TITLE: title, CROSSBIND_E2E_SERVED: SERVED.label, CROSSBIND_E2E_STEPS: JSON.stringify(STEPS) },
         timeout: RUN_TIMEOUT_MS,
     });
 }
@@ -158,10 +174,11 @@ if (failure) finish(failure);
 const logged = until(() => out.match(RESULT)?.[1], "the page's RESULT line").then((line) => ({ line }), (error) => ({ failure: error.message }));
 const result = await Promise.race([logged, exited]);
 if (result.failure) finish(result.failure);
-const { got, notification } = JSON.parse(result.line);
+const { got, notification, served } = JSON.parse(result.line);
 const expected = STEPS.map((step) => step.expected);
 if (JSON.stringify(got) !== JSON.stringify(expected)) finish(`the page got ${JSON.stringify(got)}, not ${JSON.stringify(expected)}`);
 if (notification !== 'denied') finish(`the page's notification permission is ${notification}, not denied`);
+if (served !== 'back') finish(`the app's page did not come back once the served origin ended: ${served}`);
 finish();
-console.log(`ok: ${process.platform}-${process.arch} page requests: ${STEPS.length} dialogs answered, notifications denied`);
+console.log(`ok: ${process.platform}-${process.arch} page requests: ${STEPS.length} dialogs answered, notifications denied, the served page's dialog titled ${SERVED.label} closed with its origin`);
 process.exit(0);

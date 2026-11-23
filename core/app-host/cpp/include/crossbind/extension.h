@@ -98,14 +98,19 @@ public:
     // extension gave an origin it serves for a page of that origin, and "" for a page of any other origin, which
     // page-navigation may load and which reaches none of the app's functions. A call of the app's own code is of none.
     const std::string &role() const { return role_; }
+    // What its dialogs are titled with: the label an extension gave the origin it serves, for a page of that origin, and
+    // the app's name for any other.
+    std::string label() const;
 
 private:
     friend struct app::RegistryAccess;
-    Page(uint64_t id, uint64_t windowId, std::string role = {}) : id_(id), windowId_(windowId), role_(std::move(role)) {}
+    Page(uint64_t id, uint64_t windowId, std::string role = {}, std::string label = {})
+        : id_(id), windowId_(windowId), role_(std::move(role)), label_(std::move(label)) {}
 
     uint64_t id_;
     uint64_t windowId_;
     std::string role_;
+    std::string label_;
 };
 
 // A window of the app's, which onWindow and onWindowClosed get, for the main thread while it is open: its id within
@@ -336,6 +341,11 @@ public:
     void accept(const std::string &text = {}) const;
     void cancel() const;
     void useDefault() const;
+    // Runs fn once, on the module's thread, which it must not hold up, as the page that opened the dialog goes before its
+    // answer: as the origin it is of ends, another page replaces it, or its window closes. The dialog has answered as
+    // cancelled then, and its holder closes what it shows of it. For a dialog whose page went already, fn runs at once, on
+    // the caller's thread; for one answered, never.
+    void onCancel(std::function<void()> fn) const;
 
 private:
     friend struct app::RegistryAccess;
@@ -750,7 +760,9 @@ private:
 // whose path starts at the origin's "/", on the thread the webview asks on, which it must not hold up. The host answers
 // another method with 405, and itself the paths under /__crossbind/b/, the calls its pages make with their token, and
 // /__crossbind/app.js, crossbind/app as the app's build bundled it, which its pages import; what handler throws answers
-// 500.
+// 500. label is what its pages' dialogs are titled with, as the app's are with the app's name: Page::label() gives it.
+Origin serveOrigin(const std::string &name, const std::string &role, std::function<void(Request)> handler, std::string label);
+// The same with no label: its pages' dialogs are titled with the app's name.
 Origin serveOrigin(const std::string &name, const std::string &role, std::function<void(Request)> handler);
 
 // What a server answered a fetch(): its status, its headers, their names in lower case, and its body.

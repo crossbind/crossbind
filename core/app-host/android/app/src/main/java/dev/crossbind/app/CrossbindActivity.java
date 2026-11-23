@@ -67,6 +67,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -80,6 +81,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -217,16 +219,19 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
     // The activity that the calls of extensions' Java get while it lives.
     private static volatile CrossbindActivity current;
 
-    // An origin an extension serves, http://<name>.localhost: its name, its pages' role and their token.
+    // An origin an extension serves, http://<name>.localhost: its name, its pages' role, their token and the label their
+    // dialogs are titled with, "" for the app's name.
     private static final class Served {
         final String name;
         final String role;
         final String token;
+        final String label;
 
-        Served(String name, String role, String token) {
+        Served(String name, String role, String token, String label) {
             this.name = name;
             this.role = role;
             this.token = token;
+            this.label = label;
         }
     }
 
@@ -241,6 +246,8 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
     private final Set<String> origins = new HashSet<>();
     // The page the activity shows first, which it shows again as a served origin its page is of ends.
     private String firstUrl;
+    // The dialogs of the page that its holder was given, which go with the page; on the UI thread.
+    private final List<Extension.PageDialog> pageDialogs = new ArrayList<>();
     // The served origins whose scripts and objects the WebView has, which it keeps as long as it lives.
     private final Set<String> scripted = new HashSet<>();
     // What waits for the result of each activity this one started, under its request code.
@@ -536,10 +543,11 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
     }
 
     // Native code serves an origin from now on, http://<name>.localhost, from whichever thread it is: its origin, name,
-    // role and token, in UTF-8.
-    static void serveOrigin(byte[] origin, byte[] name, byte[] role, byte[] originToken) {
+    // role, token and label, in UTF-8.
+    static void serveOrigin(byte[] origin, byte[] name, byte[] role, byte[] originToken, byte[] label) {
         String served = new String(origin, StandardCharsets.UTF_8);
-        Served entry = new Served(new String(name, StandardCharsets.UTF_8), new String(role, StandardCharsets.UTF_8), new String(originToken, StandardCharsets.UTF_8));
+        Served entry = new Served(new String(name, StandardCharsets.UTF_8), new String(role, StandardCharsets.UTF_8), new String(originToken, StandardCharsets.UTF_8),
+                new String(label, StandardCharsets.UTF_8));
         MAIN.post(() -> {
             SERVED.put(served, entry);
             CrossbindActivity activity = current;
@@ -553,9 +561,20 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
         MAIN.post(() -> {
             SERVED.remove(ended);
             CrossbindActivity activity = current;
+            if (activity != null) activity.dialogsGone((dialog) -> dialog.origin.equals(ended));
             if (activity == null || activity.webView == null || activity.webView.getUrl() == null) return;
             if (ended.equals(originOf(Uri.parse(activity.webView.getUrl())))) activity.webView.loadUrl(activity.firstUrl);
         });
+    }
+
+    // The page dialogs whose page went: each, unanswered, answers as cancelled, and its holder hears of it.
+    private void dialogsGone(Predicate<Extension.PageDialog> isGone) {
+        for (Iterator<Extension.PageDialog> open = pageDialogs.iterator(); open.hasNext();) {
+            Extension.PageDialog dialog = open.next();
+            if (!isGone.test(dialog)) continue;
+            open.remove();
+            dialog.gone();
+        }
     }
 
     // Whether an origin is the app's own or one served now, whose pages' requests reach the holders of their roles.
@@ -568,6 +587,13 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
         if (origins.contains(origin)) return "app";
         Served served = SERVED.get(origin);
         return served == null ? "" : served.role;
+    }
+
+    // What the dialogs of a page of this origin are titled with, as a native page's label() names it: a served origin's
+    // label, or the app's name.
+    private String labelOf(String origin) {
+        Served served = SERVED.get(origin);
+        return served != null && !served.label.isEmpty() ? served.label : getApplicationInfo().loadLabel(getPackageManager()).toString();
     }
 
     // A link or a quick action's tap that opens the app while it runs comes here, as an app with app.urlSchemes or
@@ -1133,6 +1159,7 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
         // another origin, which page-navigation loaded, asks for none.
         @Override
         public void onPageStarted(WebView view, String url, Bitmap favicon) {
+            dialogsGone((dialog) -> true);
             if (url != null && !isOwn(originOf(Uri.parse(url)))) nativeNewPage(url.getBytes(StandardCharsets.UTF_8));
         }
 
@@ -1221,7 +1248,8 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
             }
             Extension owner = Extensions.ROLES.get("page-dialogs");
             if (owner == null) return false;
-            Extension.PageDialog dialog = new Extension.PageDialog(kind, message == null ? "" : message, defaultText, result, roleOf(origin));
+            Extension.PageDialog dialog = new Extension.PageDialog(kind, message == null ? "" : message, defaultText, result, roleOf(origin), labelOf(origin), origin);
+            pageDialogs.add(dialog);
             ask("page-dialogs", () -> owner.onPageDialog(CrossbindActivity.this, dialog), dialog::cancel);
             return !dialog.isLeft();
         }

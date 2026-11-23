@@ -23,10 +23,11 @@ namespace app {
 
 namespace {
 
-// An origin served now: its role and handler, and which serveOrigin() of its name made it.
+// An origin served now: its role, handler and label, and which serveOrigin() of its name made it.
 struct Served {
     std::string role;
     std::function<void(Request)> handler;
+    std::string label;
     uint64_t generation;
 };
 
@@ -99,7 +100,7 @@ std::optional<ServedOrigin> servedOrigin(const std::string &name) {
     std::lock_guard<std::mutex> lock(originsMutex);
     const auto found = served.find(name);
     if (found == served.end()) return std::nullopt;
-    return ServedOrigin{found->second.role, found->second.handler};
+    return ServedOrigin{found->second.role, found->second.handler, found->second.label};
 }
 
 std::vector<std::string> servedNames() {
@@ -111,12 +112,12 @@ std::vector<std::string> servedNames() {
 
 PageOrigin pageOriginOf(const std::string &url) {
     const std::string origin = originOf(url);
-    if (isAppOrigin(origin)) return {"app", "app"};
+    if (isAppOrigin(origin)) return {"app", "app", ""};
     const std::string name = nameInOrigin(origin);
     std::lock_guard<std::mutex> lock(originsMutex);
     const auto found = served.find(name);
-    if (found == served.end()) return {"", ""};
-    return {name, found->second.role};
+    if (found == served.end()) return {"", "", ""};
+    return {name, found->second.role, found->second.label};
 }
 
 NavigationRule navigationRule(const void *webView, const std::string &url) {
@@ -150,7 +151,7 @@ const std::string &Origin::url() const { return state_->url; }
 
 void Origin::end() const { app::endOrigin(state_->name, state_->generation); }
 
-Origin serveOrigin(const std::string &name, const std::string &role, std::function<void(Request)> handler) {
+Origin serveOrigin(const std::string &name, const std::string &role, std::function<void(Request)> handler, std::string label) {
     if (!app::hasStarted()) {
         throw std::logic_error("crossbind: serveOrigin() serves an origin once the app's extensions have all started, which their entries do not wait for");
     }
@@ -168,10 +169,14 @@ Origin serveOrigin(const std::string &name, const std::string &role, std::functi
         std::lock_guard<std::mutex> lock(app::originsMutex);
         if (app::served.count(name) > 0) throw std::logic_error("crossbind: the origin " + name + " is served already");
         state->generation = ++app::generations;
-        app::served.emplace(name, app::Served{role, std::move(handler), state->generation});
+        app::served.emplace(name, app::Served{role, std::move(handler), std::move(label), state->generation});
     }
     app::originServed(name);
     return app::make<Origin>(std::move(state));
+}
+
+Origin serveOrigin(const std::string &name, const std::string &role, std::function<void(Request)> handler) {
+    return serveOrigin(name, role, std::move(handler), {});
 }
 
 }  // namespace crossbind

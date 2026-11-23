@@ -283,7 +283,7 @@ async function checkLoad() {
     const paths = jsonOf(pathsLine, 'PREVIEW paths ');
     expect(paths.includes(ROLE_REFUSAL), `the page's app.paths() got ${paths}`);
     const dialog = jsonOf(await terminal.waitFor(/PREVIEW dialog /, LINE_MS, "the page's dialog", loadLine.index), 'PREVIEW dialog ');
-    expect(dialog.dialog === 'shown' && dialog.closed === true && /^answered \d+$/.test(dialog.answer), `dialog.message did not show the system's dialog: ${JSON.stringify(dialog)}`);
+    expect(dialog.dialog === 'shown' && dialog.closed?.isShown === true && /^answered \d+$/.test(dialog.answer), `dialog.message did not show the system's dialog: ${JSON.stringify(dialog)}`);
     return { load, paths, dialog };
 }
 

@@ -2,6 +2,8 @@
 
 #include <gtk/gtk.h>
 
+#include <memory>
+
 using crossbind::PageDialog;
 
 namespace {
@@ -19,9 +21,9 @@ void responded(GtkDialog *box, gint response, gpointer data) {
 
 }  // namespace
 
-// A dialog of the page's window, with the app's name over the message, as GTK shows its own.
+// A dialog of the page's window, with its page's label over the message, as GTK shows its own.
 void showPageDialog(PageDialog dialog) {
-    const std::string title = crossbind::appName();
+    const std::string title = dialog.page().label();
     GtkWidget *box = gtk_message_dialog_new(static_cast<GtkWindow *>(windowOf(dialog)), GtkDialogFlags(GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT),
                                             GTK_MESSAGE_OTHER, dialog.kind() == PageDialog::Kind::alert ? GTK_BUTTONS_OK : GTK_BUTTONS_OK_CANCEL, "%s",
                                             title.c_str());
@@ -37,6 +39,9 @@ void showPageDialog(PageDialog dialog) {
         g_object_set_data(G_OBJECT(box), "crossbind-entry", entry);
     }
     gtk_dialog_set_default_response(GTK_DIALOG(box), GTK_RESPONSE_OK);
+    // Held, as its page may go once its user answered it, when it takes no answer, its handler gone.
+    const std::shared_ptr<GtkWidget> held(GTK_WIDGET(g_object_ref(box)), [](GtkWidget *widget) { crossbind::onMainThread([widget] { g_object_unref(widget); }); });
+    dialog.onCancel([held] { crossbind::onMainThread([held] { gtk_dialog_response(GTK_DIALOG(held.get()), GTK_RESPONSE_CANCEL); }); });
     g_signal_connect_data(box, "response", G_CALLBACK(responded), new PageDialog(std::move(dialog)), forget, GConnectFlags(0));
     gtk_window_present(GTK_WINDOW(box));
 }

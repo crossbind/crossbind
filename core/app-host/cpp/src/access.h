@@ -54,8 +54,9 @@ Page pageOf(const void *webView);
 // The page of the window of this id, 0 for an Android page's, from any thread: none before the first.
 Page pageOfWindow(uint64_t window);
 // The next page of the window of this id, 0 for an Android page's, which it shows from now on, as the webview commits
-// it: of this role, and of the origin it names, "app" for the app's own, a served origin's name, or "" for another.
-Page newPage(uint64_t window, std::string role, std::string origin);
+// it: of this role, of the origin it names, "app" for the app's own, a served origin's name, or "" for another, and of
+// the label serveOrigin() gave a served one.
+Page newPage(uint64_t window, std::string role, std::string origin, std::string label);
 // The origin the page a window shows is of, as newPage() named it, by the window's webview, null for an Android page's;
 // "app" before its first page, which is the host's own load.
 std::string originOfPage(const void *webView);

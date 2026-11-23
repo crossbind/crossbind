@@ -200,6 +200,11 @@ public:
         phase_.compare_exchange_strong(offered, Phase::open);
         return phase_ == Phase::left;
     }
+    // Whether it has its answer, or the webview took it.
+    bool isAnswered() const {
+        const Phase phase = phase_.load();
+        return phase == Phase::given || phase == Phase::left;
+    }
 
 private:
     enum class Phase { offered, open, given, left };
@@ -221,6 +226,10 @@ struct PageDialog::State {
     std::string defaultText;
     Page page;
     AnswerOnce<std::optional<std::string>> answer;
+    // What its holder closes it with as its page goes before its answer, and whether it went.
+    std::mutex mutex;
+    std::vector<std::function<void()>> cancels;
+    bool isGone = false;
 };
 
 struct PagePermission::State {

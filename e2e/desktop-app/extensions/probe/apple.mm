@@ -60,7 +60,7 @@ bool showsText(NSView *view, NSString *text) {
 
 }  // namespace
 
-void closeMessageDialog(const std::string &message, std::function<void(bool)> done) {
+void closeMessageDialog(const std::string &message, std::function<void(bool, const std::string &)> done) {
     NSString *text = @(message.c_str());
 #if TARGET_OS_IPHONE
     crossbind::onMainThread([text, done] {
@@ -68,16 +68,26 @@ void closeMessageDialog(const std::string &message, std::function<void(bool)> do
         while (top.presentedViewController) top = top.presentedViewController;
         const bool isShown = [top isKindOfClass:UIAlertController.class] && [top.title isEqualToString:text];
         if (isShown) [top dismissViewControllerAnimated:NO completion:nil];
-        done(isShown);
+        done(isShown, "");
     });
 #else
     // The alert's modal loop runs in a block of the main queue, which holds the queue's next ones, so this runs in the
-    // loop's own mode.
+    // loop's own mode. A project's page's alert is a sheet of its window, which its first button ends.
     CFRunLoopPerformBlock(CFRunLoopGetMain(), (__bridge CFArrayRef) @[ NSModalPanelRunLoopMode, NSDefaultRunLoopMode ], ^{
       NSWindow *modal = NSApp.modalWindow;
-      const bool isShown = modal && showsText(modal.contentView, text);
-      if (isShown) [NSApp abortModal];
-      done(isShown);
+      if (modal && showsText(modal.contentView, text)) {
+          [NSApp abortModal];
+          done(true, "");
+          return;
+      }
+      for (NSWindow *window in NSApp.windows) {
+          NSWindow *sheet = window.attachedSheet;
+          if (!sheet || !showsText(sheet.contentView, text)) continue;
+          [window endSheet:sheet returnCode:NSAlertFirstButtonReturn];
+          done(true, "");
+          return;
+      }
+      done(false, "");
     });
     CFRunLoopWakeUp(CFRunLoopGetMain());
 #endif

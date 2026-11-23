@@ -472,6 +472,7 @@ void Core::callApp(jsi::Runtime &rt, std::string call, const std::string &name, 
     answers.page = static_cast<uint64_t>(page);
     answers.window = window;
     answers.role = channels_[window].role;
+    answers.label = channels_[window].label;
     std::shared_ptr<StateOf<Call>> state = pageCall(rt, name, options, std::move(answers));
     if (!state) return;
     Channel &channel = channels_[window];
@@ -696,7 +697,7 @@ void Core::serveFrame(jsi::Runtime &rt, uint64_t window, SchemeRequest request, 
 
 void Core::reset(uint64_t window, const std::string &url) {
     const PageOrigin origin = pageOriginOf(url);
-    const Page page = newPage(window, origin.role, origin.origin);
+    const Page page = newPage(window, origin.role, origin.origin, origin.label);
     // After the calls the page before made, which the module's thread takes in order, and before the new page's.
     js_.post([this, window, page, origin](jsi::Runtime &rt) {
         const auto open = channels_.find(window);
@@ -706,9 +707,11 @@ void Core::reset(uint64_t window, const std::string &url) {
         channel.page = static_cast<long long>(page.id());
         channel.origin = origin.origin;
         channel.role = origin.role;
+        channel.label = origin.label;
         channel.pageFunctions.clear();
-        // The page before's calls reach no page: each that waits is cancelled.
+        // The page before's calls reach no page: each that waits is cancelled, and so is each of its dialogs.
         cancelOpenCalls(channel);
+        if (before != 0) pageGone(static_cast<uint64_t>(before));
         pageStarted(page);
         if (before != 0) rt.global().getPropertyAsFunction(rt, "__crossbind_gone").call(rt, static_cast<double>(before));
     });
@@ -720,6 +723,7 @@ void Core::closed(uint64_t window) {
         if (open == channels_.end()) return;
         const long long page = open->second.page;
         cancelOpenCalls(open->second);
+        if (page != 0) pageGone(static_cast<uint64_t>(page));
         channels_.erase(open);
         {
             std::lock_guard<std::mutex> lock(tokensMutex_);
@@ -733,7 +737,9 @@ void Core::closed(uint64_t window) {
 void Core::ended(const std::string &name) {
     js_.post([this, name](jsi::Runtime &) {
         for (auto &[window, channel] : channels_) {
-            if (channel.origin == name) cancelOpenCalls(channel);
+            if (channel.origin != name) continue;
+            cancelOpenCalls(channel);
+            if (channel.page != 0) pageGone(static_cast<uint64_t>(channel.page));
         }
     });
 }

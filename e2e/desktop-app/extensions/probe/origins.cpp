@@ -96,14 +96,15 @@ void proxy(const std::string &name, const std::string &source, const std::string
 
 void addOriginFunctions(crossbind::Registry &registry) {
     // Serves an origin of the role project under this name, whose handler is the proxy of the source given, the run's
-    // endpoint's page by default, with a preview's gate token where it is given, and gives its URL.
+    // endpoint's page by default, with a preview's gate token and a label where they are given, and gives its URL.
     registry.function("probe.serveOrigin", [](Call call) {
         const std::string name = call.options()["name"].asString();
         const std::string source = call.options()["source"].asString(SOURCE);
         const std::string previewToken = call.options()["previewToken"].asString("");
-        const crossbind::Origin origin = crossbind::serveOrigin(name, "project", [name, source, previewToken](crossbind::Request request) {
-            proxy(name, source, previewToken, std::move(request));
-        });
+        const auto handler = [name, source, previewToken](crossbind::Request request) { proxy(name, source, previewToken, std::move(request)); };
+        const Value &label = call.options()["label"];
+        const crossbind::Origin origin =
+            label.isNull() ? crossbind::serveOrigin(name, "project", handler) : crossbind::serveOrigin(name, "project", handler, label.asString());
         std::lock_guard<std::mutex> lock(originsMutex);
         origins.insert_or_assign(name, origin);
         call.resolve(origin.url());
@@ -161,6 +162,17 @@ void addOriginFunctions(crossbind::Registry &registry) {
 void addPageFunctions(crossbind::Registry &registry) {
     // The role of the page that calls, which a page of each role reaches.
     registry.function("probe.role", PAGES, [](Call call) { call.resolve(call.page().role()); });
+    // A task of the main thread's, which answers once the main thread runs it, as it does not while a dialog's modal loop
+    // holds the main queue. Android's dialogs hold none, and its host has no main thread of its own.
+    registry.function("probe.onMainThread", PAGES, [](Call call) {
+#if defined(__ANDROID__)
+        call.resolve();
+#else
+        crossbind::onMainThread([call] { call.resolve(); });
+#endif
+    });
+    // The label of the page that calls, and the app's name.
+    registry.function("probe.label", PAGES, [](Call call) { call.resolve(Value::Object{{"label", call.page().label()}, {"appName", crossbind::appName()}}); });
     // probe.every for every page, which pages of the role app alone hear, and probe.mine for the calling page, whatever
     // its role.
     registry.function("probe.emitBoth", PAGES, [events = registry.events()](Call call) {
@@ -210,9 +222,11 @@ void addPageFunctions(crossbind::Registry &registry) {
         std::lock_guard<std::mutex> lock(originsMutex);
         call.resolve(Value(reports));
     });
-    // The message dialog a page showed, closed as its user would: whether one of the message showed.
+    // The message dialog a page showed, closed as its user would: whether one of the message showed, and the title of its
+    // window where the platform shows one.
     registry.function("probe.closeDialog", PAGES, [](Call call) {
-        closeMessageDialog(call.options()["message"].asString(), [call](bool isShown) { call.resolve(isShown); });
+        closeMessageDialog(call.options()["message"].asString(),
+            [call](bool isShown, const std::string &title) { call.resolve(Value::Object{{"isShown", isShown}, {"title", title}}); });
     });
 }
 

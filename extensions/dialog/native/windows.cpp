@@ -150,7 +150,7 @@ void showSaveDialog(uint64_t window, SaveOptions options, std::function<void(std
 // Modal to the app's window, as a message box is.
 void showMessageDialog(uint64_t window, MessageOptions options, std::function<void(int)> done) {
     onMainThread([window, options = std::move(options), done = std::move(done)] {
-        const std::wstring title = wide(appName());
+        const std::wstring title = wide(options.title);
         const std::wstring message = wide(options.message);
         const std::wstring detail = wide(options.detail);
         std::vector<std::wstring> labels;
@@ -177,6 +177,12 @@ void showMessageDialog(uint64_t window, MessageOptions options, std::function<vo
         config.cButtons = static_cast<UINT>(buttons.size());
         config.pButtons = buttons.data();
         config.nDefaultButton = buttons.empty() ? IDOK : FIRST_BUTTON;
+        config.lpCallbackData = reinterpret_cast<LONG_PTR>(options.closer.get());
+        config.pfCallback = [](HWND dialog, UINT notification, WPARAM, LPARAM, LONG_PTR data) -> HRESULT {
+            auto *closer = reinterpret_cast<Closer *>(data);
+            if (closer && notification == TDN_CREATED) closer->shown([dialog] { PostMessageW(dialog, TDM_CLICK_BUTTON, IDCANCEL, 0); });
+            return S_OK;
+        };
         int clicked = IDCANCEL;
         const HRESULT shown = TaskDialogIndirect(&config, &clicked, nullptr, nullptr);
         report("message", shown);

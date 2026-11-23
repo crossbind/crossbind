@@ -59,9 +59,10 @@ void showSaveDialog(uint64_t, SaveOptions options, std::function<void(std::optio
     });
 }
 
-// App-modal, as the panels are. Return clicks the first button and Escape the last of several, as closing the dialog
-// does elsewhere; NSAlert would give Escape to one named Cancel instead, wherever it is.
-void showMessageDialog(uint64_t, MessageOptions options, std::function<void(int)> done) {
+// App-modal, as the panels are, but for a project's page, whose dialog is a sheet of its window. Return clicks the first
+// button and Escape the last of several, as closing the dialog does elsewhere; NSAlert would give Escape to one named
+// Cancel instead, wherever it is.
+void showMessageDialog(uint64_t window, MessageOptions options, std::function<void(int)> done) {
     onMain(^{
       NSAlert *alert = [NSAlert new];
       alert.messageText = ns(options.message);
@@ -76,6 +77,32 @@ void showMessageDialog(uint64_t, MessageOptions options, std::function<void(int)
       }
       alert.buttons.firstObject.keyEquivalent = @"\r";
       if (alert.buttons.count > 1) alert.buttons.lastObject.keyEquivalent = escape;
+      const std::optional<Window> open = options.isAppModal ? std::nullopt : windowOf(window);
+      __weak NSAlert *weakAlert = alert;
+      if (open) {
+          NSWindow *parent = (__bridge NSWindow *)open->native();
+          __weak NSWindow *weakParent = parent;
+          [alert beginSheetModalForWindow:parent completionHandler:^(NSModalResponse response) { done(static_cast<int>(response - NSAlertFirstButtonReturn)); }];
+          if (options.closer) {
+              options.closer->shown([weakParent, weakAlert] {
+                  dispatch_async(dispatch_get_main_queue(), ^{
+                    NSWindow *sheet = weakAlert.window;
+                    if (sheet && weakParent.attachedSheet == sheet) [weakParent endSheet:sheet returnCode:NSModalResponseAbort];
+                  });
+              });
+          }
+          return;
+      }
+      // The modal loop runs in a block of the main queue, which holds the queue's next ones: the close runs in the loop's
+      // own mode.
+      if (options.closer) {
+          options.closer->shown([weakAlert] {
+              CFRunLoopPerformBlock(CFRunLoopGetMain(), (__bridge CFArrayRef) @[ NSModalPanelRunLoopMode, NSDefaultRunLoopMode ], ^{
+                if (weakAlert && NSApp.modalWindow == weakAlert.window) [NSApp abortModal];
+              });
+              CFRunLoopWakeUp(CFRunLoopGetMain());
+          });
+      }
       done(static_cast<int>([alert runModal] - NSAlertFirstButtonReturn));
     });
 }

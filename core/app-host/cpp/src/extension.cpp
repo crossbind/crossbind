@@ -25,10 +25,11 @@ struct Call::State {
     Value options;
     // A call is the page's, which the scope checks hold to, unless the host's own code made it.
     bool isFromApp = false;
-    // The page that made it, in its window, and its role; none for the host's own code.
+    // The page that made it, in its window, its role and its label; none for the host's own code.
     uint64_t page = 0;
     uint64_t window = 0;
     std::string role;
+    std::string label;
     // The answer, with how many messages went before it, and the messages of a call whose page takes them.
     std::function<void(Failure, Value, double sent)> answer;
     std::function<void(Value)> message;
@@ -553,7 +554,7 @@ const Value &Call::options() const { return state_->options; }
 
 bool Call::isFromPage() const { return !state_->isFromApp; }
 
-Page Call::page() const { return app::make<Page>(state_->page, state_->window, state_->role); }
+Page Call::page() const { return app::make<Page>(state_->page, state_->window, state_->role, state_->label); }
 
 void Call::resolve(Value result) const {
     double before = 0;
@@ -584,6 +585,8 @@ void Call::onCancel(std::function<void()> fn) const {
 }
 
 Page Window::page() const { return app::pageOfWindow(id_); }
+
+std::string Page::label() const { return label_.empty() ? appName() : label_; }
 
 void Events::emit(const std::string &name, const Value &value) const { sendEvent(extension_, name, value, false); }
 
@@ -867,6 +870,17 @@ void PageDialog::cancel() const { state_->answer.give(std::nullopt); }
 
 void PageDialog::useDefault() const { state_->answer.giveDefault(); }
 
+void PageDialog::onCancel(std::function<void()> fn) const {
+    {
+        std::lock_guard<std::mutex> lock(state_->mutex);
+        if (!state_->isGone) {
+            if (!state_->answer.isAnswered()) state_->cancels.push_back(std::move(fn));
+            return;
+        }
+    }
+    fn();
+}
+
 const std::vector<std::string> &PagePermission::kinds() const { return state_->kinds; }
 
 const std::string &PagePermission::origin() const { return state_->origin; }
@@ -969,6 +983,7 @@ std::shared_ptr<StateOf<Call>> pageCall(jsi::Runtime &rt, const std::string &nam
     state->page = page.page;
     state->window = page.window;
     state->role = std::move(page.role);
+    state->label = std::move(page.label);
     try {
         state->options = valueOf(rt, options, 0);
     } catch (const std::exception &error) {
@@ -1199,6 +1214,7 @@ struct OpenWindow {
     uint64_t page = 0;
     std::string role;
     std::string origin = "app";
+    std::string label;
 };
 std::mutex shownMutex;
 std::vector<OpenWindow> openWindows;
@@ -1206,6 +1222,7 @@ std::vector<uint64_t> frontOrder;
 uint64_t windowlessPage = 0;
 std::string windowlessRole;
 std::string windowlessOrigin = "app";
+std::string windowlessLabel;
 uint64_t windowCount = 0;
 uint64_t pageCount = 0;
 
@@ -1287,37 +1304,39 @@ void windowFocused(uint64_t id) {
     if (at != frontOrder.end()) std::rotate(frontOrder.begin(), at, at + 1);
 }
 
-Page newPage(uint64_t window, std::string role, std::string origin) {
+Page newPage(uint64_t window, std::string role, std::string origin, std::string label) {
     std::lock_guard<std::mutex> lock(shownMutex);
     const uint64_t page = ++pageCount;
     if (window == 0) {
         windowlessPage = page;
         windowlessRole = role;
         windowlessOrigin = origin;
+        windowlessLabel = label;
     }
     for (auto &open : openWindows) {
         if (open.id != window) continue;
         open.page = page;
         open.role = role;
         open.origin = origin;
+        open.label = label;
     }
-    return make<Page>(page, window, std::move(role));
+    return make<Page>(page, window, std::move(role), std::move(label));
 }
 
 Page pageOf(const void *webView) {
     std::lock_guard<std::mutex> lock(shownMutex);
-    if (!webView) return make<Page>(windowlessPage, uint64_t{0}, windowlessRole);
+    if (!webView) return make<Page>(windowlessPage, uint64_t{0}, windowlessRole, windowlessLabel);
     for (const auto &open : openWindows) {
-        if (open.webView == webView) return make<Page>(open.page, open.id, open.role);
+        if (open.webView == webView) return make<Page>(open.page, open.id, open.role, open.label);
     }
     return make<Page>(uint64_t{0}, uint64_t{0});
 }
 
 Page pageOfWindow(uint64_t window) {
     std::lock_guard<std::mutex> lock(shownMutex);
-    if (window == 0) return make<Page>(windowlessPage, uint64_t{0}, windowlessRole);
+    if (window == 0) return make<Page>(windowlessPage, uint64_t{0}, windowlessRole, windowlessLabel);
     for (const auto &open : openWindows) {
-        if (open.id == window) return make<Page>(open.page, open.id, open.role);
+        if (open.id == window) return make<Page>(open.page, open.id, open.role, open.label);
     }
     return make<Page>(uint64_t{0}, uint64_t{0});
 }
@@ -1533,7 +1552,22 @@ bool hasPagePermissions() { return static_cast<bool>(hooks().pagePermissions); }
 
 bool hasFileInputs() { return static_cast<bool>(hooks().fileInputs); }
 
-bool askPageDialog(PageDialog dialog) { return askOwner(hooks().pageDialogs, dialog, "page-dialogs"); }
+namespace {
+
+// The page dialogs the holder of page-dialogs was given, while any of it holds them.
+std::mutex dialogsMutex;
+std::vector<std::weak_ptr<StateOf<PageDialog>>> askedDialogs;
+
+}  // namespace
+
+bool askPageDialog(PageDialog dialog) {
+    {
+        std::lock_guard<std::mutex> lock(dialogsMutex);
+        askedDialogs.erase(std::remove_if(askedDialogs.begin(), askedDialogs.end(), [](const auto &asked) { return asked.expired(); }), askedDialogs.end());
+        askedDialogs.push_back(stateOf(dialog));
+    }
+    return askOwner(hooks().pageDialogs, dialog, "page-dialogs");
+}
 
 bool isOwnOrigin(const std::string &origin) { return isAppOrigin(origin) || !servedNameOf(origin).empty(); }
 
@@ -1547,6 +1581,40 @@ void askPagePermission(PagePermission request) {
 
 bool askFileInput(FileInput input) { return askOwner(hooks().fileInputs, input, "page-files"); }
 #endif
+
+void pageGone(uint64_t page) {
+#if !defined(__ANDROID__)
+    std::vector<std::shared_ptr<StateOf<PageDialog>>> gone;
+    {
+        std::lock_guard<std::mutex> lock(dialogsMutex);
+        for (auto asked = askedDialogs.begin(); asked != askedDialogs.end();) {
+            const std::shared_ptr<StateOf<PageDialog>> state = asked->lock();
+            if (state && state->page.id() != page) {
+                ++asked;
+                continue;
+            }
+            if (state) gone.push_back(state);
+            asked = askedDialogs.erase(asked);
+        }
+    }
+    for (const auto &state : gone) {
+        std::vector<std::function<void()>> cancels;
+        {
+            std::lock_guard<std::mutex> lock(state->mutex);
+            state->isGone = true;
+            cancels.swap(state->cancels);
+        }
+        state->answer.give(std::nullopt);
+        for (const auto &fn : cancels) {
+            try {
+                fn();
+            } catch (const std::exception &error) {
+                std::fprintf(stderr, "crossbind: the extension %s failed as a dialog's page went: %s\n", holderOf("page-dialogs").c_str(), error.what());
+            }
+        }
+    }
+#endif
+}
 
 }  // namespace crossbind::app
 

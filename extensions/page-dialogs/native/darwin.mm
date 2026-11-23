@@ -10,7 +10,7 @@ NSString *ns(const std::string &text) { return [NSString stringWithUTF8String:te
 
 NSAlert *alertOf(const PageDialog &dialog, NSArray<NSString *> *buttons) {
     NSAlert *alert = [NSAlert new];
-    alert.messageText = ns(crossbind::appName());
+    alert.messageText = ns(dialog.page().label());
     alert.informativeText = ns(dialog.message());
     for (NSString *button in buttons) [alert addButtonWithTitle:button];
     return alert;
@@ -21,6 +21,14 @@ void show(NSAlert *alert, const PageDialog &dialog, void (^done)(NSModalResponse
     NSWindow *window = (__bridge NSWindow *)windowOf(dialog);
     if (window) {
         [alert beginSheetModalForWindow:window completionHandler:done];
+        __weak NSWindow *weakWindow = window;
+        __weak NSAlert *weakAlert = alert;
+        dialog.onCancel([weakWindow, weakAlert] {
+            dispatch_async(dispatch_get_main_queue(), ^{
+              NSWindow *sheet = weakAlert.window;
+              if (sheet && weakWindow.attachedSheet == sheet) [weakWindow endSheet:sheet returnCode:NSModalResponseCancel];
+            });
+        });
     } else {
         done([alert runModal]);
     }

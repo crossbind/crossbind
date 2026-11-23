@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>page wait</title>
+</head>
+<body>
+<script>
+// A page of a project's origin, which src/served-origins.js opens there once page-api.html's end closed its message
+// dialog: it leaves an alert() open as its origin ends, which its holder of page-dialogs hears answered as cancelled. A
+// page of its own, as Windows' task dialog holds the main thread's queue, through which a page's dialog reaches its
+// holder: one asked while page-api.html's message dialog showed would reach it only once that dialog closed.
+(async () => {
+    // When the origin ends, from a thread of the probe's, as the alert waits.
+    const END_AFTER_MS = 1000;
+    const name = location.hostname.split('.')[0];
+    try {
+        const api = await import('/__crossbind/app.js');
+        await api.invoke('probe.setStage', { stage: 'wait-done' });
+        await api.invoke('probe.endOrigin', { name, afterMs: END_AFTER_MS });
+        alert('wait');
+    } catch (error) {
+        console.error(`CONFORMANCE ERR: ${location.origin}: page-wait.html could not end its origin: ${error?.name ?? 'Error'}: ${error?.message ?? error}`);
+    }
+})();
+</script>
+</body>
+</html>

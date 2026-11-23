@@ -20,7 +20,7 @@ void presentOnTop(UIViewController *controller, const PageDialog &dialog) {
 // An alert that goes without an action, or that nothing shows, lets go of the dialog, which then answers as cancelled:
 // WebKit wants an answer to every one.
 void showPageDialog(PageDialog dialog) {
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:ns(crossbind::appName()) message:ns(dialog.message())
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:ns(dialog.page().label()) message:ns(dialog.message())
                                                             preferredStyle:UIAlertControllerStyleAlert];
     const PageDialog::Kind kind = dialog.kind();
     if (kind == PageDialog::Kind::prompt) {
@@ -34,4 +34,9 @@ void showPageDialog(PageDialog dialog) {
                dialog.accept(kind == PageDialog::Kind::prompt ? (shown.textFields.firstObject.text.UTF8String ?: "") : "");
            }]];
     presentOnTop(alert, dialog);
+    dialog.onCancel([shown] {
+        dispatch_async(dispatch_get_main_queue(), ^{
+          [shown dismissViewControllerAnimated:NO completion:nil];
+        });
+    });
 }
