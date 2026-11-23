@@ -89,9 +89,9 @@ export default defineConfig({ plugins: [viteCrossbindPlugin()] });
 - `crossbind app upload github`: Builds the desktop app of `-p macos`, `linux` or `windows`, else of this machine, and
   puts what installs it, and with `app.updater` its update, into the draft GitHub release of its version, `v<version>`
   (see [GitHub Releases](#github-releases)).
-- `crossbind app upload microsoft-store`: Builds the Windows app's MSIX packages, x64 and arm64, and leaves them in a
-  new submission of the app, not submitted yet, once Partner Center has the app's first submission (see [Microsoft
-  Store](#microsoft-store)).
+- `crossbind app upload microsoft-store`: Builds the Windows app's MSIX packages, x64 and arm64, and leaves them with
+  the page `store/microsoft-store` holds in a new submission of the app, not submitted yet; the app's first goes up the
+  same way and is finished in Partner Center (see [Microsoft Store](#microsoft-store)).
 - `crossbind app upload`: Uploads to each store `app.stores` names, in its order, as `app.stores: ['google-play',
   'app-store']`, for the platforms each one takes.
 - `crossbind app release [store]`: Puts out to everyone what a store's testers have, with no build, and the page
@@ -2040,26 +2040,41 @@ app: {
 ```
 
 `crossbind app build -p windows` then writes `dist/<name>-win32-x64.msix` and `dist/<name>-win32-arm64.msix`, unsigned.
-Partner Center's API makes no app's first submission, which takes the age ratings questionnaire: make it in Partner
-Center, with these packages under Packages and the listing `store/microsoft-store` holds, whose fields and files
-`crossbind app store microsoft-store` names, and say why the app asks for `runFullTrust`, as every Win32 app in a
-package does: it runs as the app does outside one.
 
-Each later version goes with `crossbind app upload microsoft-store`. It builds the app's MSIX packages alone, with no
-updater, and makes a submission of the app, a copy of its last, with the packages in place of the old ones, uploaded in
-one zip, which it leaves for the release, not submitted yet. `crossbind app release microsoft-store` puts the listing
-and the settings `store/microsoft-store` holds into that submission, with no build, and commits it for certification,
-which takes up to three business days; `--rollout 10`, or `10%`, gives its packages to that percent of the app's users
-first, a gradual rollout that Partner Center raises. A release with no such submission, or one Partner Center took
-already, stops, naming the upload. A submission in progress stops the upload, which on a terminal asks to delete it.
-Each version is above the last one the Store has, as package.json's next release is, and none is a prerelease, which
-the Store cannot tell from its release.
+Partner Center's API takes an Entra ID application with the Manager role. In Partner Center, the account's owner
+associates the application's Microsoft Entra tenant under Account settings › Tenants; then Account settings › User
+management › Microsoft Entra applications adds the application with the Manager role, shows its tenant and client ids
+and makes a key, which expires as it says. Until then Partner Center answers `400 Unauthorized` while no account has
+the tenant, and `401` until the application is added with its role. An upload takes the ids and the key from
+`CROSSBIND_MICROSOFT_STORE_TENANT_ID`, `CROSSBIND_MICROSOFT_STORE_CLIENT_ID` and
+`CROSSBIND_MICROSOFT_STORE_CLIENT_SECRET`, else asks a terminal for them once, keeping the ids in
+`~/.crossbind/config.json` and the key in the system keychain.
 
-Partner Center's API takes an Entra ID application its account has with the Manager role: in Partner Center, Account
-settings › User management › Microsoft Entra applications adds one, shows its tenant and client ids and makes a key,
-which expires as it says. An upload takes them from `CROSSBIND_MICROSOFT_STORE_TENANT_ID`,
-`CROSSBIND_MICROSOFT_STORE_CLIENT_ID` and `CROSSBIND_MICROSOFT_STORE_CLIENT_SECRET`, else asks a terminal for them once,
-keeping the ids in `~/.crossbind/config.json` and the key in the system keychain.
+`crossbind app upload microsoft-store` builds the app's MSIX packages alone, with no updater, and makes a submission of
+the app, a copy of its last, with the packages in place of the old ones and the listing and the settings
+`store/microsoft-store` holds. Their files go up in one zip, and the upload leaves the submission for the release, not
+submitted yet. `crossbind app release microsoft-store` puts the listing and the settings into that submission again,
+with no build, and commits it for certification, which takes up to three business days; `--rollout 10`, or `10%`,
+gives its packages to that percent of the app's users first, a gradual rollout that Partner Center raises. Partner
+Center takes a submission's files from its zip at the commit, so a release whose images changed after the upload
+stops, naming the upload. A release with no such submission, or one Partner Center took already, stops, naming the
+upload. A submission in progress stops the upload, which on a terminal asks to delete it. Each version is above the
+last one the Store has, as package.json's next release is, and none is a prerelease, which the Store cannot tell from
+its release.
+
+The app's first submission goes with an upload too, once its page has a description and desktop screenshots. The
+upload commits it, for the desktop alone and to publish by hand once certified, so that Partner Center takes its files.
+Partner Center then stops it at its age ratings, which its API takes none of, and the upload lists what to finish in
+Partner Center before submitting it there:
+
+- Age ratings: the IARC questionnaire.
+- Properties: the privacy policy URL, the website and the support contact, which its API takes no more.
+- Pricing and availability: the markets, the visibility and the price.
+- Submission options: why the app declares `runFullTrust`, as every Win32 app in a package does, in 500 characters at
+  most, of which the upload gives a draft; and the publishing, which waits for Publish now unless chosen otherwise.
+
+`crossbind app store microsoft-store` lists the same. Later versions go with an upload and a release once the first is
+out.
 
 ### The Microsoft Store listing
 

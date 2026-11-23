@@ -25,6 +25,13 @@ const BLOB_VERSION = '2021-08-06';
 const COMMIT_POLL_SECONDS = 30;
 const COMMIT_MINUTES = 30;
 const APPS_PAGE = 100;
+// The device families a first submission comes without, and Partner Center takes none back without: the desktop's,
+// which a Windows app's MSIX package targets.
+const DEVICE_FAMILIES = {
+    Desktop: true, Mobile: false, Xbox: false, Holographic: false,
+};
+// Partner Center's word for the age ratings a commit lacks, which its API takes none of.
+const AGE_RATINGS = 'InvalidMicrosoftAgeRating';
 
 const sleep = (seconds) => new Promise((resolve) => { setTimeout(resolve, seconds * 1000); });
 const isTransient = (status) => status === 429 || status >= 500;
@@ -76,8 +83,9 @@ function apiError(status, what, body) {
     const said = typeof body === 'string' ? body.slice(0, 200) : body?.message ?? body?.error?.message ?? '';
     const code = typeof body === 'string' ? null : body?.code ?? body?.error?.code;
     let text = `crossbind: Partner Center answered ${what} with ${status}${code ? ` ${code}` : ''}${said ? `: ${said}` : '.'}`;
-    if (status === 401 || status === 403) {
-        text += "\ncrossbind: Partner Center takes the Entra ID application once its account has it with the Manager role, under Account settings › User management › Microsoft Entra applications.";
+    // Partner Center answers 400 Unauthorized where no account has the token's tenant yet.
+    if (status === 401 || status === 403 || (status === 400 && code === 'Unauthorized')) {
+        text += "\ncrossbind: Partner Center takes the Entra ID application once the account's owner has associated its tenant under Account settings › Tenants, and it has the Manager role under Account settings › User management › Microsoft Entra applications.";
     } else if (status === 409) {
         text += "\ncrossbind: Partner Center's API takes no submission of an app with mandatory updates or Store-managed consumable add-ons, which Partner Center alone takes, nor one while another is in progress.";
     }
@@ -156,11 +164,12 @@ function listingOf(shownListings, { language, texts, images }) {
 
 // A submission of Partner Center's, with the build's packages in place of the old ones, or, where packages is null, the
 // packages it has; the rollout to a percent of the app's users, or to all where rollout is null, or, where it is not
-// given, the rollout it has; with the project's listing and settings; and the files that go up for it, by the names it
-// gives them.
+// given, the rollout it has; with the project's listing and settings, and the desktop's device family where it names
+// none, as a first submission; and the files that go up for it, by the names it gives them.
 export function changedSubmission(submission, {
     packages = null, listings = [], settings = {}, rollout,
 }) {
+    const families = Object.keys(submission.allowTargetFutureDeviceFamilies ?? {}).length > 0 ? {} : { allowTargetFutureDeviceFamilies: DEVICE_FAMILIES };
     const packageUploads = (packages ?? []).map((file) => ({ name: path.basename(file), file }));
     const listed = listings.map((listing) => listingOf(submission.listings ?? {}, listing));
     const delivery = submission.packageDeliveryOptions ?? {};
@@ -181,6 +190,7 @@ export function changedSubmission(submission, {
     return {
         submission: {
             ...submission,
+            ...families,
             ...packaged,
             ...rolledOut,
             listings: { ...submission.listings, ...Object.fromEntries(listed.map(({ key, value }) => [key, value])) },
@@ -225,11 +235,25 @@ async function committedStatus(call, route) {
         const { status, statusDetails } = await call('GET', `${route}/status`);
         if (status === 'CommitFailed') {
             const said = (statusDetails?.errors ?? []).map(({ code, details }) => `${code}: ${details}`).join(' ');
-            throw Object.assign(new Error(`crossbind: Partner Center refused the submission${said ? `: ${said}` : '.'}`), { isCommitFailed: true });
+            throw Object.assign(new Error(`crossbind: Partner Center refused the submission${said ? `: ${said}` : '.'}`), { isCommitFailed: true, errors: statusDetails?.errors ?? [] });
         }
         if (status !== 'CommitStarted' || waited >= COMMIT_MINUTES * 60) return status;
         await sleep(COMMIT_POLL_SECONDS);
     }
+}
+
+// A submission's files, its packages and its listings' images, which Partner Center takes from its zip at the commit.
+const filesOf = (submission) => [
+    ...(submission.applicationPackages ?? []),
+    ...Object.values(submission.listings ?? {}).flatMap(({ baseListing }) => baseListing?.images ?? []),
+];
+const isWaiting = ({ fileStatus }) => fileStatus === 'PendingUpload';
+
+// Whether Partner Center refused a first submission's commit for its age ratings alone, once it took its files.
+async function isLeftForPartnerCenter(call, route, error) {
+    if (!error.isCommitFailed || error.errors.length === 0 || !error.errors.every(({ details = '' }) => details.includes(AGE_RATINGS))) return false;
+    const files = filesOf(await call('GET', route).catch(() => ({})));
+    return files.length > 0 && !files.some(isWaiting);
 }
 
 // Puts what goes in a submission of the app into it, uploads the files that go up in one zip, and commits it for
@@ -237,6 +261,9 @@ async function committedStatus(call, route) {
 // committed one; a failure after the commit says so.
 async function fillSubmission(call, route, made, { isDraft, zip, ...changes }) {
     const { submission, uploads } = changedSubmission(made, changes);
+    if (uploads.length > 0 && filesOf(made).some(isWaiting)) {
+        throw new Error("crossbind: the page's images changed after the upload, and Partner Center takes the files of a submission in one zip: crossbind app upload microsoft-store again sends them with the build's packages.");
+    }
     await call('PUT', route, submission);
     if (uploads.length > 0) {
         writeZip(uploads, zip);
@@ -253,21 +280,25 @@ async function fillSubmission(call, route, made, { isDraft, zip, ...changes }) {
 
 // Makes a submission of the app with the build's packages, or, where packages is null, those it has, and the project's
 // listing and settings, uploads the files that go up in one zip, and commits it for certification, unless isDraft
-// leaves it for a release to submit. A submission that fails before Partner Center takes it is deleted, so the next one
+// leaves it for a release to submit. The app's first, isFirst, is committed for Partner Center to take its files, to
+// publish by hand once certified, and stays where Partner Center took them and stopped it at the age ratings alone,
+// which only Partner Center takes. A submission that fails before Partner Center takes it is deleted, so the next one
 // is made anew. Gives its id and status.
 export async function submitPackages(call, {
-    appId, packages = null, listings = [], settings = {}, isDraft = false, zip,
+    appId, packages = null, listings = [], settings = {}, isDraft = false, isFirst = false, zip,
 }) {
     const created = await call('POST', `applications/${appId}/submissions`);
     const route = `applications/${appId}/submissions/${created.id}`;
+    const made = isFirst ? { ...created, targetPublishMode: 'Manual' } : created;
     try {
         return {
             id: created.id,
-            status: await fillSubmission(call, route, created, {
+            status: await fillSubmission(call, route, made, {
                 packages, listings, settings, isDraft, zip,
             }),
         };
     } catch (error) {
+        if (isFirst && await isLeftForPartnerCenter(call, route, error)) return { id: created.id, status: 'CommitFailed' };
         if (!error.isCommitted || error.isCommitFailed) await call('DELETE', route).catch(() => {});
         throw error;
     }

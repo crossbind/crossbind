@@ -58,16 +58,16 @@ export default {
         { type: 'code', file: 'crossbind.config.js', code: STORE_IDENTITY },
         {
             type: 'p',
-            text: "`crossbind app build -p windows` then writes `dist/<name>-win32-x64.msix` and `dist/<name>-win32-arm64.msix`, unsigned. Partner Center's API cannot make an app's first submission, which takes the age ratings questionnaire: make it there, with these packages and the listing in `store/microsoft-store`, and say why the app asks for `runFullTrust`, as every packaged Win32 app does (it runs as it does outside a package). `crossbind app store microsoft-store` lists each step, with the field and the file it comes from.",
+            text: "`crossbind app build -p windows` then writes `dist/<name>-win32-x64.msix` and `dist/<name>-win32-arm64.msix`, unsigned. Uploads go through Partner Center's API, which takes an Entra ID application with the Manager role: the account's owner associates its tenant under Account settings › Tenants, then Account settings › User management › Microsoft Entra applications adds it. `CROSSBIND_MICROSOFT_STORE_TENANT_ID`, `CROSSBIND_MICROSOFT_STORE_CLIENT_ID` and `CROSSBIND_MICROSOFT_STORE_CLIENT_SECRET` name it; an upload in a terminal asks for them once.",
         },
         { type: 'code', file: 'shell', code: 'npx crossbind app store microsoft-store\nnpx crossbind app upload microsoft-store\nnpx crossbind app release microsoft-store --rollout 10' },
         {
             type: 'p',
-            text: "Later versions go with `crossbind app upload microsoft-store`: it builds the MSIX packages and leaves them in a submission of the app, not submitted yet. `crossbind app release microsoft-store` puts the listing into that submission and commits it for certification, with no build, which takes up to three business days, and `--rollout` gives the packages to a share of the app's users first. `crossbind app store microsoft-store --send` sends the listing alone, with no build, in a submission of the packages Partner Center has; where an upload left a submission not submitted yet, it stops and names the release, which sends the listing with the upload's packages.",
+            text: "`crossbind app upload microsoft-store` builds the MSIX packages and leaves them, with the listing in `store/microsoft-store`, in a submission of the app, not submitted yet. `crossbind app release microsoft-store` puts the listing into that submission again and commits it for certification, with no build, which takes up to three business days, and `--rollout` gives the packages to a share of the app's users first. `crossbind app store microsoft-store --send` sends the listing alone, with no build, in a submission of the packages Partner Center has; where an upload left a submission not submitted yet, it stops and names the release, which sends the listing with the upload's packages.",
         },
         {
             type: 'p',
-            text: 'Partner Center\'s API takes an Entra ID application with the Manager role (Account settings › User management › Microsoft Entra applications), named by `CROSSBIND_MICROSOFT_STORE_TENANT_ID`, `CROSSBIND_MICROSOFT_STORE_CLIENT_ID` and `CROSSBIND_MICROSOFT_STORE_CLIENT_SECRET`; an upload in a terminal asks for them once.',
+            text: "The app's first submission goes with an upload too. Partner Center takes its packages and listing, then stops it at the age ratings, which its API cannot answer. Finish it in Partner Center: the age ratings questionnaire, the privacy policy URL, website and support contact, the markets and the price, and why the app asks for `runFullTrust`, as every packaged Win32 app does, of which the upload gives a draft. Then submit it there; `crossbind app store microsoft-store` lists the same steps.",
         },
         {
             type: 'p',

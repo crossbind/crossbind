@@ -15,12 +15,13 @@ npx crossbind app release microsoft-store --rollout 10
 ```
 
 `crossbind app store` lists what only Partner Center does: reserving the app's name as an "MSIX or PWA app", whose
-identity goes in `app.windows.msix`; the first submission, with its age ratings; and the Entra ID application its API
-takes. Each later version goes with an upload: it builds the MSIX packages, x64 and arm64, and leaves them in a
-submission of the app, not submitted yet. A release puts the listing in `store/microsoft-store` into that submission
-and commits it for certification, with no build, and `--rollout` gives the packages to a share of the app's users
-first. `crossbind app store microsoft-store --send` sends the listing alone, with no build, in a submission of the
-packages Partner Center has, and stops at one an upload left, naming the release.
+identity goes in `app.windows.msix`; the Entra ID application its API takes, whose tenant the account's owner
+associates first; and what the app's first submission still wants there, its age ratings first. An upload builds the
+MSIX packages, x64 and arm64, and leaves them with the listing in `store/microsoft-store` in a submission of the app,
+not submitted yet; the app's first goes up the same way and is finished in Partner Center. A release puts the listing
+into that submission again and commits it for certification, with no build, and `--rollout` gives the packages to a
+share of the app's users first. `crossbind app store microsoft-store --send` sends the listing alone, with no build,
+in a submission of the packages Partner Center has, and stops at one an upload left, naming the release.
 
 ## Platforms
 

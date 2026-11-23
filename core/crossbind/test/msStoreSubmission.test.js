@@ -165,6 +165,19 @@ describe('a submission Partner Center made', () => {
         expect(uploads.map(({ name }) => name)).toEqual([tileName]);
     });
 
+    test('gives a first submission, which comes with no device families, the desktop alone, and keeps those another has', () => {
+        const first = {
+            id: 'S1', fileUploadUrl: SAS, applicationPackages: [], listings: {}, allowTargetFutureDeviceFamilies: {},
+        };
+        expect(changedSubmission(first, {}).submission.allowTargetFutureDeviceFamilies).toEqual({
+            Desktop: true, Mobile: false, Xbox: false, Holographic: false,
+        });
+        const families = {
+            Desktop: true, Mobile: true, Xbox: false, Holographic: false,
+        };
+        expect(changedSubmission({ ...first, allowTargetFutureDeviceFamilies: families }, {}).submission.allowTargetFutureDeviceFamilies).toEqual(families);
+    });
+
     test('makes a listing in a new language of its description, and names the file a new one lacks', () => {
         const packages = [writeUnder(dir, 'dist/demo-win32-x64.msix', 'x64')];
         expect(failureOf(() => changedSubmission(created('old.png'), { packages, listings: [{ language: 'tr-TR', texts: { title: 'Deneme' }, images: {} }] })))
@@ -209,16 +222,22 @@ describe("a zip's upload to Partner Center's storage", () => {
 describe("an app's submission through Partner Center's API", () => {
     let calls;
     let statuses;
+    let filled;
+    let taken;
     const call = async (method, route, body) => {
         calls.push([method, route]);
+        if (method === 'PUT') filled = body;
         if (method === 'POST' && route === 'applications/9N1/submissions') {
             return {
                 id: 'S2', fileUploadUrl: SAS, applicationPackages: [], listings: {}, packageDeliveryOptions: {},
             };
         }
         if (route.endsWith('/status')) return statuses.shift();
+        if (method === 'GET') return taken;
         return body ?? {};
     };
+    const AGE_RATINGS = { code: 'InvalidParameterValue', details: 'Validation error: InvalidMicrosoftAgeRating - ' };
+    const refused = (...errors) => [{ status: 'CommitFailed', statusDetails: { errors } }];
     const submit = (options = {}) => submitPackages(call, {
         appId: '9N1', packages: [writeUnder(dir, 'dist/demo-win32-x64.msix', 'x64')], listings: [], settings: {}, zip: upath.join(dir, 'submission.zip'), ...options,
     });
@@ -226,6 +245,8 @@ describe("an app's submission through Partner Center's API", () => {
     beforeEach(() => {
         calls = [];
         statuses = [{ status: 'CommitStarted' }, { status: 'PreProcessing' }];
+        filled = null;
+        taken = {};
     });
 
     test('makes it, fills it, uploads its zip, commits it and waits for Partner Center to take it', async () => {
@@ -261,6 +282,36 @@ describe("an app's submission through Partner Center's API", () => {
         calls = [];
         statuses = [{ status: 'CommitFailed', statusDetails: { errors: [{ code: 'InvalidParameterValue', details: 'The title is no reserved name.' }] } }];
         await expect(submit()).rejects.toThrow('crossbind: Partner Center refused the submission: InvalidParameterValue: The title is no reserved name.');
+        expect(calls.at(-1)).toEqual(['DELETE', 'applications/9N1/submissions/S2']);
+    });
+
+    test("commits an app's first one, published by hand, and leaves it where Partner Center took its files and stopped at the age ratings alone", async () => {
+        statuses = refused(AGE_RATINGS);
+        taken = {
+            applicationPackages: [{ fileName: 'demo-win32-x64.msix', fileStatus: 'Uploaded' }],
+            listings: { 'en-us': { baseListing: { images: [{ fileName: 'tile.png', fileStatus: 'Uploaded' }] } } },
+        };
+        expect(await submit({ isFirst: true })).toEqual({ id: 'S2', status: 'CommitFailed' });
+        expect(filled.targetPublishMode).toBe('Manual');
+        expect(calls).toEqual([
+            ['POST', 'applications/9N1/submissions'],
+            ['PUT', 'applications/9N1/submissions/S2'],
+            ['POST', 'applications/9N1/submissions/S2/commit'],
+            ['GET', 'applications/9N1/submissions/S2/status'],
+            ['GET', 'applications/9N1/submissions/S2'],
+        ]);
+    });
+
+    test('deletes a first one Partner Center refuses for more than its age ratings, or whose files it has not taken', async () => {
+        statuses = refused(AGE_RATINGS, { code: 'InvalidParameterValue', details: 'Screenshots are required.' });
+        taken = { applicationPackages: [{ fileName: 'demo-win32-x64.msix', fileStatus: 'Uploaded' }] };
+        await expect(submit({ isFirst: true })).rejects.toThrow('InvalidParameterValue: Screenshots are required.');
+        expect(calls.at(-1)).toEqual(['DELETE', 'applications/9N1/submissions/S2']);
+
+        calls = [];
+        statuses = refused(AGE_RATINGS);
+        taken = { applicationPackages: [{ fileName: 'demo-win32-x64.msix', fileStatus: 'PendingUpload' }] };
+        await expect(submit({ isFirst: true })).rejects.toThrow('crossbind: Partner Center refused the submission: InvalidParameterValue: Validation error: InvalidMicrosoftAgeRating');
         expect(calls.at(-1)).toEqual(['DELETE', 'applications/9N1/submissions/S2']);
     });
 });
@@ -318,6 +369,15 @@ describe("the release of an app's submission an upload left", () => {
         await expect(release()).rejects.toThrow('crossbind: Partner Center refused the submission: InvalidParameterValue: The title is no reserved name.');
         expect(calls.map(([method]) => method)).not.toContain('DELETE');
     });
+
+    test("stops before any change where the page's images changed after the upload, whose files Partner Center takes in one zip", async () => {
+        const tile = writeUnder(dir, 'tile.png', pngOf(300, 300));
+        pending = { ...pending, applicationPackages: [{ fileName: 'demo-win32-x64.msix', fileStatus: 'PendingUpload' }] };
+        await expect(release({ listings: [{ language: 'en-US', texts: { description: 'New.' }, images: { Icon: [{ file: tile }] } }] })).rejects
+            .toThrow("crossbind: the page's images changed after the upload, and Partner Center takes the files of a submission in one zip: crossbind app upload microsoft-store again sends them with the build's packages.");
+        expect(calls).toEqual([['GET', 'applications/9N1/submissions/S2']]);
+        expect(requests).toEqual([]);
+    });
 });
 
 describe("Partner Center's API", () => {
@@ -344,13 +404,21 @@ describe("Partner Center's API", () => {
         });
         const call = partnerCenterCaller({ tenant: 'contoso.onmicrosoft.com', client: 'C1', secret: 'S3cret' });
         expect(await call('GET', 'applications/9N1')).toEqual({ id: '9N1' });
-        await expect(call('GET', 'applications/9N2')).rejects.toThrow('crossbind: Partner Center answered GET applications/9N2 with 401 Unauthorized: The token is not valid.\ncrossbind: Partner Center takes the Entra ID application once its account has it with the Manager role');
+        await expect(call('GET', 'applications/9N2')).rejects.toThrow("crossbind: Partner Center answered GET applications/9N2 with 401 Unauthorized: The token is not valid.\ncrossbind: Partner Center takes the Entra ID application once the account's owner has associated its tenant under Account settings › Tenants");
         expect(made.filter(({ url }) => url.startsWith('https://login.microsoftonline.com/'))).toHaveLength(1);
         expect(made[0].url).toBe('https://login.microsoftonline.com/contoso.onmicrosoft.com/oauth2/token');
         expect(Object.fromEntries(new URLSearchParams(String(made[0].init.body)))).toEqual({
             grant_type: 'client_credentials', client_id: 'C1', client_secret: 'S3cret', resource: 'https://manage.devcenter.microsoft.com',
         });
         expect(made[1].init.headers.authorization).toBe('Bearer store-token');
+    });
+
+    test('says what to do where Partner Center finds no account of the token, as before its tenant is associated', async () => {
+        vi.stubGlobal('fetch', async (url) => (String(url).startsWith('https://login.microsoftonline.com/')
+            ? json(200, { access_token: 'store-token', expires_in: 3600 })
+            : json(400, { code: 'Unauthorized', message: 'A valid account could not be found with given authorization token. CorrelationId=1' })));
+        await expect(partnerCenterCaller({ tenant: 'T1', client: 'C1', secret: 'S3cret' })('GET', 'applications')).rejects
+            .toThrow("crossbind: Partner Center answered GET applications with 400 Unauthorized: A valid account could not be found with given authorization token. CorrelationId=1\ncrossbind: Partner Center takes the Entra ID application once the account's owner has associated its tenant under Account settings › Tenants, and it has the Manager role under Account settings › User management › Microsoft Entra applications.");
     });
 
     test('names the application whose token Entra ID refuses', async () => {
