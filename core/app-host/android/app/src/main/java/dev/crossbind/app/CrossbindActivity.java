@@ -35,6 +35,7 @@ import android.webkit.PermissionRequest;
 import android.webkit.URLUtil;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
+import android.webkit.WebHistoryItem;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
@@ -1044,6 +1045,19 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
         return url.getScheme() + "://" + url.getHost() + (url.getPort() == -1 ? "" : ":" + url.getPort());
     }
 
+    // The page that asks, by its URL, from the WebView's two accounts of it, on the UI thread: the page it shows names the
+    // page that is coming while a load the activity began is on its way, and its history's current page names where a
+    // Back goes while one is. Of one origin, they are the page that asks; of two, it is one of them and the WebView does
+    // not say which, so null refuses the request. A redirect is that load's own, which the page shown names.
+    private static String pageAsking(WebView view, boolean isRedirect) {
+        String shown = view.getUrl();
+        WebHistoryItem item = view.copyBackForwardList().getCurrentItem();
+        String current = item == null ? null : item.getUrl();
+        if (shown == null) return current == null ? "" : current;
+        if (current == null || isRedirect || originOf(Uri.parse(shown)).equals(originOf(Uri.parse(current)))) return shown;
+        return null;
+    }
+
     // Whether a URL is of a served origin's form, http://<name>.localhost, served or not.
     private static boolean isServedForm(Uri url) {
         String host = url.getHost();
@@ -1090,14 +1104,14 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
 
         // What the host's navigation rule loads goes on, what it refuses loads nothing, and the extension
         // page-navigation decides every other URL, as native code answers. A page of another origin gets no token, so
-        // it reaches none of the app's functions. The page that asks is the one the WebView shows, which the host hears
-        // of only after its first scripts may have asked.
+        // it reaches none of the app's functions. The page that asks is read from the WebView, as the host hears of a page
+        // only after its first scripts may have asked.
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
             Uri url = request.getUrl();
-            String page = view.getUrl();
-            int answer = nativeNavigation(url.toString().getBytes(StandardCharsets.UTF_8), (page == null ? "" : page).getBytes(StandardCharsets.UTF_8),
-                    request.isForMainFrame(), request.hasGesture());
+            String page = pageAsking(view, request.isRedirect());
+            int answer = page == null ? REFUSE
+                    : nativeNavigation(url.toString().getBytes(StandardCharsets.UTF_8), page.getBytes(StandardCharsets.UTF_8), request.isForMainFrame(), request.hasGesture());
             if (answer == LOAD) return false;
             if (answer == OUTSIDE) openOutside(url);
             return true;
@@ -1112,13 +1126,15 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
         }
 
         // A top frame's POST, which Android asks shouldOverrideUrlLoading nothing of, is decided on the UI thread all the
-        // same, for the page the WebView shows there, which the host may hear of only after the POST, and for
-        // POST_ANSWER_MS at most: one not answered in time is refused.
-        private int decidePost(WebView view, Uri url, BiFunction<byte[], byte[], Integer> decide) {
+        // same, for the page that asks as pageAsking() reads it there, which the host may hear of only after the POST,
+        // and for POST_ANSWER_MS at most: one not answered in time is refused.
+        private int decidePost(WebView view, WebResourceRequest request, BiFunction<byte[], byte[], Integer> decide) {
+            Uri url = request.getUrl();
+            boolean isRedirect = request.isRedirect();
             CompletableFuture<Integer> answer = new CompletableFuture<>();
             MAIN.post(() -> {
-                String page = view.getUrl();
-                answer.complete(decide.apply(url.toString().getBytes(StandardCharsets.UTF_8), (page == null ? "" : page).getBytes(StandardCharsets.UTF_8)));
+                String page = pageAsking(view, isRedirect);
+                answer.complete(page == null ? REFUSE : decide.apply(url.toString().getBytes(StandardCharsets.UTF_8), page.getBytes(StandardCharsets.UTF_8)));
             });
             try {
                 return answer.get(POST_ANSWER_MS, TimeUnit.MILLISECONDS);
@@ -1132,10 +1148,10 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
 
         // A top frame's POST toward an origin the host does not answer, which page-navigation decides as a link: one it
         // loads goes on to the network, one it opens outside opens there, and any other loads nothing.
-        private WebResourceResponse askOfPost(WebView view, Uri url, boolean isUserInitiated) {
-            int decided = decidePost(view, url, (address, page) -> nativeNavigation(address, page, true, isUserInitiated));
+        private WebResourceResponse askOfPost(WebView view, WebResourceRequest request) {
+            int decided = decidePost(view, request, (address, page) -> nativeNavigation(address, page, true, request.hasGesture()));
             if (decided == LOAD) return null;
-            if (decided == OUTSIDE) MAIN.post(() -> openOutside(url));
+            if (decided == OUTSIDE) MAIN.post(() -> openOutside(request.getUrl()));
             return noContent();
         }
 
@@ -1160,10 +1176,10 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
             // Every one of http://<name>.localhost, served or not, as one of them would reach the device's port 80.
             boolean isServed = isServedForm(url);
             boolean isTopPost = request.isForMainFrame() && !"GET".equals(request.getMethod());
-            if (!isApp && !isServed) return isTopPost ? askOfPost(view, url, request.hasGesture()) : null;
+            if (!isApp && !isServed) return isTopPost ? askOfPost(view, request) : null;
             // A form's POST of the top frame toward the app's origin or a served one loads only what the rule loads by
             // itself: a page of another origin's, which the rule leaves to page-navigation, loads nothing as well.
-            if (isTopPost && decidePost(view, url, (address, page) -> nativeLoads(address, page) ? LOAD : REFUSE) != LOAD) return noContent();
+            if (isTopPost && decidePost(view, request, (address, page) -> nativeLoads(address, page) ? LOAD : REFUSE) != LOAD) return noContent();
             String path = url.getEncodedPath() == null ? "/" : url.getEncodedPath();
             // The host decodes the path, as Uri does here.
             if (isApp && url.getPath() != null && url.getPath().startsWith("/b/")) return responseOf(404, "text/plain", new byte[0][], new byte[0], null, null);

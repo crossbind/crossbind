@@ -15,12 +15,14 @@ const SLOW = 'e2e-slow';
 const WAIT = 'e2e-wait';
 const SOON = 'e2e-soon';
 const FIRST = 'e2e-first';
+const ACCOUNTS = 'e2e-accounts';
 const FRAME_PAGE = 'frame-probe.html';
 const NO_ROLE_PAGE = 'no-role.html';
 const PAGE_API_PAGE = 'page-api.html';
 const WAIT_PAGE = 'page-wait.html';
 const SOON_PAGE = 'page-soon.html';
 const FIRST_PAGE = 'page-first.html';
+const ACCOUNTS_PAGE = 'page-accounts.html';
 // What arms the app's first page after page-first.html's end to go within the app at once, for the window's session.
 const FIRST_ARMED = 'e2e-first-navigation';
 // Where page-first.html's first script goes first, which page-navigation refuses.
@@ -468,6 +470,32 @@ async function afterFirst(reports) {
     show('first', { stayed: reports.first.stayed, elsewhere: { role: elsewhere.role, isPage: elsewhere.isPage }, back: location.href });
 }
 
+// 16. On Android the page that asks is read from both of the WebView's accounts of it: the page it shows, which names
+// the page coming while a load the host began is on its way, and its history's current page, which names where a Back
+// goes while one is; of two origins, the request is refused. The app's page, given its user's activation so that a
+// Back toward it can be on its way, opens page-accounts.html, whose probe asks the host's WebView client as the WebView
+// would: with a Back on its way and then a load of the app's page, a navigation toward the app's origin is refused
+// each time, and a redirect of that load, which is the load's own, loads.
+async function openAccounts() {
+    const page = `${under(await invoke('probe.serveOrigin', { name: ACCOUNTS, source: SOURCE }), ACCOUNTS_PAGE)}?app=${encodeURIComponent(location.origin)}`;
+    await invoke('probe.setStage', { stage: 'accounts' });
+    await invoke('probe.tapWebView');
+    for (const end = Date.now() + ANSWER_MS; !navigator.userActivation.hasBeenActive && Date.now() < end;) await sleep(POLL_MS);
+    location.href = page;
+    await sleep(ANSWER_MS);
+    throw new Error(`the window did not open ${page}`);
+}
+
+async function afterAccounts(reports) {
+    const asked = reports.accounts;
+    await invoke('probe.endOrigin', { name: ACCOUNTS });
+    if (asked?.canGoBack !== true) throw new Error(`no Back toward the app's page was on its way from ${ACCOUNTS_PAGE}: ${JSON.stringify(asked)}`);
+    if (asked.back !== true) throw new Error("a navigation toward the app's origin, asked of a project's page as a Back toward the app's page was on its way, loaded");
+    if (asked.load !== true) throw new Error("a navigation toward the app's origin, asked of a project's page as a load of the app's page was on its way, loaded");
+    if (asked.redirect !== false) throw new Error("a redirect toward the app's origin of the host's own load of the app's page was refused");
+    show('accounts', asked);
+}
+
 // The app's page at the stage the round trip reached: false once it sent the window elsewhere, else what the project's
 // pages reported, at its end.
 export async function runServedRoundTrip(isAndroid) {
@@ -484,7 +512,8 @@ export async function runServedRoundTrip(isAndroid) {
     if (stage === 'page-api-done') return checkEndClosedMessage(reports).then(openWait).then(() => false);
     if (stage === 'wait-done') return checkEndCancelledDialog().then(openSoon).then(() => false);
     if (stage === 'soon-done') return checkSoonGone().then(() => openFirst(isAndroid)).then(() => false);
-    if (stage === 'first') return afterFirst(reports).then(openSlowly).then(() => false);
+    if (stage === 'first') return afterFirst(reports).then(() => (isAndroid ? openAccounts() : openSlowly())).then(() => false);
+    if (stage === 'accounts') return afterAccounts(reports).then(openSlowly).then(() => false);
     if (stage === 'first-load') return afterFirstLoad(reports);
     throw new Error(`the app's page opened at ${location.href} at the stage ${stage}${stage === 'refused' ? ", which the project's page navigated to" : ''}`);
 }

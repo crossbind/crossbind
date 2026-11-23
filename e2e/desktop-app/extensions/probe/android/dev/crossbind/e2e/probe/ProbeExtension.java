@@ -7,10 +7,15 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ShortcutInfo;
 import android.content.pm.ShortcutManager;
+import android.net.Uri;
 import android.os.Handler;
 import android.os.SystemClock;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.inspector.WindowInspector;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
 import android.widget.TextView;
 
 import dev.crossbind.app.Extension;
@@ -19,6 +24,7 @@ import dev.crossbind.app.R;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -38,6 +44,41 @@ public final class ProbeExtension implements Extension {
     @Override
     public void onResume(ExtensionHost host) {
         resumes += 1;
+    }
+
+    // A GET of the top frame with no gesture, as the WebView hands its client one.
+    private static WebResourceRequest topRequest(String url, boolean isRedirect) {
+        return new WebResourceRequest() {
+            @Override
+            public Uri getUrl() {
+                return Uri.parse(url);
+            }
+
+            @Override
+            public boolean isForMainFrame() {
+                return true;
+            }
+
+            @Override
+            public boolean isRedirect() {
+                return isRedirect;
+            }
+
+            @Override
+            public boolean hasGesture() {
+                return false;
+            }
+
+            @Override
+            public String getMethod() {
+                return "GET";
+            }
+
+            @Override
+            public Map<String, String> getRequestHeaders() {
+                return Map.of();
+            }
+        };
     }
 
     @Override
@@ -88,6 +129,35 @@ public final class ProbeExtension implements Extension {
                         }
                     });
                     call.resolve(null);
+                }
+                // A tap amid the page, as its user's, which gives the page its user's activation: a history entry of a
+                // page that had none is one Back skips.
+                case "tapWebView" -> {
+                    WebView view = host.webView();
+                    long at = SystemClock.uptimeMillis();
+                    MotionEvent down = MotionEvent.obtain(at, at, MotionEvent.ACTION_DOWN, view.getWidth() / 2f, view.getHeight() / 2f, 0);
+                    MotionEvent up = MotionEvent.obtain(at, at, MotionEvent.ACTION_UP, view.getWidth() / 2f, view.getHeight() / 2f, 0);
+                    view.dispatchTouchEvent(down);
+                    view.dispatchTouchEvent(up);
+                    down.recycle();
+                    up.recycle();
+                    call.resolve(null);
+                }
+                // What the activity's WebView client answers, asked as the WebView asks it, in this one turn of the UI
+                // thread, with a project's page shown: once a Back toward the app's page is on its way, of a navigation
+                // toward the app's origin; once a load of the app's page is, of the same and of a redirect of that load.
+                // True for what it refused. The load goes on.
+                case "askAsTheWebView" -> {
+                    WebView view = host.webView();
+                    WebViewClient client = view.getWebViewClient();
+                    String app = options.getString("app");
+                    JSONObject asked = new JSONObject().put("canGoBack", view.canGoBack());
+                    view.goBack();
+                    asked.put("back", client.shouldOverrideUrlLoading(view, topRequest(app + "/?from=accounts-back", false)));
+                    view.loadUrl(app + "/?from=accounts-load");
+                    asked.put("load", client.shouldOverrideUrlLoading(view, topRequest(app + "/?from=accounts-asked", false)));
+                    asked.put("redirect", client.shouldOverrideUrlLoading(view, topRequest(app + "/?from=accounts-redirect", true)));
+                    call.resolve(asked);
                 }
                 // Messages before the answer, each with a byte of its own, from a thread of the probe's.
                 case "count" -> {

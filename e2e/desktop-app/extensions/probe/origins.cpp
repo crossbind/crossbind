@@ -233,6 +233,19 @@ void addPageFunctions(crossbind::Registry &registry) {
         std::lock_guard<std::mutex> lock(originsMutex);
         call.resolve(Value(reports));
     });
+#if defined(__ANDROID__)
+    // What the activity's WebView client answers of a project's page asked as the WebView asks it, which the probe's
+    // Java tells, kept for the app's page its load brings.
+    registry.function("probe.askAsTheWebView", PAGES, [](Call call) {
+        crossbind::android::callJava("probe", "askAsTheWebView", call.options().asObject(), [call](std::optional<std::string> failure, Value asked) {
+            {
+                std::lock_guard<std::mutex> lock(originsMutex);
+                reports.emplace_back("accounts", failure ? Value(*failure) : std::move(asked));
+            }
+            call.resolve();
+        });
+    });
+#endif
     // The message dialog a page showed, closed as its user would: whether one of the message showed, and the title of its
     // window where the platform shows one.
     registry.function("probe.closeDialog", PAGES, [](Call call) {
