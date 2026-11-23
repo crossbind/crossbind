@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
     MAIN, fileNames, newFileError, packageOf,
-} from './project.js';
+} from '../../../tooling/learn/src/project.js';
 
 // The project's files with the config the compiler writes for it, and its packages: the modern look's side panel, and
 // the lists both looks share.

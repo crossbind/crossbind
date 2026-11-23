@@ -5,14 +5,15 @@
   Cache-Control: public, max-age=31536000, immutable
 
 # The playground runs visitors' code here, in a frame with an opaque origin: no network, no forms, no other
-# scripts, and a sandbox even when the page is opened on its own. The hash is the page's one inline script.
+# scripts, and a sandbox even when the page is opened on its own. The hash is the page's one inline script; the page is
+# @crossbind/learn's (tooling/learn/src/sandbox.html), which the site's build puts here.
 # Cloudflare Pages redirects sandbox.html to /playground/sandbox and serves the page there, so both paths carry it.
 /playground/sandbox.html
-  Content-Security-Policy: sandbox allow-scripts; default-src 'none'; script-src 'sha256-6ueMHMAPndT2H8rXtZmr1FBIEmzhoKkXFAMOPhgfA+I=' blob: 'unsafe-eval' 'wasm-unsafe-eval'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'
+  Content-Security-Policy: sandbox allow-scripts; default-src 'none'; script-src 'sha256-vSePJPR4hTWkoFFSbcEZUeL8WGCK4NzYltij0J1+x/s=' blob: 'unsafe-eval' 'wasm-unsafe-eval'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'
   Cache-Control: no-cache
 
 /playground/sandbox
-  Content-Security-Policy: sandbox allow-scripts; default-src 'none'; script-src 'sha256-6ueMHMAPndT2H8rXtZmr1FBIEmzhoKkXFAMOPhgfA+I=' blob: 'unsafe-eval' 'wasm-unsafe-eval'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'
+  Content-Security-Policy: sandbox allow-scripts; default-src 'none'; script-src 'sha256-vSePJPR4hTWkoFFSbcEZUeL8WGCK4NzYltij0J1+x/s=' blob: 'unsafe-eval' 'wasm-unsafe-eval'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'
   Cache-Control: no-cache
 
 # The page a preview's QR code opens, whose address names a session: it hands the session to the crossbind app and asks

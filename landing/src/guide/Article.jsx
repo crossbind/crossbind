@@ -3,7 +3,7 @@ import RunnableExample from '../apps/RunnableExample.jsx';
 import Disclosure from '../components/Disclosure.jsx';
 import DocCode from './DocCode.jsx';
 import ReleaseMeta from '../changelog/ReleaseMeta.jsx';
-import { inline } from './inline.jsx';
+import { inline } from '../../../tooling/learn/src/inline.jsx';
 
 // One renderer for every guide page: pages are data (src/guide/pages/*.js), this turns their
 // blocks into the article. Adding a page never means writing markup.

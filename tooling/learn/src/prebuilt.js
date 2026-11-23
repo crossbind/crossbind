@@ -1,15 +1,15 @@
-import { DEMOS } from '../demos.js';
+import { servesProject } from './project.js';
 
-// The demo build (scripts/site/build-example-demos.mjs) compiles every sample ahead of time as `sample-<id>`, so an
-// unedited one runs without a compile. A site built without its demos has none; its samples then compile like any
-// other code.
+// A sample's module built ahead of time, where the caller keeps it: { script, wasm, imports }, the addresses of its
+// loader, its wasm and its import list. A sample with none compiles like any other code.
 
 const BASE64_CHUNK = 0x8000;
 
-const prebuiltOf = (sampleId) => DEMOS.get(`sample-${sampleId}`);
-
 // A module built before the samples imported their natives has no import list, so its sample compiles instead.
-export const hasPrebuilt = (sampleId) => Boolean(prebuiltOf(sampleId)?.imports);
+export const hasPrebuilt = (prebuilt) => Boolean(prebuilt?.imports);
+
+// The sample's prebuilt module stands in for a compile while it serves the project (project.js).
+export const canRunPrebuilt = (prebuilt, project, original) => servesProject(project, original) && hasPrebuilt(prebuilt);
 
 function toBase64(bytes) {
     let binary = '';
@@ -25,8 +25,7 @@ async function fetchOk(url) {
 
 // The loader, the wasm and the import list in the shape the playground compiler answers with: text, the bytes as
 // base64, and the list as parsed JSON.
-export async function loadPrebuilt(sampleId) {
-    const { script, wasm, imports } = prebuiltOf(sampleId);
+export async function loadPrebuilt({ script, wasm, imports }) {
     const [js, bytes, list] = await Promise.all([
         fetchOk(script).then((response) => response.text()),
         fetchOk(wasm).then((response) => response.arrayBuffer()),

@@ -1,13 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_FILES, MAX_PACKAGES, validateRequest } from '../../tooling/cloud/compiler/validate.js';
-import { PACKAGES } from '../../tooling/cloud/compiler/packages.js';
-import { sampleProject } from '../../scripts/site/build-example-demos.mjs';
-import { ImportError, importSpecifiers, prepareModules } from '../src/playground/modules.js';
+import { MAX_FILES, MAX_PACKAGES, validateRequest } from '../../cloud/compiler/validate.js';
+import { PACKAGES } from '../../cloud/compiler/packages.js';
+import { sampleProject } from '../../../scripts/site/build-example-demos.mjs';
+import { ImportError, importSpecifiers, prepareModules } from '../src/modules.js';
 import {
     addFile, addPackage, compileRequest, fileNames, importStatements, newFileError, removePackage, scriptsOf, servesProject, usageOf,
-} from '../src/playground/project.js';
-import { SAMPLE_LIST } from '../src/playground/sampleList.js';
+} from '../src/project.js';
+import { SAMPLE_LIST } from '../src/sampleList.js';
 
 const EMPTY = Object.freeze({ files: { 'main.js': '' }, packages: [] });
 const TOKEN = 'crossbind-0123456789abcdef';

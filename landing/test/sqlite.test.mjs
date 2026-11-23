@@ -4,10 +4,10 @@ import { test } from 'node:test';
 import {
     createStatement, DEFAULT_QUERY, insertStatement, MAIN_AFTER, MAIN_BEFORE, TABLE, toTable, withoutCommentLines,
 } from '../src/live/sqlite.js';
-import { SAMPLE_LIST } from '../src/playground/sampleList.js';
+import { SAMPLE_LIST } from '../../tooling/learn/src/sampleList.js';
 import { CATEGORY_LABELS, PORTS } from '../src/ports/catalog.js';
 
-const sampleFile = (name) => readFileSync(new URL(`../src/playground/samples/sqlite/${name}`, import.meta.url), 'utf8');
+const sampleFile = (name) => readFileSync(new URL(`../../tooling/learn/src/samples/sqlite/${name}`, import.meta.url), 'utf8');
 
 test("the home page shows every line of the demo's database.h but its comments", () => {
     const real = readFileSync(new URL('../demos/panel-sqlite/src/native/database.h', import.meta.url), 'utf8');

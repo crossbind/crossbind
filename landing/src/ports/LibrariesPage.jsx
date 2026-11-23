@@ -1,5 +1,5 @@
 import { Fragment } from 'react';
-import { inline } from '../guide/inline.jsx';
+import { inline } from '../../../tooling/learn/src/inline.jsx';
 import { CATEGORY_LABELS, PORTS } from './catalog.js';
 import { portHref } from './pages.js';
 

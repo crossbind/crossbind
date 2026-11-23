@@ -3,7 +3,7 @@ import { Chevron } from '../components/menu.jsx';
 import PrevNext from '../components/PrevNext.jsx';
 import { SideHeading, SideLink } from '../components/side.jsx';
 import Article from './Article.jsx';
-import { inline } from './inline.jsx';
+import { inline } from '../../../tooling/learn/src/inline.jsx';
 import { getNeighbours, GUIDE_SECTIONS } from './nav.js';
 
 // The doc shell: gdal3.js's three-column layout - grouped sidebar, article, "on this page" -

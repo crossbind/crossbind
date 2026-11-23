@@ -1,0 +1,10 @@
+{
+    "name": "@crossbind/learn",
+    "version": "0.0.0",
+    "private": true,
+    "description": "The tutorial and the playground that crossbind.dev and the crossbind app share",
+    "type": "module",
+    "scripts": {
+        "test": "node --test test/*.test.mjs"
+    }
+}

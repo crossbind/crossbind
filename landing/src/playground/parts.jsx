@@ -1,12 +1,10 @@
+import { PAUSED } from '../../../tooling/learn/src/runReason.js';
 import { primaryButtonStyle, secondaryButtonStyle } from '../components/ui.jsx';
 import { PLAYGROUND_URL } from '../data.js';
-import { inline } from '../guide/inline.jsx';
 import { ACCOUNT_URL, LOGIN_URL } from './client.js';
-import { PAUSED } from './runReason.js';
 
-// The run controls and the console's lines the playground and the tutorial share; useRunner.js holds their state.
-
-const ERROR_STREAMS = new Set(['stderr', 'warn', 'error']);
+// The run controls the playground and the tutorial share, with the site's sign-in; useSession.js and @crossbind/learn's
+// useRunner.js hold their state.
 
 // The page's h1, for screen readers only: the navbar's Playground already names the page on screen.
 export const visuallyHidden = {
@@ -27,9 +25,6 @@ export function statusText(phase, session, prebuilt) {
     if (!session.enabled) return PAUSED;
     return `${session.remaining} of ${session.limit} compiles left today`;
 }
-
-// `lead` is left out where the text sits on a narrow window's frame, beside its title.
-export const runInfo = (lastRun, lead = 'Ran in ') => (lastRun ? `${lead}${lastRun.seconds.toFixed(1)} s · ${lastRun.prebuilt ? 'prebuilt' : 'compiled'}` : '');
 
 // Signing in from the playground returns to the playground page (tooling/cloud/worker/oauth.js), so a page elsewhere
 // (`away`) sends the visitor there to do it. The account's page offers each way in.
@@ -115,33 +110,6 @@ export function Notice({
         >
             <span>{notice.text}</span>
             {notice.login && canSignIn && <SignInLink tokens={tokens} away={away} />}
-        </div>
-    );
-}
-
-// `intro` is what the playground says until the first run; the tutorial's steps explain themselves and pass none.
-export function ConsoleLines({ tokens, lines, buildLog, intro }) {
-    const colorOf = ({ stream }) => {
-        if (stream === 'done') return tokens.codeMuted;
-        return ERROR_STREAMS.has(stream) ? tokens.warn : tokens.codeText;
-    };
-    return (
-        <div aria-live="polite" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-            {buildLog && <div style={{ color: tokens.warn }}>{buildLog}</div>}
-            {/* Lines only ever append, so the index is a stable key. */}
-            {lines.map((line, index) => (
-                <div key={index} style={{ color: colorOf(line) }}>{line.text}</div>
-            ))}
-            {!buildLog && lines.length === 0 && (
-                <>
-                    <span style={{ color: tokens.codeMuted }}>Press Run, or Ctrl+Enter, to run main.js.</span>
-                    {intro?.map((text) => (
-                        <p key={text} style={{ margin: '12px 0 0', fontFamily: tokens.sans, fontSize: 13, lineHeight: 1.65, color: tokens.textDim, whiteSpace: 'normal' }}>
-                            {inline(text, tokens)}
-                        </p>
-                    ))}
-                </>
-            )}
         </div>
     );
 }

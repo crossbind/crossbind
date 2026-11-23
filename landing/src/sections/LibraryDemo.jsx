@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { TURBO, TURBO_SYNTAX, TurboWindow } from '../components/turbo.jsx';
-import { highlight, primaryButtonStyle } from '../components/ui.jsx';
+import { primaryButtonStyle } from '../components/ui.jsx';
+import { highlight } from '../../../tooling/learn/src/highlight.jsx';
 import { PLAYGROUND_URL } from '../data.js';
 import { isLive, liveDemo, loadDemo } from '../live/runtime.js';
 import {

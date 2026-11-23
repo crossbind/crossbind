@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Disclosure from '../components/Disclosure.jsx';
 import DocCode from '../guide/DocCode.jsx';
-import { inline } from '../guide/inline.jsx';
+import { inline } from '../../../tooling/learn/src/inline.jsx';
 import { isLive, liveDemo, loadDemo } from '../live/runtime.js';
 import { megabytes, RunButton } from './AppCard.jsx';
 

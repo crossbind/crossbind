@@ -1,8 +1,9 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { defineConfig } from 'vite';
 import preact from '@preact/preset-vite';
 import { vitePrerenderPlugin } from 'vite-prerender-plugin';
+import { SANDBOX_URL } from '../tooling/learn/src/sandbox.js';
 // Both of these read the generated release snapshot (landing/generated/release-snapshot.js), which
 // `pnpm run resolve:release` writes before dev and build. A missing-module error here means that
 // step did not run, or the release metadata failed verification and the build must not go on.
@@ -128,6 +129,26 @@ function demoDirectories() {
     };
 }
 
+// The playground's sandbox page is @crossbind/learn's. The dev server answers its address with it, and a build puts it
+// there among the site's files, where public/_headers gives it its policy.
+const SANDBOX_PAGE = resolve(import.meta.dirname, '../tooling/learn/src/sandbox.html');
+
+function sandboxPage() {
+    return {
+        name: 'crossbind-sandbox-page',
+        configureServer(server) {
+            server.middlewares.use((request, response, next) => {
+                if (request.url?.split('?')[0] !== SANDBOX_URL) return next();
+                response.setHeader('Content-Type', 'text/html');
+                response.end(readFileSync(SANDBOX_PAGE));
+            });
+        },
+        generateBundle() {
+            this.emitFile({ type: 'asset', fileName: SANDBOX_URL.slice(1), source: readFileSync(SANDBOX_PAGE) });
+        },
+    };
+}
+
 export default defineConfig(({ isPreview }) => {
     if (!isPreview) {
         assertSnapshotMatchesConfig(RELEASE, {
@@ -137,7 +158,9 @@ export default defineConfig(({ isPreview }) => {
         });
     }
     return {
-        plugins: [preact(), vitePrerenderPlugin({ renderTarget: '#root' }), sitemap(), releaseSnapshot(), llmsFiles(), demoDirectories()],
+        plugins: [preact(), vitePrerenderPlugin({ renderTarget: '#root' }), sitemap(), releaseSnapshot(), llmsFiles(), demoDirectories(), sandboxPage()],
+        // @crossbind/learn's components (tooling/learn) import React's names too, which resolve to the site's Preact.
+        resolve: { dedupe: ['preact'] },
         build: { outDir: 'dist' },
     };
 });

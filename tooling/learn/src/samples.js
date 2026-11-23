@@ -1,7 +1,7 @@
 // The compiler template's C++: its image warms the build tree on these very files, so the sample that has nothing
 // else to bind compiles once and then comes from the cache.
-import header from '../../../tooling/cloud/compiler/template/src/native/native.h?raw';
-import source from '../../../tooling/cloud/compiler/template/src/native/native.cpp?raw';
+import header from '../../cloud/compiler/template/src/native/native.h?raw';
+import source from '../../cloud/compiler/template/src/native/native.cpp?raw';
 import { SAMPLE_LIST } from './sampleList.js';
 
 const TEMPLATE_NATIVE = Object.freeze({ 'native/native.h': header, 'native/native.cpp': source });

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { highlight } from '../components/ui.jsx';
+import { highlight } from './highlight.jsx';
 
 const FONT_SIZE = 13;
 const LINE_HEIGHT = 1.7;

@@ -1,4 +1,4 @@
-import { FILE_NAME } from '../../../tooling/cloud/compiler/validate.js';
+import { FILE_NAME } from '../../cloud/compiler/validate.js';
 import {
     MAIN, packageOf, samePackages, sameProject,
 } from './project.js';

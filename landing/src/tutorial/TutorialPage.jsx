@@ -7,21 +7,22 @@ import {
 } from '../components/turbo.jsx';
 import { PLAYGROUND_URL } from '../data.js';
 import Article from '../guide/Article.jsx';
-import { inline } from '../guide/inline.jsx';
+import { inline } from '../../../tooling/learn/src/inline.jsx';
 import { TUTORIAL_PAGES, TUTORIAL_SECTIONS } from '../pages/tutorial.js';
 import {
     PLAYGROUND_DRAFT_KEY, editDraft, projectOf, readDrafts, replacesEdits, updateDrafts, without,
-} from '../playground/drafts.js';
-import Editor, { fitHeight } from '../playground/Editor.jsx';
-import {
-    ConsoleLines, Notice, Toolbar, runInfo,
-} from '../playground/parts.jsx';
-import { hasPrebuilt } from '../playground/prebuilt.js';
-import { MAIN, setFile } from '../playground/project.js';
+} from '../../../tooling/learn/src/drafts.js';
+import Editor, { fitHeight } from '../../../tooling/learn/src/Editor.jsx';
+import { ConsoleLines, runInfo } from '../../../tooling/learn/src/output.jsx';
+import { Notice, Toolbar } from '../playground/parts.jsx';
+import { canRunPrebuilt, hasPrebuilt } from '../../../tooling/learn/src/prebuilt.js';
+import { MAIN, setFile } from '../../../tooling/learn/src/project.js';
 import { CONFIG } from '../playground/ProjectPanel.jsx';
-import { runOffReason } from '../playground/runReason.js';
-import { SAMPLES, findSample } from '../playground/samples.js';
-import { canRunPrebuilt, useRunner } from '../playground/useRunner.js';
+import { runOffReason } from '../../../tooling/learn/src/runReason.js';
+import { SAMPLES, findSample } from '../../../tooling/learn/src/samples.js';
+import { useRunner } from '../../../tooling/learn/src/useRunner.js';
+import { samplePrebuilt } from '../demos.js';
+import { useSession } from '../playground/useSession.js';
 import { shortName } from '../playground/workspace.jsx';
 import Contents from './Contents.jsx';
 import { positionOf } from './sections.js';
@@ -29,8 +30,8 @@ import { positionOf } from './sections.js';
 // /tutorial/: one step per page, laid out as a workbench. The contents stay at the left of a wide screen and fold
 // into the step menu on a narrower one. The lesson has Run and the output under it. Beside them the step's playground
 // sample sits in two Turbo windows, its native file over main.js, so a declaration and its call show together.
-// Edits are kept per step in this browser; useRunner.js runs an unedited step's prebuilt module, so reading through
-// the tutorial never needs a compile. The columns and their breakpoints are in styles.css.
+// Edits are kept per step in this browser; @crossbind/learn's useRunner.js runs an unedited step's prebuilt module, so
+// reading through the tutorial never needs a compile. The columns and their breakpoints are in styles.css.
 
 const DRAFT_KEY = 'crossbind.tutorial.project';
 const RESET_QUESTION = 'Discard your changes to this step?';
@@ -60,15 +61,16 @@ export default function TutorialPage({ tokens, page }) {
     const [file, setOpenFile] = useState(tabs[0].id);
     const [drafts, setDrafts] = useState({});
     const [restored, setRestored] = useState(false);
-    const runner = useRunner({ lazy: true });
+    const service = useSession({ lazy: true });
+    const runner = useRunner({ compile: service.compile, canCompile: service.canCompile, prebuilt: samplePrebuilt });
     const output = useRef(null);
     const project = projectOf(sample, drafts[sample.id]);
     const edited = Boolean(drafts[sample.id]);
-    const prebuilt = canRunPrebuilt(sample.id, project, sample.project);
+    const prebuilt = canRunPrebuilt(samplePrebuilt(sample.id), project, sample.project);
     const idle = restored && runner.phase === 'idle';
-    const ready = idle && (prebuilt || runner.canCompile);
+    const ready = idle && (prebuilt || service.canCompile);
     const runOff = idle && !ready
-        ? runOffReason({ prebuilt, session: runner.session, canReset: edited && hasPrebuilt(sample.id) })
+        ? runOffReason({ prebuilt, session: service.session, canReset: edited && hasPrebuilt(samplePrebuilt(sample.id)) })
         : null;
     const index = TUTORIAL_PAGES.findIndex((step) => step.path === page.path);
     const position = positionOf(TUTORIAL_SECTIONS, page.path);
@@ -90,7 +92,7 @@ export default function TutorialPage({ tokens, page }) {
 
     // An unedited step runs its prebuilt module, so the session loads only once the project needs a compile.
     useEffect(() => {
-        if (restored && !prebuilt) runner.connect();
+        if (restored && !prebuilt) service.connect();
     }, [restored, prebuilt]);
 
     const edit = (name) => (text) => {
@@ -196,7 +198,7 @@ export default function TutorialPage({ tokens, page }) {
                 <Toolbar
                     tokens={tokens}
                     phase={runner.phase}
-                    session={runner.session}
+                    session={service.session}
                     ready={ready}
                     runOff={runOff}
                     prebuilt={prebuilt}
@@ -204,11 +206,11 @@ export default function TutorialPage({ tokens, page }) {
                     runFirst
                     onRun={run}
                     onStop={runner.stop}
-                    onSignOut={runner.leave}
+                    onSignOut={service.leave}
                     style={{ marginBottom: 12 }}
                 />
-                <div ref={runner.check} />
-                {runner.notice && <Notice tokens={tokens} notice={runner.notice} canSignIn={Boolean(runner.session?.canSignIn)} away style={{ margin: '0 0 12px' }} />}
+                <div ref={service.check} />
+                {runner.notice && <Notice tokens={tokens} notice={runner.notice} canSignIn={Boolean(service.session?.canSignIn)} away style={{ margin: '0 0 12px' }} />}
                 <div ref={output} className="tutorial-output" style={{ ...desk, background: TURBO.black }}>
                     <TurboWindow title="Output" number={runInfo(runner.lastRun, '') || null} background={TURBO.black} className="playground-pane" style={{ flex: 1 }}>
                         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '10px 14px' }}>

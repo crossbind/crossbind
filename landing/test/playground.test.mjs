@@ -4,11 +4,10 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { SITE_ROUTES } from '../src/site-pages.js';
 import PLAYGROUND_PAGE from '../src/pages/playground.js';
-import { PAUSED, runOffReason } from '../src/playground/runReason.js';
 import { LIMITS } from '../../tooling/cloud/compiler/sandbox.js';
 import { sampleProject } from '../../scripts/site/build-example-demos.mjs';
 
-const html = readFileSync(new URL('../public/playground/sandbox.html', import.meta.url), 'utf8');
+const html = readFileSync(new URL('../../tooling/learn/src/sandbox.html', import.meta.url), 'utf8');
 const headers = readFileSync(new URL('../public/_headers', import.meta.url), 'utf8');
 const script = html.slice(html.indexOf('<script>') + '<script>'.length, html.indexOf('</script>'));
 const scriptHash = `'sha256-${createHash('sha256').update(script, 'utf8').digest('base64')}'`;
@@ -77,19 +76,6 @@ test('the hero shows the hero sample in the 66 characters its code column holds;
     [files['main.js'], files['native/greet.h'], files['native/math.rs']].join('\n').split('\n')
         .forEach((line) => assert.ok(line.length <= 66, line));
     assert.deepEqual(packages, []);
-});
-
-test('Run that cannot run says why: the compile the project needs, and what keeps the service from it', () => {
-    const unreachable = 'The playground service cannot be reached right now.';
-    assert.equal(runOffReason({ prebuilt: true, session: null }), null);
-    assert.equal(runOffReason({ prebuilt: false, session: { enabled: true } }), null);
-    assert.equal(runOffReason({ prebuilt: false, session: null }), 'This project needs a compile. The playground service has not answered yet.');
-    assert.equal(runOffReason({ prebuilt: false, session: { error: unreachable } }), `This project needs a compile. ${unreachable}`);
-    assert.equal(runOffReason({ prebuilt: false, session: { enabled: false } }), `This project needs a compile. ${PAUSED}`);
-    assert.equal(
-        runOffReason({ prebuilt: false, session: { error: unreachable }, canReset: true }),
-        `This project needs a compile. ${unreachable} Reset your changes to run it without one.`,
-    );
 });
 
 test("the package dialog's close box is a button that closes it, as Turbo Vision's was, and comes last so the search keeps the opening focus", () => {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
     PLAYGROUND_DRAFT_KEY, editDraft, projectOf, readDrafts, updateDrafts, without,
-} from './drafts.js';
+} from '../../../tooling/learn/src/drafts.js';
 import ModernWorkspace from './ModernWorkspace.jsx';
 import PackageDialog from './PackageDialog.jsx';
 import { CONFIG } from './ProjectPanel.jsx';
@@ -10,16 +10,18 @@ import TurboWorkspace from './TurboWorkspace.jsx';
 import { Notice, Toolbar, linkButtonStyle, visuallyHidden } from './parts.jsx';
 import {
     MAIN, addFile, addPackage, removeFile, removePackage, setFile,
-} from './project.js';
-import { hasPrebuilt } from './prebuilt.js';
-import { runOffReason } from './runReason.js';
-import { DEFAULT_SAMPLE, SAMPLES, findSample } from './samples.js';
-import { canRunPrebuilt, useRunner } from './useRunner.js';
+} from '../../../tooling/learn/src/project.js';
+import { canRunPrebuilt, hasPrebuilt } from '../../../tooling/learn/src/prebuilt.js';
+import { runOffReason } from '../../../tooling/learn/src/runReason.js';
+import { DEFAULT_SAMPLE, SAMPLES, findSample } from '../../../tooling/learn/src/samples.js';
+import { useRunner } from '../../../tooling/learn/src/useRunner.js';
+import { samplePrebuilt } from '../demos.js';
+import { useSession } from './useSession.js';
 import { shortName } from './workspace.jsx';
 
-// /playground/: a project of files and packages, the open file and the console. useRunner.js runs main.js against
-// the sample's prebuilt module, or against one the playground compiler (tooling/cloud) builds from the edited
-// project. All of it lives here once; the modern and the Turbo look only draw it. The first render matches the
+// /playground/: a project of files and packages, the open file and the console. @crossbind/learn's useRunner.js runs
+// main.js against the sample's prebuilt module, or against one the playground compiler (tooling/cloud) builds from the
+// edited project. All of it lives here once; the modern and the Turbo look only draw it. The first render matches the
 // prerendered page: the drafts, the linked sample, the sign-in result and the session load afterwards.
 
 // Only the Turbo look is offered; the modern one stays in the code, but nothing leads to it.
@@ -94,17 +96,18 @@ export default function PlaygroundPage({ tokens, page }) {
     const [adding, setAdding] = useState(false);
     const creatingRequests = useRef(0);
     const returnFocus = useRef(null);
-    const runner = useRunner();
+    const service = useSession();
+    const runner = useRunner({ compile: service.compile, canCompile: service.canCompile, prebuilt: samplePrebuilt });
     const sample = findSample(sampleId);
     const project = projectOf(sample, drafts[sampleId]);
-    const prebuilt = canRunPrebuilt(sampleId, project, sample.project);
+    const prebuilt = canRunPrebuilt(samplePrebuilt(sampleId), project, sample.project);
     const shown = active === CONFIG || active in project.files ? active : MAIN;
     const busy = runner.phase !== 'idle';
     const edited = Boolean(drafts[sampleId]);
-    const ready = restored && !busy && (prebuilt || runner.canCompile);
+    const ready = restored && !busy && (prebuilt || service.canCompile);
     // Only an idle Run that cannot run has a reason; a busy one says what it is doing on its face.
     const runOff = restored && !busy && !ready
-        ? runOffReason({ prebuilt, session: runner.session, canReset: edited && hasPrebuilt(sampleId) })
+        ? runOffReason({ prebuilt, session: service.session, canReset: edited && hasPrebuilt(samplePrebuilt(sampleId)) })
         : null;
 
     useEffect(() => {
@@ -209,7 +212,7 @@ export default function PlaygroundPage({ tokens, page }) {
                     <TurboBar
                         tokens={tokens}
                         phase={runner.phase}
-                        session={runner.session}
+                        session={service.session}
                         ready={ready}
                         runOff={runOff}
                         prebuilt={prebuilt}
@@ -222,19 +225,19 @@ export default function PlaygroundPage({ tokens, page }) {
                         onNewFile={() => workspace.onCreating(true)}
                         onReset={resetSample}
                         onAddPackage={() => setAdding(true)}
-                        onSignOut={runner.leave}
+                        onSignOut={service.leave}
                     />
                 ) : (
                     <Toolbar
                         tokens={tokens}
                         phase={runner.phase}
-                        session={runner.session}
+                        session={service.session}
                         ready={ready}
                         runOff={runOff}
                         prebuilt={prebuilt}
                         onRun={run}
                         onStop={runner.stop}
-                        onSignOut={runner.leave}
+                        onSignOut={service.leave}
                         // On the files pane's surface, so the toolbar reads as the editor's and not as a second navbar.
                         style={{ margin: 0, padding: '10px var(--playground-x)', background: tokens.panelAlt, borderBottom: `1px solid ${tokens.border}` }}
                     >
@@ -242,9 +245,9 @@ export default function PlaygroundPage({ tokens, page }) {
                         <SamplePicker tokens={tokens} sampleId={sampleId} edited={edited} disabled={busy} onSelect={selectSample} onReset={resetSample} />
                     </Toolbar>
                 )}
-                <div ref={runner.check} />
+                <div ref={service.check} />
                 {runner.notice && (
-                    <Notice tokens={tokens} notice={runner.notice} canSignIn={Boolean(runner.session?.canSignIn)} style={{ margin: '10px var(--playground-x)' }} />
+                    <Notice tokens={tokens} notice={runner.notice} canSignIn={Boolean(service.session?.canSignIn)} style={{ margin: '10px var(--playground-x)' }} />
                 )}
                 {SKIN === 'turbo' ? <TurboWorkspace {...workspace} /> : <ModernWorkspace {...workspace} />}
             </section>

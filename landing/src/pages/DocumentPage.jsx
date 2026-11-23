@@ -1,5 +1,5 @@
 import Article from '../guide/Article.jsx';
-import { inline } from '../guide/inline.jsx';
+import { inline } from '../../../tooling/learn/src/inline.jsx';
 
 // Privacy and License stand alone, so they get one column: the sidebar and the rails belong to the guide.
 export default function DocumentPage({ tokens, page }) {

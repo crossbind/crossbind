@@ -21,6 +21,7 @@ export const REQUIRED_ROUTES = [
     '/sitemap.xml',
     '/robots.txt',
     '/.well-known/apple-app-site-association',
+    '/playground/sandbox.html',
 ];
 
 const HREF = /\b(?:href|src)="([^"]*)"/g;

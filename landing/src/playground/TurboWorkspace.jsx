@@ -1,6 +1,6 @@
 import { TURBO, TurboWindow, turboOutputTokens, turboTokens } from '../components/turbo.jsx';
 import { FileList, PackageList, plainButton } from './ProjectPanel.jsx';
-import { ConsoleLines, runInfo } from './parts.jsx';
+import { ConsoleLines, runInfo } from '../../../tooling/learn/src/output.jsx';
 import { OpenFile, ViewSwitch, shortName } from './workspace.jsx';
 
 // The Turbo look: Turbo C++'s windows on its blue desktop, the project and its packages beside the editor and the
