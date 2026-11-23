@@ -11,6 +11,7 @@ const PROJECT = 'e2e-project';
 const OTHER = 'e2e-other';
 const ENDED = 'e2e-ended';
 const POSTED = 'e2e-posted';
+const SLOW = 'e2e-slow';
 const WAIT = 'e2e-wait';
 const FRAME_PAGE = 'frame-probe.html';
 const NO_ROLE_PAGE = 'no-role.html';
@@ -48,6 +49,8 @@ const END_AFTER_MS = 300;
 const HOLD_MS = 2000;
 // How long the origin a page of no role posts toward stays served: past that page's POSTs and its way back.
 const POSTED_END_MS = 20000;
+// When the origin whose first page the run's endpoint answers late ends, while that page is on its way.
+const SLOW_END_MS = 1000;
 
 const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 // A path of an origin, or of a URL whose path is "/".
@@ -359,6 +362,23 @@ async function checkEndCancelledDialog() {
     show('end-dialog', { cancels });
 }
 
+// 13. An origin that ends while its first page is on its way: the window shows the app's first page again, as for one
+// that ended once its page showed. Were the page shown, it would say so.
+async function openSlowly() {
+    const slow = under(await invoke('probe.serveOrigin', { name: SLOW, source: SOURCE }), '__e2e/slow');
+    await invoke('probe.setStage', { stage: 'first-load' });
+    await invoke('probe.endOrigin', { name: SLOW, afterMs: SLOW_END_MS });
+    location.href = slow;
+    await sleep(ANSWER_MS);
+    throw new Error(`the window did not open ${slow}`);
+}
+
+async function afterFirstLoad(reports) {
+    if (location.href !== reports.app.href) throw new Error(`the window showed ${location.href}, not the app's first page, once ${SLOW} ended during its first load`);
+    show('first-load', { back: location.href, handled: await invoke('probe.handled', { name: SLOW }) });
+    return reports;
+}
+
 // The app's page at the stage the round trip reached: false once it sent the window elsewhere, else what the project's
 // pages reported, at its end.
 export async function runServedRoundTrip(isAndroid) {
@@ -373,7 +393,8 @@ export async function runServedRoundTrip(isAndroid) {
     if (stage === 'ended') return afterTheEnd(isAndroid, reports).then(() => false);
     if (stage === 'done') return openPageApi(SOURCE).then(() => false);
     if (stage === 'page-api-done') return checkEndClosedMessage(reports).then(openWait).then(() => false);
-    if (stage === 'wait-done') return checkEndCancelledDialog().then(() => reports);
+    if (stage === 'wait-done') return checkEndCancelledDialog().then(openSlowly).then(() => false);
+    if (stage === 'first-load') return afterFirstLoad(reports);
     throw new Error(`the app's page opened at ${location.href} at the stage ${stage}${stage === 'refused' ? ", which the project's page navigated to" : ''}`);
 }
 

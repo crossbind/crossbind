@@ -54,7 +54,7 @@
     {
       "source": "docs/api/extensions.md",
       "output": "api/extensions.md",
-      "sha256": "6975698793602d5e1a4920b4c3bbf9bf579269721f7307e76df97acb7a2126b3"
+      "sha256": "aaaf8c6489eece1a00f355d84054650cb297e8510935e802987fda555d2d47e9"
     },
     {
       "source": "docs/api/filesystem.md",

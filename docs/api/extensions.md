@@ -589,8 +589,9 @@ registry.function("acme.open", [](crossbind::Call call) {
   name: its pages' `label()` gives it, and the app's name without one.
 - `Origin`: Any thread may hold a copy. `url()`, its URL with the path `/`, as `crossbind://acme-notes/`. `end()`, from
   any thread, once: its pages' calls fail from then on, saying it ended, and those that wait for their answers are
-  cancelled, as are its pages' dialogs; each window that shows one of its pages shows the app's first page again; and
-  its requests get 404 without its handler. The last copy that lets it go ends it as well.
+  cancelled, as are its pages' dialogs; each window that shows one of its pages, or whose first page of it was on its
+  way, shows the app's first page again; and its requests get 404 without its handler. The last copy that lets it go
+  ends it as well.
 
 What its pages reach:
 
