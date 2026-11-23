@@ -150,6 +150,10 @@ export default {
             type: 'p',
             text: "Put copyright, categories, age rating and `review.signInRequired` in `store/app-store/store.json`. Keep reviewer contacts and demo credentials in a Git-ignored `review_information/private.json`. Crossbind applies these fields with `--send` or a release.",
         },
+        {
+            type: 'p',
+            text: "App Review's notes go in `review_information/notes.txt`, and files it gets, as a screen recording, in `review_information/attachments/`. The iOS and macOS versions are reviewed apart: `review_information/ios/` and `review_information/macos/` hold a version's own `notes.txt`, in place of the shared one, and its own `attachments/`, beside the shared ones. `--send` and a release leave App Store Connect exactly the files these folders hold, and leave its files alone where no `attachments/` folder is there.",
+        },
 
         { type: 'h2', id: 'mac-app-store', text: 'The Mac App Store' },
         {

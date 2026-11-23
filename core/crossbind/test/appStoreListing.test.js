@@ -234,6 +234,49 @@ describe("a project's App Store settings", () => {
         expect(readAppStoreSettings(project).review).toEqual({ demoAccountName: 'demo', demoAccountPassword: 'secret', demoAccountRequired: true });
     });
 
+    test("take a platform's own App Review notes in place of every platform's, and its own files beside every platform's", () => {
+        write('review_information/notes.txt', 'Every platform.');
+        write('review_information/ios/notes.txt', 'On an iPhone.');
+        write('review_information/attachments/terms.pdf', 'terms');
+        write('review_information/ios/attachments/iphone.mp4', 'iphone');
+        write('review_information/macos/attachments/mac.mov', 'mac');
+        const at = (file) => upath.join(upath.toUnix(project), 'store', 'app-store', 'review_information', file);
+        const attachmentsOf = (platform) => readAppStoreSettings(project, platform).review.attachments.map((file) => upath.toUnix(file));
+
+        expect(readAppStoreSettings(project, 'ios').review.notes).toBe('On an iPhone.');
+        expect(readAppStoreSettings(project, 'macos').review.notes).toBe('Every platform.');
+        expect(attachmentsOf('ios')).toEqual([at('attachments/terms.pdf'), at('ios/attachments/iphone.mp4')]);
+        expect(attachmentsOf('macos')).toEqual([at('attachments/terms.pdf'), at('macos/attachments/mac.mov')]);
+    });
+
+    test("leave App Store Connect's attachments as they are without a folder of them, and name none with an empty one", () => {
+        write('review_information/notes.txt', 'Every platform.');
+        expect(readAppStoreSettings(project, 'ios').review).toEqual({ notes: 'Every platform.' });
+        fs.mkdirSync(upath.join(project, 'store', 'app-store', 'review_information', 'macos', 'attachments'), { recursive: true });
+        expect(readAppStoreSettings(project, 'macos').review).toEqual({ notes: 'Every platform.', attachments: [] });
+    });
+
+    test("stop at an attachment of every platform and one of the platform's own under one name", () => {
+        write('review_information/attachments/demo.mp4', 'every');
+        write('review_information/ios/attachments/demo.mp4', 'iphone');
+        expect(() => readAppStoreSettings(project, 'ios')).toThrow(`crossbind: ${shown('review_information/attachments/demo.mp4')} and ${shown('review_information/ios/attachments/demo.mp4')} share their name`);
+        expect(readAppStoreSettings(project, 'macos').review.attachments).toHaveLength(1);
+    });
+
+    test.each([
+        ['review_information/ios/notes.md'],
+        ['review_information/android/notes.txt'],
+        ['review_information/attachments/clips/demo.mp4'],
+    ])('stop at %s, which App Review information takes none of', (file) => {
+        write(file, 'text');
+        expect(() => readAppStoreSettings(project, 'ios')).toThrow('is none of the files an App Store listing takes');
+    });
+
+    test('stop at an empty attachment, which App Store Connect takes none of', () => {
+        write('review_information/macos/attachments/demo.mov', '');
+        expect(() => readAppStoreSettings(project, 'macos')).toThrow(`crossbind: ${shown('review_information/macos/attachments/demo.mov')} is empty`);
+    });
+
     test("stop at answers App Store Connect takes none of, and at a category's id it names none by", () => {
         write('store.json', JSON.stringify({ ageRating: { violenceRealistic: 'SOMETIMES' } }));
         expect(() => readAppStoreSettings(project)).toThrow('answers violenceRealistic with "SOMETIMES", which App Store Connect takes none of: it takes "NONE", "INFREQUENT_OR_MILD", "FREQUENT_OR_INTENSE", "INFREQUENT", "FREQUENT".');
@@ -298,6 +341,31 @@ describe("a platform's version of the App Store listing", () => {
 });
 
 describe("crossbind app store's word on App Store Connect", () => {
+    test("names App Review's notes and files of each platform where the platforms' differ", () => {
+        write('review_information/notes.txt', 'Every platform.');
+        write('review_information/macos/notes.txt', 'On a Mac.');
+        write('review_information/ios/attachments/iphone.mp4', 'iphone');
+        write('review_information/macos/attachments/mac.mov', 'mac');
+
+        const guide = appStoreGuide({ project: { root: project }, config: { app: { id: 'dev.example.demo' } }, app: { encryption: false, category: { macos: 'public.app-category.utilities' } } });
+
+        expect(guide.problems).toEqual([]);
+        expect(guide.sends).toEqual(expect.arrayContaining([
+            'App Review notes for iOS', 'App Review notes for macOS', 'App Review attachments for iOS: iphone.mp4', 'App Review attachments for macOS: mac.mov',
+        ]));
+        expect(guide.sends).not.toContain('App Review notes');
+    });
+
+    test("names App Review's notes and files once where every platform has the same", () => {
+        write('review_information/notes.txt', 'Every platform.');
+        write('review_information/attachments/terms.pdf', 'terms');
+
+        const guide = appStoreGuide({ project: { root: project }, config: { app: { id: 'dev.example.demo' } }, app: { encryption: false, category: { macos: 'public.app-category.utilities' } } });
+
+        expect(guide.sends).toEqual(expect.arrayContaining(['App Review notes', 'App Review attachments: terms.pdf']));
+        expect(guide.sends.some((line) => / for (iOS|macOS)/.test(line))).toBe(false);
+    });
+
     test('names what an upload sends, what --send sends, and the steps App Store Connect alone takes', () => {
         write('en-US/listing.json', JSON.stringify({ name: 'Demo', privacyPolicyUrl: 'https://example.com/privacy' }));
         write('en-US/screenshots/APP_IPHONE_67/01.png', pngOf(1320, 2868));

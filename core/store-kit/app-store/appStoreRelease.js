@@ -13,6 +13,9 @@ const READY_POLL_SECONDS = 15;
 const READY_LOOKS = 10;
 const SCREENSHOT_POLL_SECONDS = 5;
 const SCREENSHOT_MINUTES = 10;
+// How often and how long a send waits for App Store Connect to process the files App Review gets.
+const ATTACHMENT_POLL_SECONDS = 5;
+const ATTACHMENT_MINUTES = 10;
 // The states of a version App Store Connect takes another build and listing in.
 const EDITABLE = ['PREPARE_FOR_SUBMISSION', 'DEVELOPER_REJECTED', 'REJECTED', 'METADATA_REJECTED', 'INVALID_BINARY'];
 // The states of the app's information that changes with the version App Store Connect prepares.
@@ -162,14 +165,16 @@ async function updateSettings(call, appId, version, {
     const changed = [];
     if (copyright !== undefined && await patchDiffering(call, 'appStoreVersions', version, { copyright })) changed.push('copyright');
     if (Object.keys(categories).length > 0 || ageRating) changed.push(...await updateInfoSettings(call, appId, { categories, ageRating }));
-    if (Object.keys(review).length > 0) {
-        const detail = await relatedData(call, `/appStoreVersions/${version.id}/appStoreReviewDetail`);
+    const { attachments, ...details } = review;
+    if (Object.keys(details).length > 0 || attachments !== undefined) {
+        let detail = await relatedData(call, `/appStoreVersions/${version.id}/appStoreReviewDetail`);
         if (!detail) {
-            await call('POST', '/appStoreReviewDetails', { data: { type: 'appStoreReviewDetails', attributes: review, relationships: { appStoreVersion: to('appStoreVersions', version.id) } } });
+            ({ data: detail } = await call('POST', '/appStoreReviewDetails', { data: { type: 'appStoreReviewDetails', attributes: details, relationships: { appStoreVersion: to('appStoreVersions', version.id) } } }));
             changed.push('App Review information');
-        } else if (await patchDiffering(call, 'appStoreReviewDetails', detail, review)) {
+        } else if (Object.keys(details).length > 0 && await patchDiffering(call, 'appStoreReviewDetails', detail, details)) {
             changed.push('App Review information');
         }
+        if (attachments !== undefined && await updateReviewAttachments(call, detail.id, attachments)) changed.push('App Review attachments');
     }
     return changed;
 }
@@ -195,19 +200,24 @@ async function localize(call, { type, shown, owner }, locale, texts, isWanted = 
 
 const md5 = (bytes) => createHash('md5').update(bytes).digest('hex');
 
-// Uploads a screenshot into its set as App Store Connect takes a file: reserved, its bytes uploaded where the reservation
-// says, then committed with its checksum, naming the file where App Store Connect refuses it. Gives its id.
-async function uploadScreenshot(call, setId, file, bytes) {
+// Uploads a file of a type as App Store Connect takes one, for its owner: reserved, its bytes uploaded where the
+// reservation says, then committed with its checksum, naming the file where App Store Connect refuses it. Gives its id.
+async function uploadFile(call, type, owner, file, bytes) {
     try {
-        const screenshot = { type: 'appScreenshots', attributes: { fileName: path.basename(file), fileSize: bytes.length }, relationships: { appScreenshotSet: to('appScreenshotSets', setId) } };
-        const { data: reserved } = await call('POST', '/appScreenshots', { data: screenshot });
+        const { data: reserved } = await call('POST', `/${type}`, { data: { type, attributes: { fileName: path.basename(file), fileSize: bytes.length }, relationships: owner } });
         await uploadParts(reserved.attributes.uploadOperations, bytes, file);
-        await call('PATCH', `/appScreenshots/${reserved.id}`, { data: { type: 'appScreenshots', id: reserved.id, attributes: { uploaded: true, sourceFileChecksum: md5(bytes) } } });
+        await call('PATCH', `/${type}/${reserved.id}`, { data: { type, id: reserved.id, attributes: { uploaded: true, sourceFileChecksum: md5(bytes) } } });
         return reserved.id;
     } catch (error) {
         if (error.message.includes(file)) throw error;
         throw Object.assign(new Error(`${error.message}\ncrossbind: it answered so for ${file}.`), { status: error.status, errors: error.errors });
     }
+}
+
+// App Store Connect's refusal of a file it would not process, in its own words.
+function refusedError(file, delivery) {
+    const said = (delivery.errors ?? []).map(({ description, code }) => description ?? code).join(' ');
+    return new Error(`crossbind: App Store Connect refused ${file}${said ? `: ${said}` : '.'}`);
 }
 
 // Whether App Store Connect shows a set's screenshots as the files are, processed and in their order.
@@ -234,7 +244,9 @@ async function updateScreenshots(call, localizationId, screenshots) {
             });
         }
         const uploaded = [];
-        for (const [index, file] of files.entries()) uploaded.push({ id: await uploadScreenshot(call, set.id, file, bytes[index]), file });
+        for (const [index, file] of files.entries()) {
+            uploaded.push({ id: await uploadFile(call, 'appScreenshots', { appScreenshotSet: to('appScreenshotSets', set.id) }, file, bytes[index]), file });
+        }
         changed.push({ setId: set.id, uploaded });
     }
     return changed;
@@ -249,10 +261,7 @@ async function processedScreenshots(call, sets, afterwards) {
             const { data: shown } = await call('GET', query(`/appScreenshotSets/${setId}/appScreenshots`, { limit: '200' }));
             for (const { id, file } of uploaded) {
                 const delivery = shown.find((one) => one.id === id)?.attributes.assetDeliveryState;
-                if (delivery?.state === 'FAILED') {
-                    const said = (delivery.errors ?? []).map(({ description, code }) => description ?? code).join(' ');
-                    throw new Error(`crossbind: App Store Connect refused ${file}${said ? `: ${said}` : '.'}`);
-                }
+                if (delivery?.state === 'FAILED') throw refusedError(file, delivery);
                 if (delivery?.state !== 'COMPLETE') isProcessed = false;
             }
         }
@@ -262,6 +271,53 @@ async function processedScreenshots(call, sets, afterwards) {
         }
         await sleep(SCREENSHOT_POLL_SECONDS);
     }
+}
+
+// Whether App Store Connect holds a file of App Review's as the project does: of its name and checksum, processed.
+const isAttachedAs = ({ attributes }, { name, checksum }) => attributes.fileName === name && attributes.assetDeliveryState?.state === 'COMPLETE'
+    && attributes.sourceFileChecksum?.toLowerCase() === checksum;
+
+// Waits for App Store Connect to process the files App Review gets, naming one it refuses.
+async function processedAttachments(call, uploaded) {
+    for (let waited = 0; uploaded.length > 0; waited += ATTACHMENT_POLL_SECONDS) {
+        let isProcessed = true;
+        for (const { id, file } of uploaded) {
+            const { data } = await call('GET', `/appStoreReviewAttachments/${id}`);
+            const delivery = data.attributes.assetDeliveryState;
+            if (delivery?.state === 'FAILED') throw refusedError(file, delivery);
+            if (delivery?.state !== 'COMPLETE') isProcessed = false;
+        }
+        if (isProcessed) return;
+        if (waited >= ATTACHMENT_MINUTES * 60) {
+            throw new Error(`crossbind: App Store Connect has not processed App Review's files in ${ATTACHMENT_MINUTES} minutes: send again once App Review Information shows them.`);
+        }
+        await sleep(ATTACHMENT_POLL_SECONDS);
+    }
+}
+
+// Puts the files App Review gets into the version's review details as the project holds them: one App Store Connect has
+// of the same name and checksum, processed, stays, the others go, and those it lacks go up as screenshots do. Says
+// whether it changed any. One gone already, as one a retried call removed, is gone.
+async function updateReviewAttachments(call, detailId, files) {
+    const { data: shown } = await call('GET', query(`/appStoreReviewDetails/${detailId}/appStoreReviewAttachments`, { limit: '200' }));
+    const wanted = files.map((file) => {
+        const bytes = fs.readFileSync(file);
+        return { file, bytes, name: path.basename(file), checksum: md5(bytes) };
+    });
+    const kept = shown.filter((one) => wanted.some((want) => isAttachedAs(one, want)));
+    const gone = shown.filter((one) => !kept.includes(one));
+    for (const old of gone) {
+        await call('DELETE', `/appStoreReviewAttachments/${old.id}`).catch((error) => {
+            if (error.status !== 404) throw error;
+        });
+    }
+    const owner = { appStoreReviewDetail: to('appStoreReviewDetails', detailId) };
+    const uploaded = [];
+    for (const want of wanted.filter((one) => !kept.some((held) => isAttachedAs(held, one)))) {
+        uploaded.push({ id: await uploadFile(call, 'appStoreReviewAttachments', owner, want.file, want.bytes), file: want.file });
+    }
+    await processedAttachments(call, uploaded);
+    return gone.length > 0 || uploaded.length > 0;
 }
 
 // Puts the project's listing into the version and the app's information that changes with it, and gives the locales it
