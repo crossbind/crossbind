@@ -47,9 +47,10 @@ std::atomic<bool> isAppWindow{false};
 // The windows the probe saw close, by their ids.
 std::mutex closedMutex;
 crossbind::Value::Array closedWindows;
-// The calls that wait for their cancel, and the cancels the probe heard of.
+// The calls that wait for their cancel, how many reached the probe, and the cancels the probe heard of.
 std::mutex waitingMutex;
 std::vector<crossbind::Call> waiting;
+std::atomic<int> waits{0};
 std::atomic<int> cancels{0};
 
 // The file the probe's route serves, in the app's own folder, which a phone's app writes too.
@@ -267,11 +268,13 @@ void crossbind_extension_probe(crossbind::Registry &registry) {
     });
     // A call that answers nothing until the page cancels it, after it told the page it waits.
     registry.function("probe.wait", [](Call call) {
+        waits += 1;
         call.onCancel([] { cancels += 1; });
         call.send("waiting");
         std::lock_guard<std::mutex> lock(waitingMutex);
         waiting.push_back(call);
     });
+    registry.function("probe.waits", [](Call call) { call.resolve(waits.load()); });
     registry.function("probe.cancels", [](Call call) { call.resolve(cancels.load()); });
     // The bytes the page passed, reversed, and how many, to a page of the app's and of a project's.
     registry.function("probe.bytes", {"app", "project"}, [](Call call) {

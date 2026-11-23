@@ -228,6 +228,9 @@ export async function callApp(name, options, { onMessage, signal } = {}) {
     let id = 0;
     try {
         const chosen = await unlessAborted(transport);
+        // An abort as the call starts may come after the transport settled, which the race then takes: the call goes no
+        // further, as the cancel would find nothing sent to tell the host of.
+        if (signal?.aborted) throw reasonOf(signal);
         id = nextCall;
         nextCall += 1;
         const attachments = [];

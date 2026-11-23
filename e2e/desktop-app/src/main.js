@@ -871,6 +871,17 @@ async function checkCalls(isAndroid) {
             cancels = await invoke(name('cancels'));
         }
         if (cancels !== before + 1) throw new Error(`${name('wait')}'s function heard of ${cancels - before} cancels, not one`);
+        // A call cancelled as it starts, before its request goes out, never reaches the host: a call made after it, which
+        // the host takes after it, finds its function never ran.
+        if (prefix === 'probe.') {
+            const waits = await invoke('probe.waits');
+            const early = new AbortController();
+            const cancelled = invoke('probe.wait', {}, { signal: early.signal, onMessage: () => {} }).then(() => 'answered', (error) => error.name);
+            early.abort();
+            const ended = await cancelled;
+            const reached = (await invoke('probe.waits')) - waits;
+            if (ended !== 'AbortError' || reached !== 0) throw new Error(`a call cancelled as it started ended as ${ended}, and reached its function ${reached} times, not 0`);
+        }
         const small = await invoke(name('bytes'), { data: new Uint8Array([1, 2, 3]) });
         const large = Uint8Array.from({ length: 70000 }, (_, i) => i % 251);
         const echoed = await invoke(name('bytes'), { data: large.buffer });
