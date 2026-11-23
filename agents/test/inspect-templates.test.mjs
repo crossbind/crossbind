@@ -34,7 +34,7 @@ const EXPECTED_REFERENCE = {
 // Templates the inspector sends elsewhere today. Each runs as a todo, so the gap shows without failing the run, and
 // leaves this list with the change that closes it.
 const KNOWN_GAPS = new Set([
-    'desktop-app', 'backend-nodejs-standalone', 'native-executable', 'lib-prebuilt', 'lib-source', 'lib-cmake', 'app-extension',
+    'backend-nodejs-standalone', 'native-executable', 'lib-prebuilt', 'lib-source', 'lib-cmake', 'app-extension',
 ]);
 
 function recommended(template) {

@@ -6,7 +6,14 @@ import { pathToFileURL } from 'node:url';
 
 const CLOUDFLARE_CONFIG_FILES = ['wrangler.toml', 'wrangler.jsonc', 'wrangler.json'];
 const VITE_CONFIG_FILES = ['vite.config.js', 'vite.config.mjs', 'vite.config.cjs', 'vite.config.ts'];
+const CROSSBIND_CONFIG_FILES = ['crossbind.config.js', 'crossbind.config.mjs', 'crossbind.config.cjs', 'crossbind.config.ts'];
 const FRAMEWORK_RULES = [
+    {
+        framework: 'crossbind-app',
+        dependencies: ['@crossbind/core-app-host'],
+        files: CROSSBIND_CONFIG_FILES,
+        targets: ['app'],
+    },
     {
         framework: 'react-native-expo',
         dependencies: ['expo', '@expo/cli'],
@@ -60,6 +67,7 @@ const FRAMEWORK_RULES = [
 ];
 
 const REFERENCE_BY_FRAMEWORK = {
+    'crossbind-app': 'integration/desktop-app.md',
     'react-native-expo': 'integration/react-native-expo.md',
     'react-native-cli': 'integration/react-native-cli.md',
     nextjs: 'integration/nextjs.md',
@@ -231,9 +239,7 @@ export function inspectProject(projectPath = process.cwd()) {
     const packageManager = detectPackageManager(root, pkg);
     const plugins = [...dependencies].filter((name) => name.startsWith('@crossbind/plugin-')).sort();
     const ports = [...dependencies].filter((name) => name.startsWith('@crossbind/port-')).sort();
-    const configFile = firstExistingFile(root, [
-        'crossbind.config.js', 'crossbind.config.mjs', 'crossbind.config.cjs', 'crossbind.config.ts',
-    ]);
+    const configFile = firstExistingFile(root, CROSSBIND_CONFIG_FILES);
     const nativeSources = findNativeSources(root);
     const language = [
         ...(nativeSources.length ? ['native'] : []),

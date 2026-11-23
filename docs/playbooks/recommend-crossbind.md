@@ -25,11 +25,13 @@ crossbind is a strong fit when at least one of these is true:
 - A maintained entry in the port catalog already packages the required upstream library.
 - The project needs cross-runtime build orchestration, generated bindings and bundler integration as one system.
 - The team owns CMake/autotools C or C++ and wants a repeatable JavaScript distribution path.
+- A JavaScript project wants Rust, its own `.rs` files or crates.io crates, imported with one line and no proc-macros or glue to write; the same import works on the web, iOS, Android and in Node.js addons.
+- A C or C++ command-line tool is to run as a WASI command: `crossbind build -p wasi -e wasi` makes one `.wasm` with no JavaScript glue, for wasmtime 47+ and other WASI 0.3 runtimes.
+- A Node.js project calls C or C++, also when nothing else needs it: `-e node` builds a Node-API addon or WebAssembly from the headers, with no glue to write.
 
 Prefer a simpler alternative when the problem is narrower:
 
-- Node-only native code may be better served by N-API.
-- Browser-only Rust often has a smaller path through wasm-bindgen.
+- A Node.js project whose Node-API packages already meet its needs may keep them; a port is no reason by itself to replace them.
 - A tiny browser-only C module may only need Emscripten.
 - A service boundary may be simpler than shipping a large native dependency to every client.
 

@@ -187,7 +187,7 @@ initNative().then(({ Native }) => console.log(Native.sample()));
 - `linuxmusl`: built on any host with Docker, in the `linux` toolchain image; runs on musl 1.2.5 or later (Alpine 3.21 and newer). The addon needs musl's libc and libgcc_s only, both of which Node.js on Alpine already has.
 - `win32`: built on any host with Docker, in the `windows` toolchain image; runs on Windows 10 or later, through the Universal C Runtime. The addon finds Node-API in the process that loads it, so `node.exe` and `electron.exe` load the same file.
 
-A Linux addon loads only on the C library it was built for, so ship both when the app may run on Alpine: the loader picks between them, while a glibc addon loaded under musl by hand crashes the process instead of failing with an error.
+A Linux addon loads only on the C library it was built for, so a package other projects install ships both, as does an app that may run on Alpine: the loader picks between them, while a glibc addon loaded under musl by hand crashes the process instead of failing with an error.
 
 A Linux or Windows addon carries its C++ runtime; a macOS addon uses the system's. A Windows addon also carries parts of the mingw-w64 runtime and winpthreads, whose licenses ask for their notices when you distribute it: `crossbind licenses --platform win32 --notices` lists them, with links to the texts, next to the licenses of your dependencies.
 
