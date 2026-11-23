@@ -32,4 +32,6 @@ void probePlatform(crossbind::Registry &registry) {
     registry.function("probe.javaBytes", [](Call call) { crossbind::android::callJava("probe", "bytes", call); });
     registry.function("probe.shortcuts", [](Call call) { crossbind::android::callJava("probe", "shortcuts", call); });
     registry.function("probe.tapShortcut", [](Call call) { crossbind::android::callJava("probe", "tapShortcut", call); });
+    // The UI thread's Java messages wait ms, as the page opens one the host hears of only then.
+    registry.function("probe.holdUi", [](Call call) { crossbind::android::callJava("probe", "holdUi", call); });
 }

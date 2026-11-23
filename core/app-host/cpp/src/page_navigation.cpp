@@ -61,10 +61,14 @@ void CertificateError::useDefault() const { refuse(); }
 namespace app {
 
 NavigationAnswer decideNavigation(const void *webView, std::string url, bool isMainFrame, bool isUserInitiated, bool isNewWindow) {
+    return decideNavigation(pageOf(webView), std::move(url), isMainFrame, isUserInitiated, isNewWindow);
+}
+
+NavigationAnswer decideNavigation(Page page, std::string url, bool isMainFrame, bool isUserInitiated, bool isNewWindow) {
     const auto &owner = navigationOwner();
     if (!owner) return NavigationAnswer::refuse;
     auto state = std::make_shared<StateOf<Navigation>>();
-    state->page = pageOf(webView);
+    state->page = std::move(page);
     state->url = std::move(url);
     state->isMainFrame = isMainFrame;
     state->isUserInitiated = isUserInitiated;

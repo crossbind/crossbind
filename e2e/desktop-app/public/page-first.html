@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>first</title>
+</head>
+<body>
+<script>
+// A page of a served origin, which src/served-origins.js opens, on Android with the UI thread's Java messages held, so
+// the host hears of it only after this script: a link elsewhere, which page-navigation hears with the page's role and
+// refuses; a GET toward the app's origin, then a form's POST toward it, each of which the rule refuses a project's
+// page, so the page stays. Then it says so and ends its origin, on Android with the UI thread's Java messages held
+// again, so the host hears of the app's first page only after that page's first scripts.
+(() => {
+    const GET_AFTER_MS = 250;
+    const POST_AFTER_MS = 500;
+    const STAYED_MS = 1500;
+    const HOLD_UI_MS = 2000;
+    const ELSEWHERE = 'https://crossbind-e2e.invalid/first';
+    const APP_ORIGINS = ['https://appassets.androidplatform.net', 'crossbind://app'];
+    const app = APP_ORIGINS.find((origin) => origin === new URLSearchParams(location.search).get('app'));
+    if (!app) throw new Error("page-first.html takes the app's origin it knows");
+    location.href = ELSEWHERE;
+    setTimeout(() => {
+        location.href = `${app}/?from=project-first`;
+    }, GET_AFTER_MS);
+    setTimeout(() => {
+        const form = document.createElement('form');
+        form.method = 'post';
+        form.action = `${app}/?from=project-first-post`;
+        document.body.append(form);
+        form.submit();
+    }, POST_AFTER_MS);
+    setTimeout(async () => {
+        try {
+            const api = await import('/__crossbind/app.js');
+            await api.invoke('probe.report', { key: 'first', value: { stayed: location.href } });
+            await api.invoke('probe.endOrigin', { name: location.hostname.split('.')[0], holdUiMs: HOLD_UI_MS });
+        } catch (error) {
+            console.error(`CONFORMANCE ERR: ${location.origin}: page-first.html could not tell the app's page it stayed, ${error?.message ?? error}`);
+        }
+    }, STAYED_MS);
+})();
+</script>
+</body>
+</html>

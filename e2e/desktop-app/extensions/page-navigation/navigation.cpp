@@ -1,13 +1,20 @@
 // Every navigation beyond the app's origins is refused, as src/main.js asks for some, but the page of no role that
 // src/served-origins.js opens, without a refused= in its query, and that page's way back to the app's, which load;
 // page-navigation.asked gives what each asked, to a page of the app's and of a project's, whose page src/main.js runs at
-// the probe's origin.
+// the probe's origin. On Android, as it loads the page of no role, the UI thread's Java messages wait, so the host hears
+// of that page only after its POSTs, as it may of any page.
 #include "crossbind/extension.h"
 
 #include <mutex>
+#include <optional>
 #include <string>
 
 namespace {
+
+#if defined(__ANDROID__)
+// Past the POSTs of the page of no role, 1.5 s apart.
+constexpr double NO_ROLE_HOLD_MS = 2000;
+#endif
 
 std::mutex askedMutex;
 crossbind::Value::Array asked;
@@ -32,7 +39,14 @@ void crossbind_extension_e2e_page_navigation(crossbind::Registry &registry) {
                 {"isUserInitiated", navigation.isUserInitiated()},
                 {"isNewWindow", navigation.isNewWindow()}, {"isPage", navigation.page().id() != 0}, {"role", navigation.page().role()}});
         }
-        return isLoaded(navigation) ? crossbind::NavigationAnswer::load : crossbind::NavigationAnswer::refuse;
+        if (!isLoaded(navigation)) return crossbind::NavigationAnswer::refuse;
+#if defined(__ANDROID__)
+        // The UI thread takes this after the answer, before the page's start.
+        if (navigation.page().role() == "app") {
+            crossbind::android::callJava("probe", "holdUi", Value::Object{{"ms", NO_ROLE_HOLD_MS}}, [](std::optional<std::string>, Value) {});
+        }
+#endif
+        return crossbind::NavigationAnswer::load;
     });
     registry.function("page-navigation.asked", {"app", "project"}, [](Call call) {
         std::lock_guard<std::mutex> lock(askedMutex);

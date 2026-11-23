@@ -14,11 +14,17 @@ const POSTED = 'e2e-posted';
 const SLOW = 'e2e-slow';
 const WAIT = 'e2e-wait';
 const SOON = 'e2e-soon';
+const FIRST = 'e2e-first';
 const FRAME_PAGE = 'frame-probe.html';
 const NO_ROLE_PAGE = 'no-role.html';
 const PAGE_API_PAGE = 'page-api.html';
 const WAIT_PAGE = 'page-wait.html';
 const SOON_PAGE = 'page-soon.html';
+const FIRST_PAGE = 'page-first.html';
+// What arms the app's first page after page-first.html's end to go within the app at once, for the window's session.
+const FIRST_ARMED = 'e2e-first-navigation';
+// Where page-first.html's first script goes first, which page-navigation refuses.
+const FIRST_ELSEWHERE = 'https://crossbind-e2e.invalid/first';
 // What the project's origin is labelled with, which its pages' dialogs show: but at the stage again, served without one.
 const PROJECT_LABEL = 'Öffnen e2e project';
 // crossbind/app as a served origin's page imports it, which the host answers from the app's own files.
@@ -57,6 +63,8 @@ const POSTED_END_MS = 20000;
 const SLOW_END_MS = 1000;
 // How long an end's dialogs have had to go, a dialog that was on its way among them, as the app's page looks.
 const GONE_MS = 3000;
+// How long the UI thread's Java messages wait on Android as a page starts, past what that page asks first.
+const HOLD_UI_MS = 2000;
 
 const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 // A path of an origin, or of a URL whose path is "/".
@@ -418,6 +426,48 @@ async function afterFirstLoad(reports) {
     return reports;
 }
 
+// 15. On Android the host hears of a page once its first scripts may have asked, so a request is judged by the page the
+// WebView shows as the host decides. page-first.html, opened with the UI thread's Java messages held there, goes in its
+// first script by a link elsewhere, which page-navigation hears with its role, and toward the app's origin by a GET and
+// a form's POST, each refused a project's page; it ends its origin with them held again, so the app's first page, heard
+// of late as well, goes within the app at once, which loads.
+async function openFirst(isAndroid) {
+    const page = `${under(await invoke('probe.serveOrigin', { name: FIRST, source: SOURCE }), FIRST_PAGE)}?app=${encodeURIComponent(location.origin)}`;
+    await invoke('probe.setStage', { stage: 'first' });
+    sessionStorage.setItem(FIRST_ARMED, 'armed');
+    if (isAndroid) await invoke('probe.holdUi', { ms: HOLD_UI_MS });
+    location.href = page;
+    await sleep(ANSWER_MS);
+    throw new Error(`the window did not open ${page}`);
+}
+
+// The app's first page after page-first.html's end, which openFirst() arms, goes within the app before it waits for
+// anything, on Android before the host may have heard of it, and runs nothing else: true where it goes. Were its
+// navigation refused, the page stays and says so.
+export function goWithinTheAppFirst() {
+    if (sessionStorage.getItem(FIRST_ARMED) === null || location.search !== '') return false;
+    sessionStorage.removeItem(FIRST_ARMED);
+    location.replace('/?from=first-navigation');
+    setTimeout(() => {
+        console.error(`CONFORMANCE ERR: the app's first page after a project's end was refused its navigation within the app, as the project's, at ${location.href}`);
+    }, QUIET_MS);
+    return true;
+}
+
+async function afterFirst(reports) {
+    const from = new URLSearchParams(location.search).get('from');
+    if (from === 'project-first' || from === 'project-first-post') {
+        throw new Error(`a project's page's first ${from === 'project-first' ? 'GET' : 'POST'} toward the app's origin loaded ${location.href}`);
+    }
+    if (from !== 'first-navigation') throw new Error(`the app's first page after ${FIRST_PAGE}'s end did not go within the app: ${location.href}`);
+    if (!reports.first?.stayed) throw new Error(`${FIRST_PAGE} did not tell it stayed through its GET and POST toward the app's origin: ${JSON.stringify(reports.first)}`);
+    const elsewhere = (await invoke('page-navigation.asked')).find(({ url }) => url === FIRST_ELSEWHERE);
+    if (elsewhere?.role !== 'project') {
+        throw new Error(`page-navigation heard ${FIRST_PAGE}'s first link elsewhere ${elsewhere ? `with the role ${JSON.stringify(elsewhere.role)}` : 'nowhere'}, not with the role project`);
+    }
+    show('first', { stayed: reports.first.stayed, elsewhere: { role: elsewhere.role, isPage: elsewhere.isPage }, back: location.href });
+}
+
 // The app's page at the stage the round trip reached: false once it sent the window elsewhere, else what the project's
 // pages reported, at its end.
 export async function runServedRoundTrip(isAndroid) {
@@ -433,7 +483,8 @@ export async function runServedRoundTrip(isAndroid) {
     if (stage === 'done') return openPageApi(SOURCE).then(() => false);
     if (stage === 'page-api-done') return checkEndClosedMessage(reports).then(openWait).then(() => false);
     if (stage === 'wait-done') return checkEndCancelledDialog().then(openSoon).then(() => false);
-    if (stage === 'soon-done') return checkSoonGone().then(openSlowly).then(() => false);
+    if (stage === 'soon-done') return checkSoonGone().then(() => openFirst(isAndroid)).then(() => false);
+    if (stage === 'first') return afterFirst(reports).then(openSlowly).then(() => false);
     if (stage === 'first-load') return afterFirstLoad(reports);
     throw new Error(`the app's page opened at ${location.href} at the stage ${stage}${stage === 'refused' ? ", which the project's page navigated to" : ''}`);
 }

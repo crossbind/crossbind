@@ -137,6 +137,10 @@ namespace crossbind::app {
 // page-navigation of every other. about: loads, and a blob: URL goes as its page's origin does.
 enum class NavigationRule { load, refuse, ask };
 NavigationRule navigationRule(const void *webView, const std::string &url);
+// The same rule for the page that asks, by its URL, as Android's WebView shows it as the host decides, since the host may
+// hear of a page after its first scripts asked: of the app's origins, of a served origin's form, served or not, or of no
+// role, as one of no URL is.
+NavigationRule navigationRuleAt(const std::string &page, const std::string &url);
 
 // The holder of each role's hook, or an empty function without one.
 const std::function<NavigationAnswer(const Navigation &)> &navigationOwner();
@@ -146,6 +150,8 @@ const std::function<void(CertificateError)> &certificateErrorOwner();
 // carries out, on the main thread: refuse without an owner, for useDefault, for an owner that fails, and for an openOutside of a scheme
 // that is neither http, https nor mailto.
 NavigationAnswer decideNavigation(const void *webView, std::string url, bool isMainFrame, bool isUserInitiated, bool isNewWindow);
+// The same for the page that asks, which page-navigation hears it with.
+NavigationAnswer decideNavigation(Page page, std::string url, bool isMainFrame, bool isUserInitiated, bool isNewWindow);
 // Hand a request to its owner: one without an owner, or whose owner fails on it, is cancelled or refused.
 void askHttpAuthentication(HttpAuthentication request);
 void askCertificateError(CertificateError error);
