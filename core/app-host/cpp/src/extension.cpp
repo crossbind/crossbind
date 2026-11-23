@@ -1601,10 +1601,11 @@ void pageGone(uint64_t page) {
         std::vector<std::function<void()>> cancels;
         {
             std::lock_guard<std::mutex> lock(state->mutex);
+            // A dialog its user answered meanwhile shows nothing to close, and a holder that asks later hears nothing.
+            if (!state->answer.give(std::nullopt)) continue;
             state->isGone = true;
             cancels.swap(state->cancels);
         }
-        state->answer.give(std::nullopt);
         for (const auto &fn : cancels) {
             try {
                 fn();

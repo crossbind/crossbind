@@ -288,10 +288,9 @@ public interface Extension {
         // dialog has answered as cancelled then, and its holder closes what it shows of it. For a dialog whose origin
         // ended already, fn runs at once; for one answered, never.
         public void onCancel(Runnable fn) {
-            if (once.isAnswered()) return;
             synchronized (cancels) {
                 if (!isGone) {
-                    cancels.add(fn);
+                    if (!once.isAnswered()) cancels.add(fn);
                     return;
                 }
             }
@@ -306,16 +305,16 @@ public interface Extension {
             return once.isAnswered();
         }
 
-        // Its origin ended, on the UI thread: unanswered, it answers as cancelled, and its holder hears of it.
+        // Its origin ended, on the UI thread: unanswered, it answers as cancelled, and its holder hears of it; answered
+        // meanwhile, it shows nothing to close, and a holder that asks later hears nothing.
         void gone() {
             final List<Runnable> closing;
             synchronized (cancels) {
-                if (isGone) return;
+                if (isGone || !once.gives()) return;
                 isGone = true;
                 closing = new ArrayList<>(cancels);
                 cancels.clear();
             }
-            if (!once.gives()) return;
             CrossbindActivity.MAIN.post(result::cancel);
             for (Runnable fn : closing) fn.run();
         }

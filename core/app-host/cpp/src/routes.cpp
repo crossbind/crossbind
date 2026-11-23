@@ -208,14 +208,15 @@ void Request::respond(int status, const Headers &headers, std::string body) cons
     if (!state_->answers()) return;
     SchemeResponse response{status, "application/octet-stream", {}};
     // A body's length is its own, which the platform writes; a HEAD's, which has no body, is the one the route gives, as
-    // a proxy passes its source's.
+    // a proxy passes its source's, where it is a number of bytes.
     std::string length = std::to_string(body.size());
     for (const auto &[name, value] : headers) {
         const std::string key = lower(name);
         if (key == "content-type") {
             response.mime = value;
         } else if (key == "content-length") {
-            length = value;
+            const bool isNumber = !value.empty() && std::all_of(value.begin(), value.end(), [](unsigned char c) { return c >= '0' && c <= '9'; });
+            if (isNumber) length = value;
         } else {
             response.headers.emplace_back(name, value);
         }

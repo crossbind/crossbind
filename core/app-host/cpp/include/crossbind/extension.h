@@ -188,7 +188,8 @@ public:
     Page page() const;
     // Answers with body, of the type a Content-Type header names, application/octet-stream without one, and of its own
     // length, whatever Content-Length the headers give; a HEAD gets the headers alone, with the Content-Length they give,
-    // as of the body a GET would get. A webview follows no redirect of an app's URLs, so status is not 3xx.
+    // as of the body a GET would get, where it is a number of bytes, and the body's own length otherwise. A webview follows
+    // no redirect of an app's URLs, so status is not 3xx.
     void respond(int status, const Headers &headers = {}, std::string body = {}) const;
     // Answers with the file at path, which the host reads on a thread of its own, of the type its extension names, as
     // for the page's files: the part a Range header asks for, as 206, up to 4 MiB of it, from where the webview asks
