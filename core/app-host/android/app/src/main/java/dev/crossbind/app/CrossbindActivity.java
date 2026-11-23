@@ -246,7 +246,7 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
     private final Set<String> origins = new HashSet<>();
     // The page the activity shows first, which it shows again as a served origin its page is of ends.
     private String firstUrl;
-    // The dialogs of the page that its holder was given, which go with the page; on the UI thread.
+    // The page dialogs its holder was given that wait for their answer, which go as their origin ends; on the UI thread.
     private final List<Extension.PageDialog> pageDialogs = new ArrayList<>();
     // The served origins whose scripts and objects the WebView has, which it keeps as long as it lives.
     private final Set<String> scripted = new HashSet<>();
@@ -1165,7 +1165,6 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
         // another origin, which page-navigation loaded, asks for none.
         @Override
         public void onPageStarted(WebView view, String url, Bitmap favicon) {
-            dialogsGone((dialog) -> true);
             if (url == null || isOwn(originOf(Uri.parse(url)))) return;
             nativeNewPage(url.getBytes(StandardCharsets.UTF_8));
             // A page of an origin that ended while it was on its way, which endOrigin() did not see, gives way to the
@@ -1259,6 +1258,7 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
             Extension owner = Extensions.ROLES.get("page-dialogs");
             if (owner == null) return false;
             Extension.PageDialog dialog = new Extension.PageDialog(kind, message == null ? "" : message, defaultText, result, roleOf(origin), labelOf(origin), origin);
+            pageDialogs.removeIf(Extension.PageDialog::isAnswered);
             pageDialogs.add(dialog);
             ask("page-dialogs", () -> owner.onPageDialog(CrossbindActivity.this, dialog), dialog::cancel);
             return !dialog.isLeft();

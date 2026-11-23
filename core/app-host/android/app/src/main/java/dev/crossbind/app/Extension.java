@@ -284,9 +284,9 @@ public interface Extension {
             if (!once.leaves()) cancel();
         }
 
-        // Runs fn once, on the UI thread, as the page that opened the dialog goes before its answer: as the origin it is
-        // of ends, or another page replaces it. The dialog has answered as cancelled then, and its holder closes what it
-        // shows of it. For a dialog whose page went already, fn runs at once; for one answered, never.
+        // Runs fn once, on the UI thread, as the origin of the page that opened the dialog ends before its answer. The
+        // dialog has answered as cancelled then, and its holder closes what it shows of it. For a dialog whose origin
+        // ended already, fn runs at once; for one answered, never.
         public void onCancel(Runnable fn) {
             if (once.isAnswered()) return;
             synchronized (cancels) {
@@ -302,7 +302,11 @@ public interface Extension {
             return once.isLeft();
         }
 
-        // Its page went, on the UI thread: unanswered, it answers as cancelled, and its holder hears of it.
+        boolean isAnswered() {
+            return once.isAnswered();
+        }
+
+        // Its origin ended, on the UI thread: unanswered, it answers as cancelled, and its holder hears of it.
         void gone() {
             final List<Runnable> closing;
             synchronized (cancels) {

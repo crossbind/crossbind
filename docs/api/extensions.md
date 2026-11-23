@@ -1004,7 +1004,7 @@ The Java of the holder of `page-dialogs`, `page-permissions` or `page-files` get
 `Extension`'s, on the UI thread, and answers each once, from any thread. `useDefault()` leaves a dialog or a file input
 to the WebView, which shows its own dialog or no picker, where the hook calls it before it returns, and else cancels it;
 for a permission it denies, as the WebView would. A `PageDialog` has the `label()` a native page's has, and
-`onCancel(fn)` runs `fn` on the UI thread as the native one's does, as its origin ends or another page replaces it.
+`onCancel(fn)` runs `fn` on the UI thread as the native one's does, as its origin ends.
 
 - One that is never answered keeps the page waiting, as Java tells the host of no copy let go.
 - One the hook throws on is cancelled, and a frame of another origin, which Android lets the page hold, gets no dialog
