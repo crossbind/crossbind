@@ -863,7 +863,8 @@ URL means nothing outside the app: a link, a URL with a user's name, which is no
 which Android's host answers with 204, so the page stays. Android's WebView loads a frame without asking: the app's own
 documents show in a frame of the app's own origins alone, the dev server's page during development among them
 (`Content-Security-Policy: frame-ancestors` names them), and a frame of another served origin gets nothing of the app's.
-Every other URL reaches `page-navigation` with the page, whose `role()` tells them apart, a form's POST too. On Android
+Every other URL reaches `page-navigation` with the page, whose `role()` tells them apart, a form's POST too. A page that
+is a `blob:` document is of the origin inside its URL, the page's that made it, and of that origin's role. On Android
 the host hears of a page only once its first scripts may have asked, so the rule and `page-navigation` take the page
 that asks from the WebView as each decides, from its two accounts of it: the page it shows, which names the page that
 is coming while a load the host began is on its way, and its history's current page, which names where a Back goes

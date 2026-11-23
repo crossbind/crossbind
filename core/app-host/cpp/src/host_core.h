@@ -98,6 +98,8 @@ struct PageOrigin {
     std::string label;
 };
 PageOrigin pageOriginOf(const std::string &url);
+// The origin of the document at a page's URL: a blob: URL's is the origin inside it, of the page that made it.
+std::string documentOriginOf(const std::string &url);
 // The origin the navigation rule takes a page of this URL to be of: "app" for the app's own, the name of a served
 // origin's form, served now or not, or "" for another.
 std::string pageNameOf(const std::string &page);

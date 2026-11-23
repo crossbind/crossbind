@@ -16,6 +16,7 @@ const WAIT = 'e2e-wait';
 const SOON = 'e2e-soon';
 const FIRST = 'e2e-first';
 const ACCOUNTS = 'e2e-accounts';
+const BLOB = 'e2e-blob';
 const FRAME_PAGE = 'frame-probe.html';
 const NO_ROLE_PAGE = 'no-role.html';
 const PAGE_API_PAGE = 'page-api.html';
@@ -23,6 +24,9 @@ const WAIT_PAGE = 'page-wait.html';
 const SOON_PAGE = 'page-soon.html';
 const FIRST_PAGE = 'page-first.html';
 const ACCOUNTS_PAGE = 'page-accounts.html';
+const BLOB_PAGE = 'page-blob.html';
+// The link elsewhere of public/page-blob.html's blob document.
+const BLOB_ELSEWHERE = 'https://crossbind-e2e.invalid/blob';
 // What arms the app's first page after page-first.html's end to go within the app at once, for the window's session.
 const FIRST_ARMED = 'e2e-first-navigation';
 // Where page-first.html's first script goes first, which page-navigation refuses.
@@ -496,6 +500,28 @@ async function afterAccounts(reports) {
     show('accounts', asked);
 }
 
+// 17. A blob document is of the origin inside its URL, the page's that made it, and of that origin's role: a project's
+// page sheds none by going to one of its own. page-blob.html's blob document goes to a link elsewhere, which
+// page-navigation hears with the role project, then toward the app's origin with the query page-navigation loads for a
+// page of no role, which loads nothing, and then back to its project's page, which ends its origin.
+async function openBlob() {
+    const page = `${under(await invoke('probe.serveOrigin', { name: BLOB, source: SOURCE }), BLOB_PAGE)}?app=${encodeURIComponent(location.origin)}`;
+    await invoke('probe.setStage', { stage: 'blob' });
+    location.href = page;
+    await sleep(ANSWER_MS);
+    throw new Error(`the window did not open ${page}`);
+}
+
+async function afterBlob(reports) {
+    if (new URLSearchParams(location.search).get('from') === 'no-role-back') {
+        throw new Error(`a project's blob document went toward the app's origin as a page of no role: the app's page opened at ${location.href}`);
+    }
+    if (!reports.blob) throw new Error(`the project's page did not come back from its blob document: the app's page opened at ${location.href}`);
+    const heard = (await invoke('page-navigation.asked')).find(({ url }) => url === BLOB_ELSEWHERE);
+    if (heard?.role !== 'project') throw new Error(`page-navigation heard the link elsewhere of a project's blob document as ${JSON.stringify(heard)}, not with the role project`);
+    show('blob', { back: reports.blob.back, elsewhere: { role: heard.role } });
+}
+
 // The app's page at the stage the round trip reached: false once it sent the window elsewhere, else what the project's
 // pages reported, at its end.
 export async function runServedRoundTrip(isAndroid) {
@@ -512,8 +538,9 @@ export async function runServedRoundTrip(isAndroid) {
     if (stage === 'page-api-done') return checkEndClosedMessage(reports).then(openWait).then(() => false);
     if (stage === 'wait-done') return checkEndCancelledDialog().then(openSoon).then(() => false);
     if (stage === 'soon-done') return checkSoonGone().then(() => openFirst(isAndroid)).then(() => false);
-    if (stage === 'first') return afterFirst(reports).then(() => (isAndroid ? openAccounts() : openSlowly())).then(() => false);
-    if (stage === 'accounts') return afterAccounts(reports).then(openSlowly).then(() => false);
+    if (stage === 'first') return afterFirst(reports).then(() => (isAndroid ? openAccounts() : openBlob())).then(() => false);
+    if (stage === 'accounts') return afterAccounts(reports).then(openBlob).then(() => false);
+    if (stage === 'blob') return afterBlob(reports).then(openSlowly).then(() => false);
     if (stage === 'first-load') return afterFirstLoad(reports);
     throw new Error(`the app's page opened at ${location.href} at the stage ${stage}${stage === 'refused' ? ", which the project's page navigated to" : ''}`);
 }

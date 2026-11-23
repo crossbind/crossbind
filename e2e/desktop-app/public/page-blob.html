@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>blob</title>
+</head>
+<body>
+<script>
+// A page of a served origin, which src/served-origins.js opens: it goes to a blob document of its own, of its origin
+// and its role, whose script goes to a link elsewhere, then toward the app's origin with the query page-navigation loads
+// for a page of no role, and then back here, which ends the origin, saying the blob document stayed through both.
+(async () => {
+    const QUIET_MS = 1500;
+    const APP_ORIGINS = ['https://appassets.androidplatform.net', 'crossbind://app'];
+    const ELSEWHERE = 'https://crossbind-e2e.invalid/blob';
+    const query = new URLSearchParams(location.search);
+    const app = APP_ORIGINS.find((origin) => origin === query.get('app'));
+    if (!app) throw new Error("page-blob.html takes the app's origin it knows");
+    if (query.get('back') === null) {
+        const steps = [ELSEWHERE, `${app}/?from=no-role-back&blob=1`, `${location.href}&back=1`];
+        const script = `${JSON.stringify(steps)}.forEach((url, at) => setTimeout(() => { location.href = url; }, at * ${QUIET_MS}));`;
+        location.href = URL.createObjectURL(new Blob([`<!doctype html><title>blob</title><script>${script}<\/script>`], { type: 'text/html' }));
+        return;
+    }
+    let api;
+    try {
+        api = await import('/__crossbind/app.js');
+    } catch (error) {
+        console.error(`CONFORMANCE ERR: ${location.origin}: page-blob.html could not import /__crossbind/app.js, ${error?.message ?? error}`);
+        return;
+    }
+    await api.invoke('probe.report', { key: 'blob', value: { back: location.href } });
+    await api.invoke('probe.endOrigin', { name: 'e2e-blob' });
+})();
+</script>
+</body>
+</html>

@@ -110,8 +110,10 @@ std::vector<std::string> servedNames() {
     return names;
 }
 
+std::string documentOriginOf(const std::string &url) { return originOf(url.rfind("blob:", 0) == 0 ? url.substr(5) : url); }
+
 PageOrigin pageOriginOf(const std::string &url) {
-    const std::string origin = originOf(url);
+    const std::string origin = documentOriginOf(url);
     if (isAppOrigin(origin)) return {"app", "app", ""};
     const std::string name = nameInOrigin(origin);
     std::lock_guard<std::mutex> lock(originsMutex);
@@ -141,7 +143,7 @@ NavigationRule ruleOf(const std::string &page, const std::string &url) {
 NavigationRule navigationRule(const void *webView, const std::string &url) { return ruleOf(originOfPage(webView), url); }
 
 std::string pageNameOf(const std::string &page) {
-    const std::string origin = originOf(page);
+    const std::string origin = documentOriginOf(page);
     return isAppOrigin(origin) ? "app" : nameInOrigin(origin);
 }
 
