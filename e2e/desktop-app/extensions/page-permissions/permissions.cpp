@@ -39,7 +39,8 @@ void crossbind_extension_e2e_page_permissions(crossbind::Registry &registry) {
     registry.onPagePermission([](const crossbind::PagePermission &request) {
         {
             std::lock_guard<std::mutex> lock(askedMutex);
-            asked.emplace_back(Value::Object{{"kinds", request.kinds()}, {"origin", request.origin()}, {"isListed", request.isListed()}, {"role", request.page().role()}});
+            asked.emplace_back(Value::Object{{"kinds", request.kinds()}, {"origin", request.origin()}, {"isListed", request.isListed()}, {"role", request.page().role()},
+                {"label", request.page().label()}});
         }
         if (request.kinds() == std::vector<std::string>{"clipboard"} || request.kinds() == std::vector<std::string>{"downloads"}) {
             request.allow();

@@ -850,7 +850,10 @@ std::vector<Window> openWindows();
 
 // Asks the holder of page-permissions, as the webview does, whether the page of origin may use these kinds: for an
 // extension that gives the page what its webview lacks, as the host's page-location gives a macOS page its location.
-// From any thread; done gets the answer once, on the main thread, false without page-permissions.
+// The request's page() is of the origin's role and label, "app" for the app's own and a served origin's own two, and
+// names no page and no window, id 0 for both, as an origin may show in several; one of another origin is denied
+// before the holder hears of it. From any thread; done gets the answer once, on the main thread, false without
+// page-permissions.
 void askPagePermission(std::vector<std::string> kinds, std::string origin, std::function<void(bool isAllowed)> done);
 #endif
 

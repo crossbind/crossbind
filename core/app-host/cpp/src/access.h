@@ -51,9 +51,13 @@ std::string holderOf(const std::string &role);
 // over, from any thread: none, 0 for its id and its window's, before the first or once the window closed. An Android
 // page is of no window, and null names it.
 Page pageOf(const void *webView);
+// The page of this URL's origin that no window names, as one an extension asks for by its origin: of id 0 for it and
+// its window, and of the origin's role and label, "app" for the app's own, a served origin's own two, and none for
+// another.
+Page pageOfOrigin(const std::string &url);
 // The Android page of this URL, the page that asks as the activity reads it: the one the host heard of last, at heard,
-// where the two are of one origin, else one the host has yet to hear of, of id 0 and of its origin's role and label, as
-// the WebView tells the host of a page once its first scripts may have asked.
+// where the two are of one origin, else one the host has yet to hear of, pageOfOrigin()'s, as the WebView tells the
+// host of a page once its first scripts may have asked.
 Page pageAt(const std::string &page, const std::string &heard);
 // The page of the window of this id, 0 for an Android page's, from any thread: none before the first.
 Page pageOfWindow(uint64_t window);
