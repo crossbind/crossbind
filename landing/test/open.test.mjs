@@ -20,9 +20,9 @@ const takes = (rule, path) =>
     new RegExp(`^${rule.split('*').map((part) => part.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')).join('.*').replace(/:[A-Za-z]\w*/g, '[^/]+')}$`).test(path);
 const rulePaths = (file) => file.split('\n').filter((line) => line.startsWith('/')).map((line) => line.split(/\s+/)[0]);
 
-test('hands the crossbind app the session its address names, as crossbind://open?s=<session>', () => {
-    assert.equal(appLink(`?s=${SESSION}`), `crossbind://open?s=${SESSION}`);
-    assert.equal(appLink(`?x=1&s=${SESSION}`), `crossbind://open?s=${SESSION}`);
+test('hands the crossbind app the session its address names, as dev.crossbind.app://open?s=<session>', () => {
+    assert.equal(appLink(`?s=${SESSION}`), `dev.crossbind.app://open?s=${SESSION}`);
+    assert.equal(appLink(`?x=1&s=${SESSION}`), `dev.crossbind.app://open?s=${SESSION}`);
 });
 
 test('names no session for an address whose s is out of its form: 22 characters of base64url alone', () => {
