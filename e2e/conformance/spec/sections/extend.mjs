@@ -1,5 +1,5 @@
-// The methods a hand-written interface adds to a class with %extend, and the template instances it names with
-// %template (native/confextend.h, confextend.i).
+// The methods and the constructor a hand-written interface adds to a class with %extend, and the template instances
+// it names with %template (native/confextend.h, confextend.i).
 export function extendChecks({ add }, s) {
     add('extend:method', async () => (await new s.ConfExtended('Ada')).greet('Bob'), 'Ada greets Bob');
     add('extend:onSharedPointer', async () => (await s.ConfExtended.shared('Ada')).greet('Bob'), 'Ada greets Bob');
@@ -13,6 +13,7 @@ export function extendChecks({ add }, s) {
         return [await ada.size(), await ada.size(10), await ada.name()];
     }, [3, 13, 'Ada']);
     add('extend:staticMethod', () => s.ConfExtended.kind(), 'extended');
+    add('extend:constructor', async () => (await new s.ConfExtended('Ada', 'Lovelace')).greet('Bob'), 'Ada Lovelace greets Bob');
     add('extend:templateClass', async () => {
         const box = await new s.ConfTemplateBoxInt();
         await box.set(5);

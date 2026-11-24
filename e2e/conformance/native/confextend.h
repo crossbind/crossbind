@@ -4,8 +4,8 @@
 #include <memory>
 #include <string>
 
-// The class whose hand-written interface, confextend.i beside this header, adds methods with %extend, and the
-// templates whose instances it names with %template.
+// The class whose hand-written interface, confextend.i beside this header, adds methods and a constructor with
+// %extend, and the templates whose instances it names with %template.
 
 class ConfExtended {
 public:
