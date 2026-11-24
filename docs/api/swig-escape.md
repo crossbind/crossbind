@@ -26,7 +26,7 @@ Write your own `.i` only for one of these:
 4. **Ignoring members** (`%ignore`) — a declaration the library never defines, or a member you do not want exposed, and you can't refactor the upstream header. For whole names, `export.ignoredDeclarations` in the config does the same without a `.i` file.
 5. **Custom directors** for cross-language polymorphism (rare).
 6. **A type the generator leaves out** — a template instantiation, or a container outside the type table, registered by hand ([below](#registering-a-type-by-hand)).
-7. **A method the class does not have** (`%extend`) — written in the `.i` and called from JavaScript as one of the class's own ([below](#adding-a-method-to-a-class)).
+7. **A method or a constructor the class does not have** (`%extend`) — written in the `.i` and called from JavaScript as one of the class's own ([below](#adding-a-method-to-a-class)).
 
 For everything else: write a C++ wrapper instead. Wrappers are easier to reason about and won't drift if SWIG semantics change.
 
@@ -160,7 +160,9 @@ reading.label('°C');                     // '21 °C'
 m.Reading.fromFahrenheit(212).value();   // 100
 ```
 
-An added method takes strings, numbers and objects as a method of the class does, may be `static`, and may overload a method the class has itself under another argument count. A constructor added with `%extend` does not bind: called from JavaScript it throws `crossbind: this class cannot be constructed from these arguments`, or, when the class has a constructor of the same argument count, the build leaves it out with a line. Give the class a static method that returns the object instead, as `fromFahrenheit` does.
+An added method takes strings, numbers and objects as a method of the class does, may be `static`, and may overload a method the class has itself under another argument count.
+
+A constructor is added the same way, as a function that returns the new object: with `Reading(int whole, int tenths) { return new Reading(whole + tenths / 10.0); }` in the block, `new m.Reading(21, 6).value()` is `21.6`. Its argument count must be one that no constructor of the class has. When the class has a constructor of the same argument count, the build leaves the added one out with a line; give the class a static method that returns the object instead, as `fromFahrenheit` does.
 
 ## Caveats
 
