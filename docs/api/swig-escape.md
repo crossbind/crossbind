@@ -26,6 +26,7 @@ Write your own `.i` only for one of these:
 4. **Ignoring members** (`%ignore`) — a declaration the library never defines, or a member you do not want exposed, and you can't refactor the upstream header. For whole names, `export.ignoredDeclarations` in the config does the same without a `.i` file.
 5. **Custom directors** for cross-language polymorphism (rare).
 6. **A type the generator leaves out** — a template instantiation, or a container outside the type table, registered by hand ([below](#registering-a-type-by-hand)).
+7. **A method the class does not have** (`%extend`) — written in the `.i` and called from JavaScript as one of the class's own ([below](#adding-a-method-to-a-class)).
 
 For everything else: write a C++ wrapper instead. Wrappers are easier to reason about and won't drift if SWIG semantics change.
 
@@ -122,11 +123,50 @@ const m = await initNative();   // m.BoxInt, m.MapStringDouble
 
 The module then has the classes `BoxInt` and `MapStringDouble`, and a function of `box.h` that takes or returns a `Box<int>` can be called. A template instance also binds through SWIG's own `%template`, in the `.i` beside its header after the `%include`: `%template(BoxInt) Box<int>;` binds the class `BoxInt`, and `%template(largerInt) larger<int>;` the function `largerInt`.
 
+## Adding a method to a class
+
+`%extend` gives a class methods its header does not have. A method's body is C++ and reaches the object as `$self`. This one stands beside `reading.h` as `src/native/reading.i`. `Reading::as<T>()` is a member template, which the generator leaves out, and the added methods call it with a type:
+
+```swig
+%module READING
+
+%{
+#include <memory>
+#include <string>
+#include "reading.h"
+%}
+
+%feature("shared_ptr");
+%feature("polymorphic_shared_ptr");
+
+%extend Reading {
+    int rounded() { return $self->as<int>(); }
+    std::string label(const std::string &unit) { return std::to_string($self->as<int>()) + " " + unit; }
+    static std::shared_ptr<Reading> fromFahrenheit(double fahrenheit) {
+        return std::make_shared<Reading>((fahrenheit - 32) / 1.8);
+    }
+}
+
+%include "reading.h"
+```
+
+```js
+import { initNative } from './native/reading.h';
+
+const m = await initNative();
+const reading = new m.Reading(21.6);
+reading.rounded();                       // 21
+reading.label('°C');                     // '21 °C'
+m.Reading.fromFahrenheit(212).value();   // 100
+```
+
+An added method takes strings, numbers and objects as a method of the class does, may be `static`, and may overload a method the class has itself under another argument count. A constructor added with `%extend` does not bind: called from JavaScript it throws `crossbind: this class cannot be constructed from these arguments`, or, when the class has a constructor of the same argument count, the build leaves it out with a line. Give the class a static method that returns the object instead, as `fromFahrenheit` does.
+
 ## Caveats
 
 1. **Manual `.i` overrides the auto-gen entirely.** You're responsible for `%feature("shared_ptr")` and the rest. Forget them, and `shared_ptr` returns become opaque pointers in JS.
 2. **`%include "myheader.h"` is what tells SWIG about your symbols.** Without it, the `.i` is empty even with the `%{ #include ... %}` block (that one only injects into the generated wrapper, not into SWIG's symbol table).
-3. **Build cache** keys on header hash, not `.i` hash. If you only edit the `.i` and not the header, you may need to clear `.crossbind/cache.json` or touch the header to retrigger the binding regen.
+3. **The `.i` is part of the build cache.** Edit it alone and the next build makes its bridge again; the header need not change.
 
 ## When you're past `.i`
 
