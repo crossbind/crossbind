@@ -80,7 +80,7 @@ Adding a new runtime (e.g. Deno) ≈ writing one `<runtime>.js` shim that compos
 
 ### Plugins (bundler integrations)
 
-Each `plugins/*` adapts crossbind's outputs to one bundler. They share a small contract:
+Each `plugins/*` adapts crossbind's outputs to one bundler, through one api, `integrationApi()` from `crossbind` (`core/crossbind/src/integration/api.js`): the page's targets, a header or `.rs` turned into a module, the glue linked and served or emitted, and an app's build and dev session. Each plugin maps its bundler's hooks onto it. They share a small contract:
 
 - Watch native source dirs (`paths.native`) so bundler HMR triggers `createLib`/`buildWasm` rebuilds.
 - Pipe `/crossbind.js`, `/crossbind.wasm`, `/crossbind.data.txt` requests to dev-server middleware.

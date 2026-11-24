@@ -10,7 +10,7 @@
 - `src/actions/` — the actual build steps. **Most edits land here.**
 - `src/state/` — config loading + target matrix.
 - `src/utils/` — small helpers (logger, hashing, fs, JSON I/O, Docker pull, …).
-- `src/integration/` — `getCrossbindScript`, `getDependFilePath` (consumer-side helpers used by plugins).
+- `src/integration/` — the integration api the bundler plugins reach crossbind through, `integrationApi()` (`api.js`, with `pageTargets.js`, `glue.js` and `appDevSession.js`), and the helpers under it (`getCrossbindScript`, `getDependFilePath`, `bindHeaderImports`).
 - `src/assets/` — runtime artifacts shipped with the published package: `js-runtime/` (browser/node/edge JS shims), `cpp-runtime/` (C++ entrypoints), `cmake/` (CMake templates), `packaging/` (podspec template).
 
 Use `docs/CODEMAP.md` (repo root) for "concept → file" lookups before guessing.

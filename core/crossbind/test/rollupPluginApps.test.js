@@ -1,43 +1,53 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-// The Rollup plugin of a desktop app's build for two arches, with crossbind stood in for: when it checks, publishes and
-// ships each arch's app.
+// The Rollup plugin of a desktop app's build for two arches, on crossbind's integration api with the steps under it
+// stood in for: when it checks, publishes and ships each arch's app.
 const steps = [];
 const targets = ['x64', 'arm64'].map((arch) => ({ platform: 'linux', arch, buildType: 'release', runtimeEnv: 'app' }));
 // The arch whose app could not be installed, as an installer's check says.
 const refused = { arch: null };
-vi.mock('crossbind', () => ({
-    state: { config: { target: { runtimeEnv: 'app' }, ext: { header: ['h'], module: ['i'] }, paths: { project: '/project', native: [] } } },
-    isAppBuild: () => true,
-    findAppPageApi: () => null,
+vi.mock('../src/state/index.js', () => ({
+    default: {
+        config: {
+            target: { runtimeEnv: 'app' },
+            ext: { header: ['h'], module: ['i'], source: ['cpp'] },
+            paths: { project: '/project', native: [], build: '/project/.crossbind/build', cache: '/project/.crossbind/cache' },
+        },
+        targets,
+    },
+}));
+vi.mock('../src/utils/appBuild.js', () => ({ default: () => true }));
+vi.mock('../src/utils/appSources.js', () => ({ default: () => [], isAppSource: () => false }));
+vi.mock('../src/actions/target.js', () => ({ getTargetParams: () => ({}), getFilteredBuildTargets: () => targets }));
+vi.mock('../src/actions/buildApp.js', () => ({
     appTargetParams: () => ({}),
-    getTargetParams: () => ({}),
-    getFilteredBuildTargets: () => targets,
     appOutputName: (target) => `demo-linux-${target.arch}`,
-    checkInstaller: async (target) => {
-        steps.push(`check ${target.arch}`);
-        if (target.arch === refused.arch) throw new Error(`crossbind: no installer can make the ${target.arch} app.`);
-    },
-    buildDependencies: async () => {
-        steps.push('dependencies');
-    },
+    appPlatform: () => 'linux',
+    appLayout: vi.fn(),
+    buildProjectApp: vi.fn(),
+    emptyAppOutDir: vi.fn(),
     publishApp: (target, { to }) => {
         steps.push(`publish ${target.arch}`);
         return to;
     },
+}));
+vi.mock('../src/actions/appInstaller.js', () => ({
+    checkInstaller: async (target) => {
+        steps.push(`check ${target.arch}`);
+        if (target.arch === refused.arch) throw new Error(`crossbind: no installer can make the ${target.arch} app.`);
+    },
     shipApp: async (target, to) => {
         steps.push(`ship ${target.arch} ${to}`);
     },
-    createLib: vi.fn(),
-    buildWasm: vi.fn(),
-    createBridgeFile: vi.fn(),
-    getCrossbindScript: vi.fn(),
-    getRustJsScript: vi.fn(),
-    getDependFilePath: vi.fn(),
-    isSourceNewer: vi.fn(),
-    appSourceFiles: () => [],
-    buildProjectApp: vi.fn(),
 }));
+vi.mock('../src/actions/buildDependencies.js', () => ({
+    default: async () => {
+        steps.push('dependencies');
+    },
+}));
+vi.mock('../src/actions/createInterface.js', () => ({ default: vi.fn() }));
+vi.mock('../src/integration/getCrossbindScript.js', () => ({ default: vi.fn(), getRustJsScript: vi.fn() }));
+vi.mock('crossbind', async () => ({ integrationApi: (await import('../src/integration/api.js')).default }));
 
 const { default: rollupCrossbindPlugin } = await import('../../../plugins/rollup/index.js');
 
@@ -65,7 +75,7 @@ describe("the Rollup plugin of a desktop app's build", () => {
     // A dependency's header lies under the include root of the target that builds it: bound for wasm, which the app does
     // not build, it was included by its file name alone.
     test("binds a header the page imports for the app's target", async () => {
-        const { createBridgeFile } = await import('crossbind');
+        const { default: createBridgeFile } = await import('../src/actions/createInterface.js');
         const plugin = rollupCrossbindPlugin();
         plugin.configResolved({ base: '/', command: 'build' });
 
