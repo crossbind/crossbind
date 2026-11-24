@@ -1522,6 +1522,11 @@ stores, as `CROSSBIND_APP_PLATFORM` does without either. For a store of more tha
 An upload of more than one platform checks what each needs before its first build, and where one fails after another
 went to the store, its error says which went and the `-p` that publishes the rest.
 
+Each store's section below says what its own site takes once, by hand, before the first upload, as
+`crossbind app store <store>` does: App Store Connect and Play Console make no app through their APIs, so the app is
+created there first, with `app.id` as its bundle ID or package name. An `app-store` upload runs on a Mac with Xcode, for
+the team of `app.team`.
+
 Without a store, `crossbind app upload`, `crossbind app release` and `crossbind app store` go to each store
 `app.stores` names in `crossbind.config.js`, in its order, or to those of them that take the platform `-p` names; without
 `app.stores`, an upload and a release go to the store that goes first for the platform.

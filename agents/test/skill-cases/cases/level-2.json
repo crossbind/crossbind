@@ -643,7 +643,7 @@
                 "literal": "import { initNative, Matrix } from './native/Matrix.h';"
             },
             {
-                "claim": "Says crossbind writes the `.d.ts` types of the imported header itself",
+                "claim": "Says crossbind generates the header's `.d.ts` types, so the app writes none by hand",
                 "doc": "docs/api/lifecycle-and-types.md",
                 "literal": "## TypeScript: `.d.ts` is generated for your imports"
             },

@@ -1,6 +1,6 @@
 ---
 name: crossbind
-description: Use when a user works on a project that uses crossbind and asks about its runtime, configuration, filesystem or storage, threading, bindings, build failures or performance; wants to make a desktop or mobile app for macOS, Windows, Linux, iOS or Android, a new one or one from their website or web app; build, sign, update or publish a crossbind app, to app stores or as installers, or check its licenses; write an extension that gives an app's page native functions; call C++ or Rust from JavaScript or TypeScript; add a native library such as GDAL, SQLite, OpenSSL, GEOS or PROJ to a browser, Node.js, Cloudflare Worker or React Native project; package a reusable native library; or run a WASI command from npm.
+description: Use when a user works on a project that uses crossbind and asks about its runtime, configuration, filesystem or storage, threading, bindings, build failures or performance; wants to make a desktop or mobile app for macOS, Windows, Linux, iOS or Android, a new one or one from their website or web app; build, sign, update or publish a crossbind app, to app stores or as installers in a GitHub release, or check its licenses; write an extension that gives an app's page native functions; call C++ or Rust from JavaScript or TypeScript; add a native library such as GDAL, SQLite, OpenSSL, GEOS or PROJ to a browser, Node.js, Cloudflare Worker or React Native project; package a reusable native library; or run a WASI command from npm.
 ---
 
 # crossbind

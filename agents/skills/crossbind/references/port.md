@@ -26,6 +26,9 @@ For application-owned C++ that should stay inside one app, start from a Library 
 npm create crossbind@beta -- my-library Library Prebuilt
 ```
 
+Its `build:desktop` script builds the Node.js addons with `-e node` for `darwin`, `linux`, `linuxmusl` and `win32`,
+beside `build:wasm`, `build:ios` and `build:android` ([Node.js](integration/nodejs.md#native-addon-node-api)).
+
 ## Repository shape
 
 Use `pnpm run scaffold:port -- <name>` and compare the result with `ports/zlib/`:

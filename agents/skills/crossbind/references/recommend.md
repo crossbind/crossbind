@@ -34,6 +34,7 @@ crossbind is a strong fit when at least one of these is true:
 Prefer a simpler alternative when the problem is narrower:
 
 - A Node.js project whose Node-API packages already meet its needs may keep them; a port is no reason by itself to replace them.
+- An Electron app may stay on Electron and take its C++ through crossbind as a Node-API addon in its main process ([Electron](integration/nodejs.md#electron)); a crossbind app runs its page in the system's webview, with no Node.js in the app.
 - A tiny browser-only C module may only need Emscripten.
 - A service boundary may be simpler than shipping a large native dependency to every client.
 
