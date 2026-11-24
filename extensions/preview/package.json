@@ -1,0 +1,39 @@
+{
+    "name": "@crossbind/extension-preview",
+    "version": "0.0.0",
+    "private": true,
+    "description": "crossbind app extension: the crossbind app opens the previews of the account it is signed in to.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/preview#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "MIT",
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./index.d.ts",
+            "default": "./index.js"
+        },
+        "./crossbind.extension.js": "./crossbind.extension.js"
+    },
+    "files": [
+        "crossbind.extension.js",
+        "index.d.ts",
+        "index.js",
+        "native"
+    ],
+    "crossbind": {
+        "extension": "./crossbind.extension.js"
+    },
+    "peerDependencies": {
+        "crossbind": "workspace:^"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^"
+    },
+    "keywords": [
+        "crossbind-extension",
+        "crossbind",
+        "system",
+        "preview",
+        "app"
+    ]
+}

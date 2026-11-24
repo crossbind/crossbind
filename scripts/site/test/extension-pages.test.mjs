@@ -5,14 +5,14 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { readExtensionPages, renderExtensionPagesModule } from '../build-extension-pages.mjs';
 
-function treeOf(t, name, readme) {
+function treeOf(t, name, readme, manifest = {}) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-extension-pages-'));
     t.after(() => fs.rmSync(root, { recursive: true, force: true }));
     const folder = path.join(root, 'extensions', name);
     fs.mkdirSync(folder, { recursive: true });
     fs.writeFileSync(
         path.join(folder, 'package.json'),
-        JSON.stringify({ name: `@crossbind/extension-${name}`, homepage: `https://example.com/${name}` }),
+        JSON.stringify({ name: `@crossbind/extension-${name}`, homepage: `https://example.com/${name}`, ...manifest }),
     );
     fs.writeFileSync(path.join(folder, 'README.md'), readme);
     return root;
@@ -45,12 +45,19 @@ test('a README that is not titled with its package, or has no line under its tit
     assert.throws(() => readExtensionPages(treeOf(t, 'power', '# @crossbind/extension-power\n\n## Use\n')), /has no line under its title/);
 });
 
-test("the repository's extensions each have a page, which the module holds", () => {
+test('a private extension, which npm has not, has no page', (t) => {
+    assert.deepEqual(readExtensionPages(treeOf(t, 'preview', '# @crossbind/extension-preview\n\nThe previews.\n', { private: true })), []);
+});
+
+test("the repository's published extensions each have a page, which the module holds", () => {
     const pages = readExtensionPages();
-    const folders = fs.readdirSync(new URL('../../../extensions/', import.meta.url));
+    const folder = new URL('../../../extensions/', import.meta.url);
+    const published = fs
+        .readdirSync(folder)
+        .filter((name) => JSON.parse(fs.readFileSync(new URL(`${name}/package.json`, folder), 'utf8')).private !== true);
     assert.deepEqual(
         pages.map(({ name }) => name),
-        folders.toSorted((left, right) => left.localeCompare(right, 'en')),
+        published.toSorted((left, right) => left.localeCompare(right, 'en')),
     );
     for (const page of pages)
         assert.ok(
