@@ -11,6 +11,8 @@
 // WebView would, with a Back and then a load of the app's page on their way, and that load brings the app's page back.
 (async () => {
     const APP_ORIGINS = ['https://appassets.androidplatform.net', 'crossbind://app'];
+    // Where a frame's redirect the probe asks of goes, which the rule leaves to page-navigation.
+    const FRAME_REDIRECT = 'mailto:frame-redirect@crossbind-e2e.invalid';
     const app = APP_ORIGINS.find((origin) => origin === new URLSearchParams(location.search).get('app'));
     let api;
     try {
@@ -20,7 +22,7 @@
         return;
     }
     // The load the probe begins replaces this page, whose call then answers nowhere.
-    api.invoke('probe.askAsTheWebView', { app }).catch(() => {});
+    api.invoke('probe.askAsTheWebView', { app, frameRedirect: FRAME_REDIRECT }).catch(() => {});
 })();
 </script>
 </body>
