@@ -18,8 +18,8 @@ import {
 } from './steps.mjs';
 
 // The fixture's app, which `pnpm build` made, opens the previews of made-up accounts as the crossbind app does, against
-// a stand-in for crossbind cloud (cloud.mjs): crossbind app preview runs e2e/app-preview, --cloud first uploads it as a
-// snapshot, and servers of the run's own, at this machine's address on its network, answer the check of sessions that
+// a stand-in for crossbind cloud (cloud.mjs): crossbind app preview runs e2e/app-preview, on Linux --cloud first uploads
+// it as a snapshot, and servers of the run's own, at this machine's address on its network, answer the check of sessions that
 // stop and are a second project. The app's page and each project's take the run's steps through the fixture's hooks and
 // report what they got (src/main.js, e2e/app-preview/src/project-steps.js); the previewed page's own lines come to the
 // preview's terminal, as phase 2's checks read them. With CROSSBIND_APP_PLATFORM=ios the app opens in the Simulator,
@@ -54,6 +54,9 @@ const isPhone = platform === 'ios' || platform === 'android';
 const isApple = platform === 'ios' || (!platform && process.platform === 'darwin');
 // Android's and Windows' served origins are http://<name>.localhost, the others' crossbind://<name>.
 const isHttpOrigin = platform === 'android' || (!platform && process.platform === 'win32');
+// --cloud builds e2e/app-preview for the web, whose toolchain CI's Linux runners have, in Docker, and its macOS and
+// Windows runners have not.
+const isWebBuilt = process.platform === 'linux';
 const run = randomBytes(4).toString('hex');
 process.chdir(root);
 
@@ -358,11 +361,11 @@ function secondProject(address) {
     return listedSource(address, { project: { id: newId(), name: 'e2e second project' } }, asPreview(), { '/index.html': STEPS_PAGE, '/project-steps.js': stepsModule() });
 }
 
-// The snapshot of the dev session's project: crossbind app preview --cloud uploads e2e/app-preview's web build; a
-// Windows runner, which has no builder of a web build, uploads a page of the project's steps with crossbind's own
-// upload. Either is a snapshot of the dev session's project, of its one origin.
+// The snapshot of the dev session's project: on Linux crossbind app preview --cloud uploads e2e/app-preview's web
+// build; elsewhere the run uploads a page of the project's steps with crossbind's own upload, which --cloud calls once
+// its build is made. Either is a snapshot of the dev session's project, of its one origin.
 async function snapshotOf(dev) {
-    if (process.platform === 'win32') {
+    if (!isWebBuilt) {
         const dir = mkdtempSync(join(tmpdir(), 'crossbind-e2e-snapshot-'));
         made.push(dir);
         writeFileSync(join(dir, 'index.html'), STEPS_PAGE);
@@ -629,7 +632,7 @@ async function flow() {
     endpoint = await serveEndpoint(ENDPOINT_PORT);
     // A token a run before left in this Mac's file-based keychain, which a rebuilt app would ask its user for.
     if (!platform && process.platform === 'darwin') spawnSync('security', ['delete-generic-password', '-s', `dev.crossbind.${name}.cloud`, '-a', CLOUD.cloud]);
-    if (process.platform !== 'win32') {
+    if (isWebBuilt) {
         await uploadSnapshot();
         expect(/uploaded as a snapshot, version 1,/.test(terminal.text()), `crossbind app preview --cloud did not upload version 1:\n${terminal.text()}`);
     }
