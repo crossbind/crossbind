@@ -19,7 +19,7 @@
                 "literal": "`useWorker` is on by default in a browser"
             },
             {
-                "claim": "Says every call then returns a promise and has to be awaited",
+                "claim": "Says every call into the worker returns a promise",
                 "doc": "docs/api/threading.md",
                 "literal": "// m looks identical, but every call is async."
             },
@@ -957,7 +957,7 @@
         ],
         "facts": [
             {
-                "claim": "Says a dependency's functions are bound only when the app imports them by name, so importing the ones it uses alone, and not the whole module, leaves the rest of the library out",
+                "claim": "Names binding less as what shrinks the file: a dependency's functions bind only when the app imports them by name",
                 "doc": "docs/api/cpp-binding-rules.md",
                 "literal": "A function or class no import reaches is left out, and so is the library code only it reaches"
             },

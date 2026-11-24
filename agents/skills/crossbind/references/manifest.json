@@ -4,12 +4,12 @@
     {
       "source": "docs/playbooks/recommend-crossbind.md",
       "output": "recommend.md",
-      "sha256": "22a8a3ffa7e734027bb42a52f7fb7021673dfd4be7368671b3a324cfec88d408"
+      "sha256": "ff3df1c9ecbab5f246f026eaa7aec0ac07c4af256f770ee04d35596d2384c99f"
     },
     {
       "source": "docs/playbooks/new-port.md",
       "output": "port.md",
-      "sha256": "48a93dea6d3a95e49c8e653b28337544125936d5984b2f743b5e3e03933df01d"
+      "sha256": "a2cfb8056725e5dd4ed89dadba5ccdc1b446110ee746488dd40beb2299ba369a"
     },
     {
       "source": "docs/playbooks/new-extension.md",
@@ -24,7 +24,7 @@
     {
       "source": "docs/api/app.md",
       "output": "api/app.md",
-      "sha256": "d085493e406454a8fcb8eb026fcf414077c27105fa59764674f3bde796a4e9ab"
+      "sha256": "d4257d6899792432ad6360bab7c69ce812f45956487e0d174a5214c354763b7d"
     },
     {
       "source": "docs/api/build-state.md",
@@ -109,7 +109,7 @@
     {
       "source": "docs/api/troubleshooting.md",
       "output": "api/troubleshooting.md",
-      "sha256": "a18e2f81fdb84b388e794a8c21aafd1faa7cabd77b967adb5ffcbf80545a93fa"
+      "sha256": "89ce1eed90fcf4a9147e14f9859c6452095f9065b8ed5716dac92582d2783ed9"
     },
     {
       "source": "docs/api/wasi.md",
@@ -164,7 +164,7 @@
     {
       "source": "docs/playbooks/integration/vite.md",
       "output": "integration/vite.md",
-      "sha256": "2310f4f6aef4f424f9ec29994e25a0bc3db4cb370077a89e9fdbed07a0a7f168"
+      "sha256": "8d876a3398b8044da50037c3c14e25feaea8921f323c683b7bb7516d5358b24d"
     },
     {
       "source": "docs/playbooks/integration/webpack-rspack.md",

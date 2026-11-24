@@ -116,6 +116,7 @@ If the user picks `runtime: 'st'` (single-thread), none of this applies — no h
 - **Mismatched runtime.** If `crossbind.config.js` says `runtime: 'st'` but the user expected threading, threads won't run. Check both.
 - **`pnpm dev` shows `crossbind build` errors but page loads.** The plugin reports build failures via the dev server overlay; if the page loads anyway, it's a stale cached artifact. Run `pnpm build` once to surface the error.
 - **HMR doesn't rebuild after `.cpp` edit.** Check `paths.native` in the project's `crossbind.config.js`. Default `src/native/` works; if the user moved C++ files elsewhere, point at the new location.
+- **Opening a file the user picks by its name.** The module sees only its own filesystem: `const paths = await m.autoMountFiles(Array.from(input.files))` mounts the picked files and gives the paths the library opens. See [`filesystem.md`](../../api/filesystem.md).
 
 ## Reference examples
 

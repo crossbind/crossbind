@@ -160,6 +160,15 @@ You set `target.runtime: 'mt'` but production hosting isn't sending COOP/COEP he
 
 Same root cause as above — COOP/COEP missing.
 
+### Files written in the browser are gone after a reload
+
+They were written in the module's memory: `/memfs/<app>/`, and every path outside `/opfs/<app>/`, lasts for the tab's
+session alone.
+
+- **Fix:** write them under `/opfs/<app>/`, which keeps them across reloads. It needs the module in a worker
+  (`useWorker: true`, the browser's default) and, in a single-threaded build, `fs: { opfs: true }`. See
+  [`filesystem.md`](./filesystem.md).
+
 ### `OPFS is only available inside a Worker scope`
 
 You mounted `/opfs/...` but didn't set `useWorker: true` on `initNative(opts)`.
