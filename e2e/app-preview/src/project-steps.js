@@ -86,7 +86,9 @@ export async function runSteps(invoke) {
         if (step.do === 'wait') continue;
         if (step.do === 'close') {
             const dialog = step.withDialog ? await shownDialog(invoke, DIALOG) : null;
-            await ask('/report', { id: step.id, value: { dialog: dialog?.first ?? null } });
+            // The report's own answer is not waited for: on Windows a message dialog's modal loop holds every answer to
+            // the page until it closes, which the preview's end does. The run waits for both.
+            ask('/report', { id: step.id, value: { dialog: dialog?.first ?? null } }).catch(() => {});
             await invoke('e2e-hooks.closePreview');
             return;
         }
