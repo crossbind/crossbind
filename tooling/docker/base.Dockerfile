@@ -52,8 +52,8 @@ COPY --chmod=755 retry-network.sh /usr/local/bin/crossbind-retry-network
 # Built here rather than fetched: no upstream ships a binary of the fork.
 FROM os AS swig
 
-ARG SWIG_REV=63612ba356e172ab100fad24155f7426273904c6
-ARG SWIG_SHA256=537fe2b3ef55d9b4c6a18b9fc600c3af1575fbaca47bb02cda01b2716567b49e
+ARG SWIG_REV=d1ad8a01efb8712b16047134f5c70703ce4f0009
+ARG SWIG_SHA256=8ec28db09b5b84fe132b8113c75173ed84df5ce3719e7b4dc52066042cd4f7b2
 
 RUN apt-get update && apt-get install -y --no-install-recommends automake bison libbison-dev libpcre2-dev
 WORKDIR /src
