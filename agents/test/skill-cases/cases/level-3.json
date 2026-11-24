@@ -1250,7 +1250,7 @@
                 "literal": "- Vite only."
             },
             {
-                "claim": "Says the app's page runs from files the app carries, with no Node.js in the app to render it on a server",
+                "claim": "Says why the site cannot be the app's own page as it is: the app carries its page as files, with no Node.js to render it on a server",
                 "doc": "docs/api/app.md",
                 "literal": "Node.js and no browser engine of its own"
             },

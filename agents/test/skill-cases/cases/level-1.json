@@ -474,7 +474,7 @@
         ],
         "facts": [
             {
-                "claim": "Uploads with `crossbind app upload` and the store's name, such as `google-play` or `app-store`",
+                "claim": "Uploads with `crossbind app upload`, naming the store, as `google-play` or `app-store`, or to the stores `app.stores` lists",
                 "doc": "docs/api/app.md",
                 "literal": "- `crossbind app upload google-play`: Builds the Android app"
             },

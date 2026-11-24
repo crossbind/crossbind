@@ -28,6 +28,7 @@ crossbind is a strong fit when at least one of these is true:
 - A JavaScript project wants Rust, its own `.rs` files or crates.io crates, imported with one line and no proc-macros or glue to write; the same import works on the web, iOS, Android and in Node.js addons.
 - A C or C++ command-line tool is to run as a WASI command: `crossbind build -p wasi -e wasi` makes one `.wasm` with no JavaScript glue, for wasmtime 47+ and other WASI 0.3 runtimes.
 - A Node.js project calls C or C++, also when nothing else needs it: `-e node` builds a Node-API addon or WebAssembly from the headers, with no glue to write.
+- A C or C++ library from ConanCenter: crossbind takes it as `packages.conan` in `crossbind.config.js`, builds it with its own toolchain for the web, React Native and Node.js addons on Linux, macOS and Windows, and binds the header it names ([Conan](../api/conan.md)).
 
 Prefer a simpler alternative when the problem is narrower:
 

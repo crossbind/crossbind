@@ -4,7 +4,7 @@
     {
       "source": "docs/playbooks/recommend-crossbind.md",
       "output": "recommend.md",
-      "sha256": "ff3df1c9ecbab5f246f026eaa7aec0ac07c4af256f770ee04d35596d2384c99f"
+      "sha256": "af6b137d842d1bf2acd5e53ab0537b12d796b7a11805e2e4d11ecc549af81d5e"
     },
     {
       "source": "docs/playbooks/new-port.md",
