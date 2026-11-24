@@ -212,10 +212,7 @@ export default async function appPreview({
         viteVersion,
         account,
         id,
-        where: [
-            `on ${address}${where.interface ? ` (${where.interface})` : ''}${where.listen === where.address ? '' : `, listening on ${where.listen}`}`,
-            `open: http://${address}/#k=${key}`,
-        ],
+        where: [`on ${address}${where.interface ? ` (${where.interface})` : ''}${where.listen === where.address ? '' : `, listening on ${where.listen}`}`],
     });
 
     const session = {

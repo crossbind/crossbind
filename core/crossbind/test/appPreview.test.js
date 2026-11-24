@@ -152,20 +152,22 @@ describe('crossbind app preview', () => {
             expect(status).toBe(0);
             expect(stdout).toContain('crossbind app preview: demo, protocol 1, Vite 8.3.8\n  signed in to crossbind cloud as made-up-dev\n');
             expect(stdout).toContain("in a preview these are the crossbind app's: app.urlSchemes (links of acme open nothing of this project)");
-            const [, address, port, key] = stdout.match(/open: http:\/\/(\S+):(\d+)\/#k=([A-Za-z0-9_-]{43})\n/);
+            const [, address, port] = stdout.match(/^ {2}on (\S+):(\d+)/m);
             const [, link, id] = stdout.match(/ {2}scan this with a phone's camera, or open (https:\/\/crossbind\.dev\/open\/\?s=([A-Za-z0-9_-]{22}))\n/);
             expect(stdout).toContain(`${qrLines(link, {}).map((line) => `  ${line}`).join('\n')}\n  Projects lists it in the crossbind app on every device signed in as made-up-dev\n`);
             const handed = JSON.parse(stdout.match(/^VITE --mode staging (.*)$/m)[1]);
+            const { key } = handed;
+            expect(key).toMatch(/^[A-Za-z0-9_-]{43}$/);
             expect(handed).toMatchObject({
-                key, port: Number(port), session: { protocol: 1, project: { name: 'demo' }, account: ACCOUNT, session: id },
+                port: Number(port), session: { protocol: 1, project: { name: 'demo' }, account: ACCOUNT, session: id },
             });
             expect(cloud.calls.map(({ call }) => call)).toEqual(['GET /v1/account', `PUT /v1/sessions/${id}`, `DELETE /v1/sessions/${id}`]);
             expect(cloud.calls.map(({ authorization }) => authorization)).toEqual(Array(3).fill(`Bearer ${TOKEN}`));
             expect(cloud.calls[1].body).toEqual({
                 source: 'dev', project: { id: projectIdOf('demo', dir), name: 'demo' }, addresses: [`${address}:${port}`], protocol: 1, key,
             });
-            // crossbind prints the key once, in the line's fragment; the rest is the stand-in's.
-            expect(stdout.slice(0, stdout.indexOf('VITE --mode')).split(key)).toHaveLength(2);
+            // crossbind prints no key: a device reads it from its own account's list; the rest is the stand-in's.
+            expect(stdout.slice(0, stdout.indexOf('VITE --mode'))).not.toContain(key);
         } finally {
             cloud.close();
         }

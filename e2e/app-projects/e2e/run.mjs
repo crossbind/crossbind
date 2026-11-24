@@ -638,7 +638,7 @@ async function flow() {
     preview.once('exit', (code) => setTimeout(() => finish(`crossbind app preview exited with ${code}`), SETTLE_MS));
     await terminal.waitFor(PREVIEW_LISTED, START_MS, "crossbind app preview's session on the account's list", started);
     const printed = terminal.lines.slice(started).map((line) => line.text).join('\n');
-    expect(/^ {2}on \S+:\d+/m.test(printed), `crossbind app preview printed:\n${printed}`);
+    expect(/^ {2}on \S+:\d+/m.test(printed) && !/^\s*open: /m.test(printed), `crossbind app preview printed:\n${printed}`);
     const dev = [...cloud.sessions.values()].find((session) => session.source === 'dev' && session.project.name === 'crossbind-e2e-app-preview');
     expect(dev, `crossbind app preview listed ${JSON.stringify([...cloud.sessions.values()].map((session) => [session.source, session.project?.name]))}`);
     const snapshot = await snapshotOf(dev);
