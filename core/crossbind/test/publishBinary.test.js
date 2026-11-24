@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const { state } = vi.hoisted(() => ({ state: { config: {} } }));
 vi.mock('../src/state/index.js', () => ({ default: state }));
+// The license rows an app's command carries come from the whole build state, which these tests leave out.
+vi.mock('../src/actions/licenses.js', () => ({ default: vi.fn() }));
 
 const { publishNativeCommand, publishNodeAddon, publishWasiCommand } = await import('../src/actions/publishBinary.js');
 

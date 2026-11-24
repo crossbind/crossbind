@@ -6,6 +6,7 @@ import loadJs from '../utils/loadJs.js';
 import { isCopyleft } from '../utils/licenseReport.js';
 import familyManifestOf from '../utils/familyManifest.js';
 import { wasiToolchainIdentity } from '../utils/provenance.js';
+import { getDockerImage, imageRoleFor } from '../utils/pullDockerImage.js';
 import { resolveWasiSdkPath } from '../utils/wasiToolchain.js';
 import resolveEmbindNapiRoot, { resolveEmbindJsiRoot } from '../utils/resolveEmbindNapi.js';
 import resolveAppHostRoot, { resolveAppEmbindJsiRoot } from '../utils/resolveAppHost.js';
@@ -80,12 +81,13 @@ async function bundledRowsOf(node, platform, familyProjects, sourceUrl) {
 
 // The wasi toolchain statically links its C/C++ runtime into every artifact; the
 // notice rows pin the identities from the actual sdk (or point at the docker digest).
-function wasiToolchainRows() {
+function wasiToolchainRows(target) {
     const sdkPath = resolveWasiSdkPath(state.config.system);
     const identity = sdkPath && fs.existsSync(`${sdkPath}/bin/clang`) ? wasiToolchainIdentity(sdkPath) : null;
+    // The image by its digest: an app's package carries no crossbind.provenance that would name it.
     const sdkLabel = identity?.version
         ? `wasi-sdk ${identity.version}`
-        : 'the digest-pinned wasi-sdk docker image (see crossbind.provenance)';
+        : `the wasi-sdk of ${getDockerImage(imageRoleFor(target))}`;
     const libcRef = identity?.['wasi-libc'] || 'main';
     const llvmRef = identity?.llvm || 'main';
     const shared = {
@@ -677,7 +679,7 @@ export default async function collectLicenseRows(platform = null, { runtimeEnv =
             rows.push(...await bundledRowsOf(node, platform, familyProjects, row.sourceUrl));
         }
     }
-    if (platform === 'wasi') rows.push(...wasiToolchainRows());
+    if (platform === 'wasi') rows.push(...wasiToolchainRows(target));
     if (platform === 'wasm') rows.push(...wasmToolchainRows(), crossbindRow("crossbind's JavaScript runtime, which the module's glue bundles"));
     if (['linux', 'linuxmusl', 'win32'].includes(platform)) rows.push(...addonToolchainRows(platform));
     if (platform === 'linuxmusl' && runtimeEnv === 'native') rows.push(muslRow());

@@ -10,6 +10,8 @@
         "bin/",
         "dist/prebuilt/*/bin/*",
         "dist/prebuilt/*/crossbind-bin.json",
+        "dist/prebuilt/*/sbom.cdx.json",
+        "dist/prebuilt/*/THIRD-PARTY-LICENSES.md",
         "crossbind.config.mjs"
     ],
     "scripts": {

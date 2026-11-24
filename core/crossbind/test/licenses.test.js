@@ -10,6 +10,7 @@ vi.mock('../src/state/index.js', () => ({ default: state }));
 
 const { default: collectLicenseRows, missingNotices } = await import('../src/actions/licenses.js');
 const { newUpdaterKey } = await import('../../../extensions/updater/src/update.js');
+const { getDockerImage } = await import('../src/utils/pullDockerImage.js');
 
 describe('collectLicenseRows', () => {
     beforeEach(() => {
@@ -137,6 +138,21 @@ describe('collectLicenseRows', () => {
 
     test('lists no runtime for a macOS addon, which uses the C++ runtime of the system', async () => {
         expect(await collectLicenseRows('darwin')).toEqual([]);
+    });
+
+    test("names the image whose wasi-sdk a command built in docker links, as an app's package has no crossbind.provenance", async () => {
+        vi.stubEnv('CROSSBIND_RUNNER', 'DOCKER_RUN');
+        try {
+            const rows = await collectLicenseRows('wasi');
+
+            expect(rows.map((row) => row.name)).toEqual(['llvm-runtimes', 'wasi-libc']);
+            for (const row of rows) {
+                expect(row.licenseNotes).toContain(`statically linked by the wasi-sdk of ${getDockerImage('web')}`);
+                expect(row.licenseNotes).not.toContain('crossbind.provenance');
+            }
+        } finally {
+            vi.unstubAllEnvs();
+        }
     });
 
     const stagedZlib = (project) => ({
