@@ -660,6 +660,13 @@ async function checkStore(keyring) {
     const held = await valueOf('the account after a start again', { do: 'account' });
     expect(keyring ? held.account?.id === ACCOUNTS.main.id : held.account === null, `after a start again the app was signed in as ${JSON.stringify(held)}`);
     if (!keyring) await signIn(ACCOUNTS.main, NUMBER);
+    if (platform === 'android') {
+        // A key of the Keystore's that no longer seals is made anew: the next sign-in keeps its token.
+        await valueOf("the preview's key of the Keystore broken", { do: 'breakKey' });
+        await valueOf('the sign-out before a sign-in with a broken key', { do: 'signOut' });
+        const again = await signIn(ACCOUNTS.main, NUMBER);
+        expect(again.signedIn.value?.keyring === true, `a sign-in with a key that no longer seals answered ${JSON.stringify(again)}`);
+    }
     const deleted = await valueOf("the account's deletion", { do: 'deleteAccount' });
     expect(deleted.message === `${ACCOUNTS.main.name} is deleted, with its tokens, sessions and snapshots.` && cloud.calls.some((call) => call.call === 'DELETE /v1/account'), `the deletion was ${JSON.stringify(deleted)}`);
     await relaunch();

@@ -85,6 +85,7 @@ const STEPS = {
     compile: ({ files, packages }) => preview.compile({ files, packages }),
     remove: ({ session }) => preview.removeSnapshot(session),
     handLink: ({ url }) => invoke('e2e-hooks.handLink', { url }),
+    breakKey: () => invoke('e2e-hooks.breakKey'),
 };
 
 async function run() {

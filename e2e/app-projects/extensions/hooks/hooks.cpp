@@ -53,4 +53,12 @@ void crossbind_extension_e2e_hooks(crossbind::Registry &registry) {
 #if defined(__APPLE__) && TARGET_OS_IPHONE
     registry.function("e2e-hooks.handLink", handLinkAsIos);
 #endif
+#if defined(__ANDROID__)
+    registry.function("e2e-hooks.breakKey", [](Call call) {
+        crossbind::android::callJava("e2e-hooks", "breakKey", Value::Object{}, [call](std::optional<std::string> failure, Value) {
+            if (failure) call.reject(*failure);
+            else call.resolve();
+        });
+    });
+#endif
 }

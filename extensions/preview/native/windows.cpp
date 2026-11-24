@@ -7,6 +7,7 @@
 #include <bcrypt.h>
 #include <wincred.h>
 
+#include <stdexcept>
 #include <thread>
 
 namespace preview {
@@ -55,7 +56,8 @@ void sha256(const std::string &text, Digest done) { answerDigest(digestOf(false,
 
 std::string randomBytes(std::size_t count) {
     std::string bytes(count, '\0');
-    BCryptGenRandom(nullptr, reinterpret_cast<PUCHAR>(bytes.data()), static_cast<ULONG>(count), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+    const NTSTATUS status = BCryptGenRandom(nullptr, reinterpret_cast<PUCHAR>(bytes.data()), static_cast<ULONG>(count), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+    if (status < 0) throw std::runtime_error("crossbind: Windows gave no random bytes: " + std::to_string(status));
     return bytes;
 }
 
