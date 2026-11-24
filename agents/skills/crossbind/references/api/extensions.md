@@ -775,7 +775,7 @@ each by the name crossbind gives it:
 - **macOS**
   - `page-dialogs`: Every dialog.
   - `page-permissions`: The camera, the microphone, and the location `page-location` gives the page, which asks about
-    it once a run.
+    it once for each page.
   - `page-files`: Every file input.
 - **iOS**
   - `page-dialogs`: Every dialog.

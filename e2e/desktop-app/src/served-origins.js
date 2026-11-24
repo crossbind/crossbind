@@ -555,23 +555,28 @@ async function afterBlobEnd(reports) {
 }
 
 // 19. On macOS, where page-location asks page-permissions for a page's location by the page's origin, a project's page
-// asks it with its origin's role and label, as the other platforms' webviews ask with the page.
+// asks it with its origin's role and label, as the other platforms' webviews ask with the page, and once for each page:
+// a page's second ask is answered as its first was, and the next page of the origin, served again, asks anew.
 async function askLocation(key) {
     if (device.platform !== 'macos') return;
-    const code = await new Promise((resolve) => {
+    const ask = () => new Promise((resolve) => {
         navigator.geolocation.getCurrentPosition(() => resolve(0), (error) => resolve(error.code));
     });
-    await invoke('probe.report', { key, value: { origin: location.origin, code } });
+    const codes = [await ask(), await ask()];
+    await invoke('probe.report', { key, value: { origin: location.origin, codes } });
 }
 
-async function checkProjectLocation({ projectLocation }) {
+async function checkProjectLocation({ projectLocation, againLocation }) {
     if (device.platform !== 'macos') return;
+    const { appName } = await invoke('probe.label');
     const asked = (await invoke('page-permissions.asked')).filter(({ kinds, origin }) => kinds.join() === 'location' && origin === projectLocation?.origin)
         .map(({ role, label }) => ({ role, label }));
-    if (projectLocation.code !== GeolocationPositionError.PERMISSION_DENIED || asked[0]?.role !== 'project' || asked[0].label !== PROJECT_LABEL) {
-        throw new Error(`the project's page got the code ${projectLocation.code} for its location, of page-permissions asked as ${JSON.stringify(asked)}, not of the role project and the label ${PROJECT_LABEL}`);
+    const codes = [...projectLocation.codes, ...(againLocation?.codes ?? [])];
+    const wanted = [{ role: 'project', label: PROJECT_LABEL }, { role: 'project', label: appName }];
+    if (codes.length !== 4 || codes.some((code) => code !== GeolocationPositionError.PERMISSION_DENIED) || JSON.stringify(asked) !== JSON.stringify(wanted)) {
+        throw new Error(`the project's pages got the codes ${codes.join(', ')} for their location, of page-permissions asked as ${JSON.stringify(asked)}, not once for each page as ${JSON.stringify(wanted)}`);
     }
-    show('location', { code: projectLocation.code, asked });
+    show('location', { codes, asked });
 }
 
 // The app's page at the stage the round trip reached: false once it sent the window elsewhere, else what the project's
@@ -861,6 +866,7 @@ async function againStage() {
     const again = { mark: localStorage.getItem('e2e-mark'), waited: localStorage.getItem('e2e-waited'), after: localStorage.getItem('e2e-after'),
         ...await invoke('probe.label') };
     await invoke('probe.report', { key: 'again', value: again });
+    await askLocation('againLocation');
     await invoke('probe.setStage', { stage: 'done' });
     await invoke('probe.endOrigin', { name: PROJECT }).catch(() => {});
     await sleep(ANSWER_MS);
