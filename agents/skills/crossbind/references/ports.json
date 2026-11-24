@@ -102,7 +102,7 @@
       "npm": "@crossbind/port-geos",
       "category": "geo",
       "summary": "Geometry predicates and spatial operations",
-      "nativeVersion": "3.15.0",
+      "nativeVersion": "3.15.1",
       "license": "LGPL-2.1-only",
       "homepage": "https://crossbind.dev/ports/geos/",
       "targets": [
