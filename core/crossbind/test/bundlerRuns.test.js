@@ -87,7 +87,10 @@ describe('the plugins on their own tools', () => {
         expect(read('dist/crossbind.js')).toBe('glue release');
         expect(read('dist/crossbind.wasm')).toBe('wasm release');
         expect(fs.existsSync(`${work}/dist/crossbind.data.txt`)).toBe(false);
-        expect(createBridgeFile).toHaveBeenCalledWith(`${work}/src/native.h`, expect.objectContaining({ buildType: 'release' }));
+        // Rollup names a module as the system spells its path, with backslashes on Windows.
+        const [[header, target]] = createBridgeFile.mock.calls;
+        expect(upath.normalize(header)).toBe(`${work}/src/native.h`);
+        expect(target).toMatchObject({ buildType: 'release' });
         expect(buildWasm).toHaveBeenCalledTimes(1);
     });
 
