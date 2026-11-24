@@ -1,7 +1,7 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import {
-    existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync,
+    existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync,
 } from 'node:fs';
 import { request } from 'node:http';
 import { createRequire } from 'node:module';
@@ -15,7 +15,7 @@ import {
 } from './cloud.mjs';
 import { serveEndpoint } from './endpoint.mjs';
 import {
-    CLOUD, CLOUD_PORT, ENDPOINT_PORT, PREVIEW_FUNCTIONS, SNAPSHOTS_PORT,
+    CLOUD, CLOUD_PORT, ENDPOINT_PORT, SNAPSHOTS_PORT,
 } from './steps.mjs';
 
 // The fixture's app, which `pnpm build` made, opens the previews of made-up accounts as the crossbind app does, against
@@ -36,6 +36,21 @@ const SETTLE_MS = 1000;
 const NUMBER = 47;
 const PREVIEW_LISTED = /Projects lists it in the crossbind app on every device signed in as made-up-e2e/;
 const ROLE_REFUSAL = (name) => `a page of the role project does not reach ${name}, which pages of the role app call`;
+const ABSENT = (name) => `Error: crossbind: an app has no function ${name}`;
+const CLIPBOARD_TEXT = 'crossbind e2e: a project wrote this';
+// What a page of the role project reaches of the app's functions, and what each answers options it does not take: the
+// design's 6.1 as the first version has it. Every other function the app registers refuses it, with the host's words.
+const OPEN = {
+    'dialog.message': (answer) => answer === 'Error: crossbind: a message dialog takes a message',
+    'clipboard.writeText': (answer) => answer === 'Error: crossbind: clipboard.writeText takes a string',
+    'shell.openExternal': (answer) => answer.startsWith('Error: crossbind: openExternal opens http, https and mailto addresses alone'),
+};
+// Where the system tells its user of a read, the clipboard's read is a project's too.
+const OPEN_ON_A_PHONE = { 'clipboard.readText': (answer) => answer === `answered ${JSON.stringify(CLIPBOARD_TEXT)}` };
+const SOURCE = /\.(c|cc|cpp|h|hpp|m|mm)$/;
+const NAMED = /"([a-z][a-z0-9-]*\.[a-z][A-Za-z0-9]*)"/g;
+const REGISTERED = /(?:\.|->)function\(\s*([^,]+?)\s*,/g;
+const HOOKS = 'e2e-hooks.';
 // What a preview refuses through the project's crossbind/app, one of each kind: a function that belongs to the built
 // app, one that would end the preview, one of a name refused whole, and a file dialog.
 const MODULE_REFUSED = ['app.paths', 'app.quit', 'shell.openPath', 'windows.set', 'dialog.open'];
@@ -62,6 +77,10 @@ const isHttpOrigin = platform === 'android' || (!platform && process.platform ==
 // --cloud builds e2e/app-preview for the web, whose toolchain CI's Linux runners have, in Docker, and its macOS and
 // Windows runners have not.
 const isWebBuilt = process.platform === 'linux';
+const isWindows = !platform && process.platform === 'win32';
+// The port WebView2's DevTools listen on in a Windows run, through which the run clicks in the page, as its user would.
+const DEVTOOLS_PORT = 9224;
+const CLICK_MS = 5000;
 const run = randomBytes(4).toString('hex');
 process.chdir(root);
 
@@ -205,7 +224,7 @@ let builtForDevice = null;
 // The app, as e2e/desktop-app/e2e/run.mjs opens it, its page's console in its output: on the desktop with the
 // arguments given, as a link the system hands it as it starts. Its page says so once it loaded.
 async function launch(args = []) {
-    const env = { CROSSBIND_APP_CONSOLE: '1' };
+    const env = { CROSSBIND_APP_CONSOLE: '1', ...(isWindows ? { WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${DEVTOOLS_PORT}` } : {}) };
     const loaded = endpoint.waitForNote((note) => note.role === 'app' && note.loaded, LOAD_MS, "the app's page");
     if (platform) {
         const built = `${root}/dist/${name}-${platform}`;
@@ -590,22 +609,132 @@ async function storageOf(role, mark) {
 const holds = (storage, mark) => storage.seen[mark].database && storage.seen[mark].file !== false;
 const holdsNone = (storage, mark) => !storage.seen[mark].database && storage.seen[mark].file !== true;
 
-// 2, 4 and 5 for the first project: its page's lines, its JavaScript in place, every function of the extension's
-// refused to it by its name, and its storage.
+// Every function the app may register, as the names its sources write: each string literal shaped <prefix>.<member> in
+// each C, C++ and Objective-C++ source of the host and of each extension the app has, crossbind's own and those its
+// config lists, so that one a helper or a table registers is among them. A registration whose name is neither a
+// literal nor a plain name, which this reading would miss, stops the run.
+function functionNames() {
+    const host = dirname(createRequire(join(root, 'package.json')).resolve('@crossbind/core-app-host/package.json'));
+    const fromHost = createRequire(join(host, 'package.json'));
+    const own = Object.keys(JSON.parse(readFileSync(join(host, 'package.json'), 'utf8')).dependencies ?? {})
+        .filter((name) => name.startsWith('@crossbind/extension-'))
+        .map((name) => dirname(fromHost.resolve(`${name}/crossbind.extension.js`)));
+    const names = new Set();
+    for (const folder of [join(host, 'cpp'), ...own, ...config.extensions.map((extension) => extension.root)]) {
+        for (const file of readdirSync(folder, { recursive: true })) {
+            if (!SOURCE.test(file) || file.split(/[\\/]/).includes('node_modules')) continue;
+            const text = readFileSync(join(folder, file), 'utf8');
+            for (const [, name] of text.matchAll(NAMED)) names.add(name);
+            for (const [, argument] of text.matchAll(REGISTERED)) {
+                expect(/^("[^"]*"|[A-Za-z_]\w*)$/.test(argument), `${join(folder, file)} registers a function named ${argument}, which the run does not read`);
+            }
+        }
+    }
+    return [...names].filter((name) => !name.startsWith(HOOKS)).sort();
+}
+
+// Rule 1 of the roles: the project's page calls every function the app may register itself, past its crossbind/app;
+// each it reaches answers as the design's 6.1 says, every other one refuses it with the host's words, and a name the
+// app has no function of on this platform says so.
+async function checkFunctions() {
+    const open = { ...OPEN, ...(isPhone ? OPEN_ON_A_PHONE : {}) };
+    const names = functionNames();
+    const { value: answers, error } = await project({ do: 'sweep', names, text: isPhone ? CLIPBOARD_TEXT : null });
+    expect(error === undefined, `the project's calls of the app's functions: ${error}`);
+    const counted = { refused: 0, open: 0, absent: 0 };
+    for (const name of names) {
+        const answer = answers[name];
+        if (answer === ABSENT(name)) {
+            expect(!Object.hasOwn(open, name) || name === 'shell.openExternal', `the app has no ${name}, which a project's page reaches`);
+            counted.absent += 1;
+        } else if (Object.hasOwn(open, name)) {
+            expect(open[name](answer), `a project's page called ${name} and got ${answer}`);
+            counted.open += 1;
+        } else {
+            expect(answer?.startsWith(`Error: crossbind: a page of the role project does not reach ${name}, which pages of the role`), `a project's page called ${name} and got ${answer}`);
+            counted.refused += 1;
+        }
+    }
+    return { found: names.length, ...counted };
+}
+
+// What the project's page hears: an event sent to every page of the role app reaches it not, one sent to its own page
+// does.
+async function checkEvents() {
+    const { value: heard } = await project({ do: 'heard', ms: LINE_MS });
+    expect(JSON.stringify(heard) === '["own"]', `the project's page heard ${JSON.stringify(heard)}`);
+    return heard;
+}
+
+// A path the app's own page may reach, as one its user picked, is no project's: the shell's file functions refuse its
+// page by its role.
+const PICKED = join(tmpdir(), `crossbind-e2e-picked-${run}.txt`);
+async function checkPicked() {
+    const { value: answers } = await project({ do: 'picked', path: PICKED });
+    for (const [name, answer] of Object.entries(answers)) expect(answer.includes(ROLE_REFUSAL(name)), `a project's page called ${name} for a path the app picked and got ${answer}`);
+    return Object.keys(answers).length;
+}
+
+// DevTools' answer to commands given the page WebView2 shows, the last one's.
+async function devTools(commands) {
+    const signal = AbortSignal.timeout(ASKED_MS);
+    const targets = await (await fetch(`http://127.0.0.1:${DEVTOOLS_PORT}/json`, { signal })).json();
+    const page = targets.find((target) => target.type === 'page');
+    if (!page) throw new Error('WebView2 lists no page');
+    const sent = [{ method: 'Emulation.setFocusEmulationEnabled', params: { enabled: true } }, ...commands];
+    const socket = new WebSocket(page.webSocketDebuggerUrl);
+    try {
+        const { error, result } = await new Promise((done, fail) => {
+            signal.addEventListener('abort', () => fail(new Error('DevTools did not answer in time')));
+            socket.onerror = () => fail(new Error('DevTools refused the connection'));
+            socket.onopen = () => sent.forEach((command, index) => socket.send(JSON.stringify({ id: index + 1, ...command })));
+            socket.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                if (message.id === sent.length) done(message);
+            };
+        });
+        if (error || result?.exceptionDetails) throw new Error(JSON.stringify(error ?? result.exceptionDetails));
+        return result;
+    } finally {
+        socket.close();
+    }
+}
+
+const inPage = async (expression, ...before) => (await devTools([...before, {
+    method: 'Runtime.evaluate', params: { expression, awaitPromise: true, returnByValue: true },
+}])).result.value;
+
+// What the page's clipboard read gives on its user's click, which DevTools gives with the mouse on a button at the page's
+// corner: Windows hands such a read to page-permissions, as no other platform does.
+async function clickedRead() {
+    const mouse = (type) => ({ method: 'Input.dispatchMouseEvent', params: { type, x: 20, y: 20, button: 'left', clickCount: 1 } });
+    await inPage(`void (globalThis.crossbindClicked = new Promise((resolve) => {
+        const button = document.body.appendChild(document.createElement('button'));
+        button.style.cssText = 'position: fixed; left: 0; top: 0; width: 40px; height: 40px; z-index: 2147483647';
+        button.onclick = () => { resolve(navigator.clipboard.readText().then(() => 'read', (error) => error.name)); button.remove(); };
+        setTimeout(() => resolve('the click missed its button'), ${CLICK_MS});
+    }))`);
+    return inPage('globalThis.crossbindClicked', mouse('mousePressed'), mouse('mouseReleased'));
+}
+
+// 2, 4 and 5 for the first project: its page's lines, its JavaScript in place, every function the app may register
+// called by it, the events it hears, a path the app picked, the clipboard's read on its user's click on Windows, and its
+// storage.
 async function checkProject(terminalFrom) {
     const load = await checkLoad(terminalFrom);
     const js = await checkJsEdit(load.load);
-    const { value: refusals } = await project({ do: 'refused', names: PREVIEW_FUNCTIONS });
-    for (const fn of PREVIEW_FUNCTIONS) {
-        expect(refusals[fn]?.includes(ROLE_REFUSAL(`preview.${fn}`)), `a project's page called preview.${fn} and got ${refusals[fn]}`);
-    }
+    const functions = await checkFunctions();
+    const events = await checkEvents();
+    const picked = await checkPicked();
+    const clipboard = isWindows ? await clickedRead() : 'no request a run makes';
+    expect(!isWindows || clipboard === 'NotAllowedError', `a project's page read the clipboard on its user's click: ${clipboard}`);
     // 6.1's words, which the project's own import of crossbind/app gives: one of each kind it refuses.
     const { value: words } = await project({ do: 'throughModule', names: MODULE_REFUSED });
     for (const name of MODULE_REFUSED) expect(words[name] === `Error: ${previewRefusal(name)}`, `the project's ${name}() through its crossbind/app got ${words[name]}`);
     const first = await storageOf('project', 'first');
     expect(holdsNone(first, 'first') && holdsNone(first, 'second'), `the first project's storage held marks at its first open: ${JSON.stringify(first)}`);
     return {
-        load, js, refusals, words, storage: first,
+        load, js, functions, events, picked, clipboard, words, storage: first,
     };
 }
 
@@ -769,6 +898,12 @@ async function flow() {
     const stops = await checkStops(stoppers);
     stops.acrossSignOut = await checkAcrossSignOut(address);
 
+    // The app's own page reads the clipboard on its user's click, as with the host's page-permissions, where a run makes
+    // that request.
+    const ownClipboard = isWindows ? await clickedRead() : 'no request a run makes';
+    expect(!isWindows || ownClipboard === 'read', `the app's own page could not read the clipboard on its user's click: ${ownClipboard}`);
+    await valueOf("the app's own page's pick", { do: 'allow', path: PICKED });
+
     // 2 and 4: the link's session opened, phase 2's checks of its page and its storage; then closed with a dialog of the
     // project's up, after which the app's own dialog shows; the second project, and the first again.
     const terminalFrom = terminal.lines.length;
@@ -811,7 +946,7 @@ async function flow() {
     const dependency = await checkOptimizedDependency(source, gateToken(dev.key));
     const secrets = checkSecrets();
     console.log(`PROJECTS CHECKS ${JSON.stringify({
-        platform: devicePlatform, keyring, stops, first, ranges, other, dependency, secrets,
+        platform: devicePlatform, keyring, stops, ownClipboard, first, ranges, other, dependency, secrets,
     })}`);
     console.log(`TIMING a JavaScript edit to the page: ${first.js} ms`);
     console.log(`ok: ${devicePlatform} projects of e2e/app-projects`);

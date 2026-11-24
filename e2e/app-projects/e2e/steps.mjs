@@ -5,7 +5,3 @@ export const CLOUD_PORT = 47843;
 export const SNAPSHOTS_PORT = 47844;
 export const ENDPOINT = `http://127.0.0.1:${ENDPOINT_PORT}`;
 export const CLOUD = Object.freeze({ cloud: `http://127.0.0.1:${CLOUD_PORT}`, snapshots: `http://127.0.0.1:${SNAPSHOTS_PORT}` });
-// The functions of the preview extension's, each of the role app alone, which a project's page reaches none of.
-export const PREVIEW_FUNCTIONS = Object.freeze([
-    'account', 'signIn', 'signInNumber', 'openSignInPage', 'signOut', 'deleteAccount', 'sessions', 'check', 'open', 'close', 'compile', 'removeSnapshot',
-]);

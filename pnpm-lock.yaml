@@ -309,6 +309,9 @@ importers:
       '@crossbind/core-app-host':
         specifier: workspace:^
         version: link:../../core/app-host
+      '@crossbind/extension-clipboard':
+        specifier: workspace:^
+        version: link:../../extensions/clipboard
       '@crossbind/extension-preview':
         specifier: workspace:^
         version: link:../../extensions/preview
