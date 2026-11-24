@@ -48,6 +48,14 @@ location.href = (await preview.open(sessions[0].id)).url;
   `https://crossbind.dev/open/?s=<session>`, that opened the app; each names a session alone, which the page opens
   from the account's list.
 
+## What a project's page reaches
+
+The extension takes the host's `page-permissions` and `page-drops`, and decides by the page's role. The app's own page
+gets what the host's own give it: the devices `app.permissions` lists, the clipboard's text on its user's gesture, and
+the paths of the files dropped on it. A project's page gets none of the kinds that would ask its user, the camera, the
+microphone, the location and the clipboard's read among them, and no path of a drop: its page's own `drop` event keeps
+the dropped files. A page of no role gets nothing.
+
 ## Platforms
 
 The token never reaches a page: the extension makes every call that carries it.

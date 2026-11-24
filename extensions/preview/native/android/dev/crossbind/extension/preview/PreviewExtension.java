@@ -1,6 +1,9 @@
 package dev.crossbind.extension.preview;
 
+import android.Manifest;
+import android.app.Activity;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.security.keystore.KeyGenParameterSpec;
@@ -16,6 +19,9 @@ import java.nio.file.Files;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.MessageDigest;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
@@ -27,14 +33,43 @@ import javax.crypto.spec.SecretKeySpec;
 import org.json.JSONObject;
 
 // The preview extension's Java: the app's token sealed with a key of the Android Keystore, which never leaves it, in a
-// file of the app's own that no backup takes; HMAC-SHA256 and SHA-256; and the page that approves a sign-in in a Custom
-// Tab of the system's browser.
+// file of the app's own that no backup takes; HMAC-SHA256 and SHA-256; the page that approves a sign-in in a Custom
+// Tab of the system's browser; and what a page asks to use, as the holder of page-permissions, by the page's role.
 public final class PreviewExtension implements Extension {
     private static final String KEY_ALIAS = "crossbind-preview-token";
     private static final String CIPHER = "AES/GCM/NoPadding";
     private static final int TAG_BITS = 128;
     // The extra by which the system's browser opens a link as a Custom Tab, with no library in the app.
     private static final String CUSTOM_TAB = "android.support.customtabs.extra.SESSION";
+    private static final String COARSE = Manifest.permission.ACCESS_COARSE_LOCATION;
+    private static final Map<String, String> DEVICES = Map.of(
+            "camera", Manifest.permission.CAMERA,
+            "microphone", Manifest.permission.RECORD_AUDIO);
+
+    // The app's own page gets the devices the manifest asks for once the app's user gives them, as the host's
+    // page-permissions does, the location the approximate one at least; any other page nothing, a project's among them.
+    @Override
+    public void onPagePermission(ExtensionHost host, PagePermission request) {
+        Activity activity = host.activity();
+        if (!request.isListed() || !"app".equals(request.role())) {
+            request.deny();
+        } else if (request.kinds().equals(List.of("location"))) {
+            if (isGranted(activity, COARSE)) request.allow();
+            else host.afterAsking(new String[] {COARSE, Manifest.permission.ACCESS_FINE_LOCATION}, () -> answer(activity, request, COARSE));
+        } else {
+            String[] permissions = request.kinds().stream().map(DEVICES::get).toArray(String[]::new);
+            host.afterAsking(permissions, () -> answer(activity, request, permissions));
+        }
+    }
+
+    private static void answer(Activity activity, PagePermission request, String... permissions) {
+        if (Arrays.stream(permissions).allMatch((permission) -> isGranted(activity, permission))) request.allow();
+        else request.deny();
+    }
+
+    private static boolean isGranted(Activity activity, String permission) {
+        return activity.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED;
+    }
 
     @Override
     public void call(ExtensionHost host, String function, JSONObject options, Call call) {

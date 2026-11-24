@@ -76,6 +76,10 @@ void endPreview(const std::string &words = {}, const std::string &session = {});
 void forgetOpener();
 void addOpenerFunctions(crossbind::Registry &registry);
 
+// requests.cpp: what a page asks to use and the files dropped on it, by the page's role, as the holder of the host's
+// page-permissions and page-drops.
+void addPageRequests(crossbind::Registry &registry);
+
 // cloud.cpp: a call of crossbind cloud's, with the app's token where one is given: done gets why it failed, or its
 // status and its answer's JSON, null for none or for one that is no JSON.
 void askCloud(const std::string &method, const std::string &path, const std::string &token, const std::string &body,
