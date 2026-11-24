@@ -5,6 +5,7 @@
 #include "preview.h"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <memory>
 #include <mutex>
@@ -24,6 +25,7 @@ constexpr auto LOCAL_NETWORK_RETRY = std::chrono::seconds(1);
 constexpr auto LOCAL_NETWORK_WAIT = std::chrono::minutes(2);
 const std::string GATE_TEXT = "crossbind-requests";
 const std::string GONE = "This snapshot is no longer on your account's list.";
+const std::string CHECK_FIRST = "crossbind opens the preview it checked last: check it first.";
 const std::string NAMELESS = "crossbind cloud lists this preview with a name crossbind shows on no dialog: give the project a name of letters, digits and ._@/- (general.name in crossbind.config.js), and run crossbind app preview again.";
 const Request::Headers TEXT{{"Content-Type", "text/plain; charset=utf-8"}};
 const std::vector<std::string> PASSED{"content-type", "content-range", "accept-ranges", "cache-control", "etag", "last-modified"};
@@ -296,7 +298,7 @@ Value sheetOf(const Checked &found) {
 // Steps 5 to 8 of the opener at the session's source, which on iOS and macOS, where the system has yet to let the app
 // on the local network, are tried again every second for two minutes, the page told why meanwhile.
 void checkAt(Call call, Session session, Account account, std::string gate, std::string originName, std::chrono::steady_clock::time_point until,
-    std::shared_ptr<bool> isCancelled) {
+    std::shared_ptr<std::atomic<bool>> isCancelled) {
     verify(session, account, gate, [=](Verified verified) {
         if (*isCancelled) return;
         if (verified.words && verified.isUnreachable && asksForLocalNetwork() && session.source == "dev" && std::chrono::steady_clock::now() < until) {
@@ -329,7 +331,7 @@ void check(Call call) {
         call.reject("This link opens no preview.");
         return;
     }
-    auto isCancelled = std::make_shared<bool>(false);
+    auto isCancelled = std::make_shared<std::atomic<bool>>(false);
     call.onCancel([isCancelled] { *isCancelled = true; });
     withAccount([call, id, isCancelled](std::optional<Account> account, std::string token) {
         if (!account) {
@@ -360,8 +362,26 @@ void check(Call call) {
     });
 }
 
-// Step 10: the session the page checked last, served as its origin, the project's name its label; the page then goes
-// to the origin's URL.
+void serve(const Call &call, const Checked &found) {
+    endPreview();
+    auto proxy = std::make_shared<Proxy>(found.session, found.account, found.source, found.gateToken);
+    try {
+        const crossbind::Origin origin = crossbind::serveOrigin(
+            found.originName, "project", [proxy](Request request) { proxy->answer(std::move(request)); }, found.session.projectName);
+        {
+            std::lock_guard<std::mutex> lock(openerMutex);
+            openOrigin = origin;
+            openProxy = proxy;
+        }
+        if (found.session.source == "snapshot") noteOpened(found.session.id, found.session.version);
+        call.resolve(Value::Object{{"url", origin.url()}});
+    } catch (const std::exception &error) {
+        call.reject(error.what());
+    }
+}
+
+// Step 10: the session the page checked last, for the account signed in now, served as its origin, the project's name
+// its label; the page then goes to the origin's URL. A check that ended after a sign-out opens nothing.
 void open(Call call) {
     const std::string id = textOf(call.options()["session"]);
     std::optional<Checked> found;
@@ -370,24 +390,13 @@ void open(Call call) {
         if (checked && checked->session.id == id) found.swap(checked);
     }
     if (!found) {
-        call.reject("crossbind opens the preview it checked last: check it first.");
+        call.reject(CHECK_FIRST);
         return;
     }
-    endPreview();
-    auto proxy = std::make_shared<Proxy>(found->session, found->account, found->source, found->gateToken);
-    try {
-        const crossbind::Origin origin = crossbind::serveOrigin(
-            found->originName, "project", [proxy](Request request) { proxy->answer(std::move(request)); }, found->session.projectName);
-        {
-            std::lock_guard<std::mutex> lock(openerMutex);
-            openOrigin = origin;
-            openProxy = proxy;
-        }
-        if (found->session.source == "snapshot") noteOpened(found->session.id, found->session.version);
-        call.resolve(Value::Object{{"url", origin.url()}});
-    } catch (const std::exception &error) {
-        call.reject(error.what());
-    }
+    withAccount([call, found = *found](std::optional<Account> account, std::string) {
+        if (account && account->id == found.account.id) serve(call, found);
+        else call.reject(CHECK_FIRST);
+    });
 }
 
 }  // namespace

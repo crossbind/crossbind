@@ -51,6 +51,16 @@ async function unreachable({ session }) {
     return { messages, checked };
 }
 
+// A check whose source answers only once the app signed out, and what it leaves to open: the run gives the page the step
+// go once the source has the check, and the source its answer once the page reported go.
+async function checkAcrossSignOut({ session, origin }) {
+    const checking = outcome(preview.check(session));
+    const go = await ask('/next');
+    await ask('/report', { id: go.id, value: await preview.signOut() });
+    const checked = await checking;
+    return { checked, opened: await outcome(preview.open(session)), served: await invoke('e2e-hooks.served', { name: origin }) };
+}
+
 // The app's own message dialog: it shows, its call waiting, and goes as the call is cancelled.
 async function dialog() {
     const cancel = new AbortController();
@@ -68,6 +78,7 @@ const STEPS = {
     check: ({ session }) => preview.check(session),
     refuses,
     unreachable,
+    checkAcrossSignOut,
     open: async ({ session }) => ({ sheet: await preview.check(session), ...(await preview.open(session)) }),
     storage,
     dialog,

@@ -323,7 +323,7 @@ export async function standInSource(address, { key, answer, files = {} }) {
         const url = new URL(request.url, 'http://source');
         asked.push({ path: url.pathname, gate: request.headers['x-crossbind-preview'] });
         if (url.pathname === '/__crossbind/session') {
-            const answered = answer(url.searchParams.get('challenge'));
+            const answered = await answer(url.searchParams.get('challenge'));
             if (answered === null) return response.writeHead(404, { 'content-type': 'text/plain' }).end('not a preview');
             return json(response, 200, answered);
         }
