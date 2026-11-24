@@ -31,6 +31,11 @@ await writeText('Copied from the app');
 const text = await readText(); // '' when the clipboard holds no text
 ```
 
+A page of the role `project`, of an origin an extension serves, writes the clipboard on every platform, and reads it on
+iOS and Android alone, which tell their user of each read: elsewhere the host refuses it the read, as it refuses a page
+every function that does not name the page's role (see
+[extensions.md](https://github.com/crossbind/crossbind/blob/main/docs/api/extensions.md#origins)).
+
 ## Platforms
 
 - iOS asks its user before an app reads what another app copied.
