@@ -17,6 +17,11 @@
   `android-app`. They fix what the daily scan finds in the published 1.0.23 images: 6 CVEs in
   OpenJDK (4 HIGH, 2 CRITICAL) since 20 November, and 14 in krb5 and 19 in the kernel's headers
   (HIGH) since 23 November.
+- Refreshed the pinned `debian:trixie-slim` digest, the starting point of `base` (and so of
+  every image built on it) and of the stage that assembles the `linux` sysroots. The tag is the
+  same; upstream rebuilt it.
+- Refreshed the pinned `node:26.13.1-trixie-slim` digest, upstream's rebuild of the same release
+  on the refreshed Debian above. `base` copies only Node out of it.
 
 ## Image family 1.0.23
 
