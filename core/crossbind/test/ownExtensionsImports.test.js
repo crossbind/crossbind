@@ -9,7 +9,7 @@ const SHARED = '@crossbind/core-store-kit';
 // What a package's page.js alone takes of crossbind's, as a page runs it.
 const PAGE_API = 'crossbind/app/core';
 // What an app lists itself, as its page imports it.
-const OPTIONAL = ['clipboard'];
+const OPTIONAL = ['clipboard', 'preview'];
 
 const filesIn = (dir) => fs.readdirSync(dir, { withFileTypes: true })
     .filter((entry) => entry.name !== 'node_modules')

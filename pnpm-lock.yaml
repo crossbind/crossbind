@@ -1677,6 +1677,12 @@ importers:
         specifier: workspace:^
         version: link:../../core/crossbind
 
+  extensions/preview:
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../core/crossbind
+
   extensions/shell:
     devDependencies:
       crossbind:

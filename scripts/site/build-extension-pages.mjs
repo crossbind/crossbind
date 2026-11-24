@@ -5,7 +5,7 @@ import { REPOSITORY_ROOT } from './build-ports-catalog.mjs';
 
 // The site's page of each app extension, from its README, as the release notes are made: the line under its title is
 // the page's lede and the rest its blocks, so that the site says what the package says. A link to the site itself
-// becomes one of the site's own.
+// becomes one of the site's own. A private package, which npm has not, has no page, as it is in no catalog.
 
 const SITE_LINK = /\]\(https:\/\/crossbind\.dev\//g;
 // A code block's language, as the site's blocks name what a block holds.
@@ -16,8 +16,9 @@ export function readExtensionPages(root = REPOSITORY_ROOT) {
     return fs
         .readdirSync(folder, { withFileTypes: true })
         .filter((entry) => entry.isDirectory() && fs.existsSync(path.join(folder, entry.name, 'package.json')))
-        .map((entry) => {
-            const manifest = JSON.parse(fs.readFileSync(path.join(folder, entry.name, 'package.json'), 'utf8'));
+        .map((entry) => ({ entry, manifest: JSON.parse(fs.readFileSync(path.join(folder, entry.name, 'package.json'), 'utf8')) }))
+        .filter(({ manifest }) => manifest.private !== true)
+        .map(({ entry, manifest }) => {
             const file = `extensions/${entry.name}/README.md`;
             const [title, ...lines] = fs.readFileSync(path.join(root, file), 'utf8').replace(SITE_LINK, '](/').split('\n');
             if (title !== `# ${manifest.name}`) throw new Error(`${file} opens with no # ${manifest.name}, the title of its page.`);

@@ -13,7 +13,8 @@ const manifestOf = (name) => JSON.parse(read(`extensions/${name}/package.json`))
 const dependenciesOf = (folder) => Object.keys(JSON.parse(read(`${folder}/package.json`)).dependencies);
 // What an app has by having the host, and what every project has by having crossbind.
 const broughtDependencies = [...dependenciesOf('core/app-host'), ...dependenciesOf('core/crossbind')];
-const PACKAGES = readdirSync(new URL('extensions/', ROOT));
+// The packages npm has: a private one is in no catalog.
+const PACKAGES = readdirSync(new URL('extensions/', ROOT)).filter((name) => manifestOf(name).private !== true);
 const ROWS = EXTENSION_GROUPS.flatMap((group) => group.items);
 
 test('the catalog and the guide page are pages of the site, each linking to the other', () => {
