@@ -42,6 +42,7 @@ const WORDS = {
     notListed: (account) => `This preview is not on ${account}'s list. It ended, or it runs as another account: sign in to the same account here and in crossbind app preview.`,
     wrongNumber: 'That was not the number the page showed. Start again.',
     checkFirst: 'crossbind opens the preview it checked last: check it first.',
+    signedInAs: (account) => `crossbind is signed in as ${account}: sign out first.`,
 };
 
 const root = resolve(import.meta.dirname, '..');
@@ -415,6 +416,36 @@ async function checkStops(stoppers) {
     return said;
 }
 
+// A promise's value, else the run's failure once ms passed.
+function within(promise, ms, what) {
+    return Promise.race([promise, new Promise((done, fail) => { setTimeout(() => fail(new Error(`${what} did not come in ${ms / 1000} s`)), ms).unref(); })]);
+}
+
+// A check that lands after a sign-out opens nothing: its source holds its answer until the page signed out, which the
+// page does once the source has the check. The main account then signs in again.
+async function checkAcrossSignOut(address) {
+    let reached;
+    let release;
+    const isReached = new Promise((done) => { reached = done; });
+    const isReleased = new Promise((done) => { release = done; });
+    const { session } = await listedSource(address, {}, async (listed, challenge) => {
+        reached();
+        await isReleased;
+        return asPreview()(listed, challenge);
+    });
+    const origin = originName(ACCOUNTS.main, session.project.id);
+    const report = app({ do: 'checkAcrossSignOut', session: session.id, origin });
+    await within(isReached, LINE_MS, "the check's request at its source");
+    const signedOut = await app({ do: 'go' });
+    expect(signedOut.value?.revoked === true, `the sign-out during a check was ${JSON.stringify(signedOut)}`);
+    release();
+    const { value, error } = await report;
+    expect(error === undefined, `the check across a sign-out: ${error}`);
+    expect(value.opened.error === WORDS.checkFirst && value.served === false, `a check that ended after a sign-out opened ${JSON.stringify(value)}`);
+    await signIn(ACCOUNTS.main, NUMBER);
+    return value.opened.error;
+}
+
 // Phase 2's checks of a previewed page, now opened by the app: its first lines in the preview's terminal, the device
 // asking the dev server for nothing its app answers itself.
 async function checkLoad(from) {
@@ -583,6 +614,12 @@ async function checkAccounts(dev, snapshot) {
     const main = await signIn(ACCOUNTS.main, NUMBER);
     expect(main.signedIn.value?.account?.name === ACCOUNTS.main.name, `the sign-in gave ${JSON.stringify(main)}`);
     const { keyring } = main.signedIn.value;
+    // One account at a time: a sign-in over the one signed in is refused before crossbind cloud hears of it.
+    const authorizations = () => cloud.calls.filter((call) => call.call === 'POST /v1/device/authorize').length;
+    const authorized = authorizations();
+    const over = await valueOf('a sign-in over the account signed in', { do: 'signIn', number: NUMBER });
+    expect(over.signedIn.error === WORDS.signedInAs(ACCOUNTS.main.name) && over.after.account?.id === ACCOUNTS.main.id && authorizations() === authorized,
+        `a sign-in over the account signed in answered ${JSON.stringify(over)}`);
     // An id that reaches a URL's path is checked for its form first: none of these asks crossbind cloud.
     const before = cloud.calls.length;
     for (const odd of ['../account', `${dev.id.slice(1)}/`, `${dev.id}A`]) {
@@ -615,6 +652,11 @@ async function checkTokenCalls(snapshot) {
 // out, which a start again keeps.
 async function checkStore(keyring) {
     await relaunch();
+    if (keyring) {
+        // The store is read before a sign-in starts: the first call after a start, a sign-in, meets the account kept.
+        const first = await valueOf('a sign-in as the app starts again', { do: 'signIn', number: NUMBER });
+        expect(first.signedIn.error === WORDS.signedInAs(ACCOUNTS.main.name), `a sign-in as the app started again answered ${JSON.stringify(first)}`);
+    }
     const held = await valueOf('the account after a start again', { do: 'account' });
     expect(keyring ? held.account?.id === ACCOUNTS.main.id : held.account === null, `after a start again the app was signed in as ${JSON.stringify(held)}`);
     if (!keyring) await signIn(ACCOUNTS.main, NUMBER);
@@ -665,6 +707,7 @@ async function flow() {
     if ((await valueOf('the account at the start', { do: 'account' })).account) await valueOf('the sign-out of a run before', { do: 'signOut' });
     const keyring = await checkAccounts(dev, snapshot);
     const stops = await checkStops(stoppers);
+    stops.acrossSignOut = await checkAcrossSignOut(address);
 
     // 2 and 4: the link's session opened, phase 2's checks of its page and its storage; then closed with a dialog of the
     // project's up, after which the app's own dialog shows; the second project, and the first again.

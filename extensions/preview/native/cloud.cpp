@@ -141,7 +141,7 @@ void poll(Call call, std::shared_ptr<SignIn> attempt, std::string deviceCode, in
 
 // The sign-in: the page gets its code and the address of the page that approves it as the call's first message, then
 // a message that asks for the number that page shows, which preview.signInNumber gives; the call answers the account.
-void signIn(Call call) {
+void startSignIn(Call call) {
     auto attempt = std::make_shared<SignIn>();
     std::shared_ptr<SignIn> before;
     {
@@ -174,6 +174,14 @@ void signIn(Call call) {
         call.send(Value::Object{{"code", code}, {"page", page}, {"expiresIn", expiresIn}});
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(expiresIn);
         std::thread(poll, call, attempt, deviceCode, interval, deadline).detach();
+    });
+}
+
+// The app is signed in to one account at a time: another signs out first.
+void signIn(Call call) {
+    withAccount([call](std::optional<Account> account, std::string) {
+        if (account) call.reject("crossbind is signed in as " + account->name + ": sign out first.");
+        else startSignIn(call);
     });
 }
 
