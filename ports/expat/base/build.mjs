@@ -1,5 +1,5 @@
 export default {
-    sha256: '5466a341f9c692ef7a958a6881311be597f8e1ce345984cf78414f54793dea4c', // expat-2.10.0.tar.gz
+    sha256: 'b3e3fcbb629e4d357a9cc0af5b146b85959bcf1cefe87e529d2c0a9234be737f', // expat-2.11.0.tar.gz
     getURL: (version) => `https://github.com/libexpat/libexpat/releases/download/R_${version.replaceAll('.', '_')}/expat-${version}.tar.gz`,
     buildType: 'cmake',
     getBuildParams: () => [
