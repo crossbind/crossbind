@@ -4,24 +4,24 @@
 
 ## What lives here
 
-- `index.js` — single file, exports `rollupCrossbindPlugin(options, bridges)` factory. The `bridges` array is shared by the Vite outer plugin so both can append to one accumulating list per project.
+- `index.js` — single file, exports `rollupCrossbindPlugin(options, api)` factory. `api` is crossbind's integration api, `integrationApi()` from `crossbind` (`core/crossbind/src/integration/api.js`), which the plugin makes itself when none is given; the Vite outer plugin passes its own, so both keep one bridge set per project.
 
 ## Hooks the plugin implements
 
 | Rollup hook | What it does |
 |-------------|--------------|
 | `resolveId('crossbind')` | Mark the crossbind loader as `external: true` so consumers fetch it at runtime, not bundle it |
-| `transform(code, '.h')` | Run SWIG bridge generation; emit JS bridge code for the header |
-| `buildStart` | Iterate `state.config.paths.native` array; `addWatchFile` every entry. Watch mode now sees `.cpp`/`.h` edits |
-| `generateBundle` | Run `createLib + createXCFramework + buildWasm` with `force = isSourceNewer(...)`; emit `crossbind.js`, `crossbind.wasm`, `crossbind.data.txt` as bundle assets, and `crossbind-licenses.json` (`pageLicensesAsset`) when the page imports `crossbind/licenses` |
+| `transform(code, '.h')` | `api.transform`: SWIG bridge generation; the JS module for the header |
+| `buildStart` | `api.prepare` builds the dependencies, then `addWatchFile` for every file under `api.nativeFiles()` (the existing entries of `paths.native`). Watch mode sees `.cpp`/`.h` edits |
+| `generateBundle` | `api.link` (`createLib` + `buildWasm`, forced when `isSourceNewer(...)`); emit `api.outputs` (`crossbind.js`, `crossbind.wasm`, `crossbind.data.txt`) as bundle assets, and `crossbind-licenses.json` (`api.licenses`) when the page imports `crossbind/licenses` |
 
-In app mode (`isAppBuild()`: a run of `crossbind app`, or `target.runtimeEnv: 'app'`; macOS, Linux, Windows, iOS and Android for now) `generateBundle` builds the app host for this machine with `buildProjectApp` instead, or with `CROSSBIND_APP_PLATFORM`, which `crossbind app -p` sets, one for each iOS SDK, Android ABI or Linux or Windows arch (`appTargetParams`), and emits its page runtime as `crossbind.js`; `writeBundle` then puts the written page into each app beside it with `publishApp`: `<name>.app`, `<name>-linux-<arch>/`, `<name>-win32-<arch>/`, the Xcode project `<name>-ios/` or the Gradle project `<name>-android/` and its APK. Once every app has its page, `shipApp` runs each desktop app's installers, crossbind's and its extensions', and its update, which it records for `crossbind app upload`; `buildStart` awaits `checkInstaller` for each desktop app first, which stops the build before anything compiles. See `docs/api/app.md`.
+In app mode (`isAppBuild()`: a run of `crossbind app`, or `target.runtimeEnv: 'app'`; macOS, Linux, Windows, iOS and Android for now) `generateBundle` builds the app host for this machine with `api.app.build()` (`buildProjectApp`) instead, or with `CROSSBIND_APP_PLATFORM`, which `crossbind app -p` sets, one for each iOS SDK, Android ABI or Linux or Windows arch (`appTargetParams`), and emits its page runtime as `crossbind.js`; `writeBundle` then puts the written page into each app beside it with `api.app.publish(dir)` (`publishApp`): `<name>.app`, `<name>-linux-<arch>/`, `<name>-win32-<arch>/`, the Xcode project `<name>-ios/` or the Gradle project `<name>-android/` and its APK. Once every app has its page, `shipApp` runs each desktop app's installers, crossbind's and its extensions', and its update, which it records for `crossbind app upload`; `buildStart` awaits `api.app.check()` (`checkInstaller` for each desktop app) first, which stops the build before anything compiles. See `docs/api/app.md`.
 
 ## Invariants
 
 - **`paths.native` is an array.** The outer Vite plugin assumed this years ago; this plugin must too. `existsSync(array)` returns false silently — always iterate entries before testing each one.
-- **`force = isSourceNewer(buildTargetRelease)`** in `generateBundle`. Skips rebuild when artifacts are newer than every native source; bypasses cache when not.
-- **`bridges` accumulates across `transform` calls.** Don't reset; downstream `generateBundle` reads the union.
+- **`force = isSourceNewer(target)`** in `api.link`. Skips rebuild when artifacts are newer than every native source; bypasses cache when not.
+- **The api's bridge set accumulates across `transform` calls.** One api for a project's plugins; `api.link` reads the union.
 
 ## Common pitfalls
 
@@ -29,7 +29,7 @@ In app mode (`isAppBuild()`: a run of `crossbind app`, or `target.runtimeEnv: 'a
 - **Returning `external: true` for `crossbind` in some configs and `false` in others.** Inconsistency makes Vite's HMR vs prod build behave differently.
 - **Emitting `crossbind.js`/`crossbind.wasm` to a custom path.** Consumers (including Vite) expect `crossbind.js`, `crossbind.wasm`, `crossbind.data.txt` at the bundle root, and `crossbind/licenses` reads `crossbind-licenses.json` there. Don't rename without updating the loader.
 - **Re-running `buildWasm` without `force` semantics.** Cache-shortcut bugs land here; always go through `isSourceNewer`.
-- **Calling `state.config.paths.cli/...` directly with hardcoded sub-paths.** Use the public `crossbind` exports (`createLib`, `buildWasm`, `getCrossbindScript`, …); they survive asset reorgs.
+- **Calling `state.config.paths.cli/...` directly with hardcoded sub-paths.** Use the integration api (`api.link`, `api.transform`, `api.outputs`, …); it survives asset reorgs.
 
 ## Validation
 

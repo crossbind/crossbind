@@ -39,3 +39,4 @@ export {
 export { default as buildAppRustCrates } from './utils/appRustCrates.js';
 export { default as appSourceFiles, isAppSource } from './utils/appSources.js';
 export { default as bindHeaderImports } from './integration/bindHeaderImports.js';
+export { default as integrationApi } from './integration/api.js';

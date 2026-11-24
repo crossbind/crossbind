@@ -1,26 +1,26 @@
 import { describe, expect, test, vi } from 'vitest';
 
-// The Rollup plugin's header transform with crossbind stood in for: which files it asks the bundler to watch with the
-// header. Vite takes those for imports of the header.
+// The Rollup plugin's header transform, on crossbind's integration api with the steps under it stood in for: which files
+// it asks the bundler to watch with the header. Vite takes those for imports of the header.
 const pageApi = vi.hoisted(() => ({ file: null }));
-vi.mock('crossbind', () => ({
-    state: { config: { target: {}, ext: { header: ['h'], module: ['i'] }, paths: { project: '/project' } } },
-    isAppBuild: () => false,
-    findAppPageApi: () => pageApi.file,
-    getTargetParams: () => ({}),
-    getFilteredBuildTargets: () => [{ buildType: 'release' }],
-    createBridgeFile: () => '/project/.crossbind/build/bridge/native.i.cpp',
-    getCrossbindScript: () => 'export {};',
-    appSourceFiles: () => ['/project/src/main.js'],
-    createLib: vi.fn(),
-    buildWasm: vi.fn(),
-    getRustJsScript: vi.fn(),
-    buildDependencies: vi.fn(),
-    getDependFilePath: vi.fn(),
-    isSourceNewer: vi.fn(),
-    buildProjectApp: vi.fn(),
-    publishApp: vi.fn(),
+vi.mock('../src/state/index.js', () => ({
+    default: {
+        config: {
+            target: {},
+            ext: { header: ['h'], module: ['i'], source: ['cpp'] },
+            paths: { project: '/project', native: [], build: '/project/.crossbind/build', cache: '/project/.crossbind/cache' },
+        },
+        targets: [],
+    },
 }));
+vi.mock('../src/utils/appBuild.js', () => ({ default: () => false }));
+vi.mock('../src/utils/resolveAppHost.js', () => ({ findAppPageApi: () => pageApi.file, resolveAppPageApi: vi.fn() }));
+vi.mock('../src/utils/appSources.js', () => ({ default: () => ['/project/src/main.js'], isAppSource: () => false }));
+vi.mock('../src/actions/target.js', () => ({ getTargetParams: () => ({}), getFilteredBuildTargets: () => [{ buildType: 'release' }] }));
+vi.mock('../src/actions/createInterface.js', () => ({ default: () => '/project/.crossbind/build/bridge/native.i.cpp' }));
+vi.mock('../src/integration/getCrossbindScript.js', () => ({ default: () => 'export {};', getRustJsScript: vi.fn() }));
+vi.mock('../src/integration/getDependFilePath.js', () => ({ default: vi.fn() }));
+vi.mock('crossbind', async () => ({ integrationApi: (await import('../src/integration/api.js')).default }));
 
 const { default: rollupCrossbindPlugin } = await import('../../../plugins/rollup/index.js');
 

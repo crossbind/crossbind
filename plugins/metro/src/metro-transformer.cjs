@@ -1,6 +1,4 @@
- 
 const path = require('node:path');
-const { getWebTargets, requireWebTargets } = require('./web.cjs');
 
 const upstreamTransformer = (() => {
     try {
@@ -14,52 +12,30 @@ const upstreamTransformer = (() => {
     }
 })();
 
-let compilerClassPromise;
-const getCompilerClass = () => {
-    if (compilerClassPromise) return compilerClassPromise;
-    compilerClassPromise = new Promise((resolve, reject) => {
-        import('crossbind').then(({
-            state, getCrossbindScript, getRustJsScript, createBridgeFile, getTargetParams, getFilteredBuildTargets, bindHeaderImports,
-        }) => {
-            resolve({
-                state, getCrossbindScript, getRustJsScript, createBridgeFile, getTargetParams, getFilteredBuildTargets, bindHeaderImports,
-            });
-        }).catch((e) => reject(e));
-    });
-    return compilerClassPromise;
+let apiPromise;
+const getApi = () => {
+    apiPromise ??= import('crossbind').then(({ integrationApi }) => integrationApi());
+    return apiPromise;
 };
 
+const NATIVE_KINDS = ['header', 'module', 'rust'];
+const isReactNative = (platform) => platform === 'ios' || platform === 'android';
+
 module.exports.transform = async ({ src, filename, ...rest }) => {
-    const crossbind = await getCompilerClass();
-    const { state, getCrossbindScript, getRustJsScript, createBridgeFile } = crossbind;
+    const api = await getApi();
+    const { platform } = rest.options;
     const file = path.resolve(rest.options.projectRoot ?? '', filename);
-    const headerRegex = new RegExp(`\\.(${state.config.ext.header.join('|')})$`);
-    const moduleRegex = new RegExp(`\\.(${state.config.ext.module.join('|')})$`);
-    if (headerRegex.test(filename) || moduleRegex.test(filename) || filename.endsWith('.rs')) {
-        let target;
-        if (rest.options.platform === 'ios') target = state.targets.find((t) => t.platform === 'ios');
-        else if (rest.options.platform === 'android') target = state.targets.find((t) => t.platform === 'android');
-        else target = requireWebTargets(crossbind).release;
-        // Expo serves a web app under experiments.baseUrl, and the boot code asks for its wasm there.
+    if (NATIVE_KINDS.includes(api.kindOf(filename))) {
+        const target = isReactNative(platform) ? api.nativeTarget(platform) : api.targets.release;
+        // Expo serves a web app under experiments.baseUrl, and the boot code asks for its wasm there. Only a dev server
+        // keeps a header's module while the app's imports change: Xcode and Gradle bundle a release from a cleared cache.
         const base = `${rest.options.customTransformOptions?.baseUrl ?? ''}/`;
-
-        // Rust surfaces need no bridge file here: the native bridge is the package's generated
-        // companion crate; this only emits the JS proxy module (same shape as the .h flow).
-        if (filename.endsWith('.rs')) {
-            return upstreamTransformer.transform({ src: getRustJsScript(target, filename, { base }), filename, ...rest });
-        }
-
-        const bridgeFile = createBridgeFile(file, target);
-
-        // Only a dev server keeps a header's module while the app's imports change: Xcode and Gradle bundle a release
-        // from a cleared cache.
-        return upstreamTransformer.transform({ src: getCrossbindScript(target, bridgeFile, { base, liveExports: rest.options.dev }), filename, ...rest });
+        const code = api.transform(file, target, { base, liveExports: rest.options.dev });
+        return upstreamTransformer.transform({ src: code, filename, ...rest });
     }
 
-    const appTarget = ['ios', 'android'].includes(rest.options.platform)
-        ? state.targets.find((t) => t.platform === rest.options.platform)
-        : getWebTargets(crossbind)?.release;
-    if (appTarget) crossbind.bindHeaderImports(src, file, appTarget);
+    const appTarget = isReactNative(platform) ? api.nativeTarget(platform) : api.web?.release;
+    if (appTarget) api.bindImports(src, file, appTarget);
 
     return upstreamTransformer.transform({ src, filename, ...rest });
 };

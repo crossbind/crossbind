@@ -15,7 +15,7 @@ new CrossbindWebpackPlugin()
   .apply(compiler)                   ← webpack standard plugin hook
   .getRule()                         ← module.rules entry for .h
   .getDevServerConfig()              ← devServer block w/ COOP+COEP + middleware
-  .getLoaderOptions()                ← escape hatch: crossbind state passed to other rules
+  .getLoaderOptions()                ← escape hatch: crossbind state passed to other rules, and the api the loader uses
   .setDevServerMiddleware(...)        ← internal, called by getDevServerConfig
 ```
 
@@ -25,8 +25,8 @@ User config consumes all four; see `docs/playbooks/integration/webpack-rspack.md
 
 | webpack hook | What it does |
 |--------------|--------------|
-| `compiler.hooks.done` | After every compilation: re-run `createLib + createXCFramework + buildWasm` (mtime-aware via `isSourceNewer`) |
-| `compiler.hooks.afterCompile` | Adds `state.config.paths.native` to `compilation.contextDependencies` so webpack watch picks up `.cpp`/`.h` edits |
+| `compiler.hooks.done` | After every compilation: `api.link` (`createLib` + `buildWasm`, mtime-aware via `isSourceNewer`); in production `api.writeOutputs` copies the files beside webpack's output |
+| `compiler.hooks.afterCompile` | Adds `api.nativeDirs()` (`paths.native`) to `compilation.contextDependencies` so webpack watch picks up `.cpp`/`.h` edits |
 
 ## DevServer middleware
 
@@ -34,7 +34,7 @@ User config consumes all four; see `docs/playbooks/integration/webpack-rspack.md
 
 ```js
 {
-  watchFiles: state.config.paths.native,
+  watchFiles: api.nativeDirs(),
   hot: true,
   liveReload: true,
   headers: {
@@ -45,7 +45,7 @@ User config consumes all four; see `docs/playbooks/integration/webpack-rspack.md
 }
 ```
 
-The middleware adds `/crossbind.js` and `/crossbind.wasm` routes that pipe the freshly built artifacts. Both routes also re-emit COOP/COEP per-response (belt-and-suspenders for caching layers that strip top-level headers).
+The middleware, `api.serve(debug, { isolate: true })`, answers `/crossbind.js`, `/crossbind.wasm` and `/crossbind.data.txt` under webpack's public path from the build directory, waiting for a link in flight. Each response also re-emits COOP/COEP (belt-and-suspenders for caching layers that strip top-level headers).
 
 ## Rspack compatibility
 

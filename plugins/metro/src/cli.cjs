@@ -1,31 +1,23 @@
 #!/usr/bin/env node
-const fs = require('node:fs');
-const path = require('node:path');
-const { WEB_FILES, requireWebTargets, buildWebGlue } = require('./web.cjs');
-
 const USAGE = 'usage: crossbind-metro prepare-web\n       crossbind-metro export-web [output-dir]';
+
+const webApi = async () => (await import('crossbind')).integrationApi();
 
 // Metro resolves imports against the files it found when it started, so the Conan packages and cargo
 // builds a web bundle needs are staged before `expo start --web` or `expo export`, as build_js.js
 // stages them before the native bundles.
 async function prepareWeb() {
-    const crossbind = await import('crossbind');
-    const { targetParams, release: target } = requireWebTargets(crossbind);
-    await crossbind.buildDependencies({ targetParams: { ...targetParams, buildType: [target.buildType] } });
+    const api = await webApi();
+    await api.prepare(api.targets.release);
 }
 
 // Expo's export copies public/ before Metro bundles and runs nothing after it, so the wasm the web
 // bundle boots is linked here, from the bridges that bundling wrote, and put next to the bundle.
 async function exportWeb(outputDir) {
-    const crossbind = await import('crossbind');
-    const { targetParams, release: target } = requireWebTargets(crossbind);
-    await buildWebGlue(crossbind, targetParams, target);
-    fs.mkdirSync(outputDir, { recursive: true });
-    WEB_FILES.forEach(({ name, output, isOptional }) => {
-        const filePath = `${crossbind.state.config.paths.build}/${target[output]}`;
-        if (isOptional && !fs.existsSync(filePath)) return;
-        fs.copyFileSync(filePath, path.join(outputDir, name));
-    });
+    const api = await webApi();
+    const target = api.targets.release;
+    await api.link(target, { prepare: true, allBridges: true });
+    api.writeOutputs(target, outputDir);
     console.log(`crossbind: linked ${target.path} into ${outputDir}`);
     if (target.runtime === 'mt') {
         console.log(`crossbind: ${outputDir} holds a multithreaded build; serve it with Cross-Origin-Opener-Policy: same-origin and Cross-Origin-Embedder-Policy: require-corp.`);
