@@ -34,8 +34,8 @@ import {
 // Part of every interface hash, so interfaces cached by an older generator are rebuilt.
 const INTERFACE_FORMAT = 'swig-macros-5';
 // Part of every bridge hash: each bridge carries the SWIG fork's runtime and all bridges of a module must share it, so
-// bridges from a fork that still bound std::unique_ptr arguments are rebuilt.
-const BRIDGE_FORMAT = 'swig-extras-3';
+// bridges from a fork that did not bind the constructors %extend adds are rebuilt.
+const BRIDGE_FORMAT = 'swig-extras-4';
 // Part of the key of SWIG's parse of a header, which the bindings plan reads.
 const TREE_FORMAT = 'swig-xml-1';
 const predefinedMacros = new Map();
