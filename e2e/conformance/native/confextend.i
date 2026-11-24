@@ -22,6 +22,8 @@
     // An overload of a method the class has itself.
     int size(int extra) { return self->size() + extra; }
     static std::string kind() { return "extended"; }
+    // A constructor %extend adds is a function that returns the new object.
+    ConfExtended(const std::string &first, const std::string &second) { return new ConfExtended(first + " " + second); }
 }
 
 %include "confextend.h"

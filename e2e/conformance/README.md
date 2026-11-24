@@ -50,8 +50,9 @@ skips (search `KNOWN ENGINE GAP` in `spec/run.mjs`).
   interface, which crossbind uses in place of the one it generates: the methods `%extend` adds to a
   class, bound as the function itself or through an adapter, called on an object the constructor
   makes and on one a factory returns in a `shared_ptr`, an overload of a method the class has, and
-  a static one; and an instance of a class template and of a function template that `%template`
-  names. Every leg runs the section.
+  a static one; a constructor `%extend` adds, under an argument count the class has none for; and
+  an instance of a class template and of a function template that `%template` names. Every leg
+  runs the section.
 - `../conformance-rust/` — the Rust half: one plain crate (`src/lib.rs`, every construct in
   sections) built as a cargo package like `core/embind-rust/demo`; `spec/sections/rust/*.mjs` hold
   its checks. Constructs the generator does not carry yet are `todo` entries: a miss prints a
