@@ -13,6 +13,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.MessageDigest;
 
@@ -99,7 +100,15 @@ public final class PreviewExtension implements Extension {
 
     private static void write(File file, String secret) throws Exception {
         Cipher cipher = Cipher.getInstance(CIPHER);
-        cipher.init(Cipher.ENCRYPT_MODE, key());
+        try {
+            cipher.init(Cipher.ENCRYPT_MODE, key());
+        } catch (GeneralSecurityException error) {
+            // A key that no longer seals is made anew, or the device would keep no token again.
+            KeyStore store = KeyStore.getInstance("AndroidKeyStore");
+            store.load(null);
+            store.deleteEntry(KEY_ALIAS);
+            cipher.init(Cipher.ENCRYPT_MODE, key());
+        }
         byte[] vector = cipher.getIV();
         byte[] sealed = cipher.doFinal(secret.getBytes(StandardCharsets.UTF_8));
         byte[] out = new byte[1 + vector.length + sealed.length];

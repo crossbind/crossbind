@@ -93,7 +93,13 @@ void verifyAt(Session session, Account account, std::string gate, std::vector<st
         return;
     }
     const std::string source = sources[index];
-    const std::string challenge = toBase64url(randomBytes(CHALLENGE_BYTES));
+    std::string challenge;
+    try {
+        challenge = toBase64url(randomBytes(CHALLENGE_BYTES));
+    } catch (const std::exception &error) {
+        done({std::string(error.what()), false, {}});
+        return;
+    }
     const std::string url = source + "/__crossbind/session?challenge=" + challenge + "&protocols=" + std::to_string(LEAST_PROTOCOL) + "-"
                             + std::to_string(MOST_PROTOCOL);
     // A snapshot's host answers nothing without the gate's token, its session among it; a dev server takes none there.
