@@ -23,7 +23,7 @@
  *   --cases <file>       A further case file, as one kept out of the repository (repeatable)
  *   --runs <n>           Runs of each case (default: 1)
  *   --model <model>      The model under test (default: claude-sonnet-5-5)
- *   --judge-model <m>    The model that judges the claims (default: claude-haiku-5-5)
+ *   --judge-model <m>    The model that judges the claims (default: claude-sonnet-5-5)
  *   --effort <level>     The reasoning effort of the agents under test, as low; without it, Claude Code's default,
  *                        whatever effort or thinking settings the shell exports
  *   --without-skill      Run each case without the skill as well, which doubles the runs
@@ -71,7 +71,7 @@ function readOptions() {
             cases: { type: 'string', multiple: true, default: [] },
             runs: { type: 'string', default: '1' },
             model: { type: 'string', default: 'claude-sonnet-5-5' },
-            'judge-model': { type: 'string', default: 'claude-haiku-5-5' },
+            'judge-model': { type: 'string', default: 'claude-sonnet-5-5' },
             effort: { type: 'string' },
             'without-skill': { type: 'boolean', default: false },
             concurrency: { type: 'string', default: '1' },

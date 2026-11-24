@@ -39,9 +39,9 @@ function factGrader(claim) {
     return [
         frontmatter({ type: 'llm' }),
         'The assistant worked in a read-only session, so its final answer is a plan.',
-        `PASS if the answer does this, or tells the user to do it: ${claim}.`,
+        `PASS if the answer does this, tells the user to do it, or finds that the project already does it: ${claim}.`,
         'FAIL if it leaves this out, does something else in its place, or advises against it.',
-        'That nothing was run or changed is no reason to fail.',
+        'That nothing was run or changed is no reason to fail, and the answer may say it in its own words.',
         'Judge this one point alone, and ignore the rest of the answer.',
         '',
     ].join('\n');

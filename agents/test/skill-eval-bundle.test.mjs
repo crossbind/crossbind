@@ -25,9 +25,9 @@ test('a must case asks for the skill, its references and each claim', () => {
     const files = caseFiles(MUST);
     assert.match(files['graders/trigger.md'], /^---\ntype: tool_used\ntool: Skill\ninput_match: '"skill"\\s\*:\\s\*"\(\?:\[\\w-\]\+:\)\?crossbind"'\n---\n$/);
     assert.match(files['graders/route.md'], /tool: Read\ninput_match: '\(\?:references\/api\/app\\\.md\|references\/ports\\\.json\)'\n/);
-    assert.match(files['graders/fact-1.md'], /^---\ntype: llm\n---\n\nThe assistant worked in a read-only session, so its final answer is a plan\.\nPASS if the answer does this, or tells the user to do it: Says one thing\.\n/);
-    assert.match(files['graders/fact-1.md'], /\nThat nothing was run or changed is no reason to fail\.\n/);
-    assert.match(files['graders/fact-2.md'], /tells the user to do it: Says another\.\n/);
+    assert.match(files['graders/fact-1.md'], /^---\ntype: llm\n---\n\nThe assistant worked in a read-only session, so its final answer is a plan\.\nPASS if the answer does this, tells the user to do it, or finds that the project already does it: Says one thing\.\n/);
+    assert.match(files['graders/fact-1.md'], /\nThat nothing was run or changed is no reason to fail, and the answer may say it in its own words\.\n/);
+    assert.match(files['graders/fact-2.md'], /already does it: Says another\.\n/);
     assert.equal(files['graders/fact-3.md'], undefined);
 });
 
