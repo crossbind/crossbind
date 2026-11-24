@@ -186,7 +186,10 @@ export default {
 {
     "name": "wordfreq",
     "bin": { "wordfreq-wasi": "bin/wordfreq-wasi.mjs" },
-    "files": ["bin/", "dist/prebuilt/*/bin/*", "dist/prebuilt/*/crossbind-bin.json", "crossbind.config.js"],
+    "files": [
+        "bin/", "dist/prebuilt/*/bin/*", "dist/prebuilt/*/crossbind-bin.json",
+        "dist/prebuilt/*/sbom.cdx.json", "dist/prebuilt/*/THIRD-PARTY-LICENSES.md", "crossbind.config.js"
+    ],
     "scripts": { "prepublishOnly": "crossbind build -p wasi -e wasi -b release" }
 }
 ```
@@ -203,6 +206,9 @@ wordfreq-wasi README.md
 ```
 
 - The map names one command, of `kind: 'binary'`, and it becomes `<tool>-wasi`, as the ports' tools do.
+- Beside the command the build writes the `sbom.cdx.json` and `THIRD-PARTY-LICENSES.md` of what it links, the ports
+  and the wasi-sdk runtime, as a port's tools carry them. The project's `LICENSE` and `package.json`'s `license` stay
+  yours.
 - The build stops, naming the line to add, when `paths.output` is the build directory or when `package.json`'s `bin`
   lacks the command. It never edits `package.json`.
 - `files` names `dist/prebuilt/*/bin/*`: the folder's own pattern, `dist/prebuilt/*/bin/`, packs none of its files.

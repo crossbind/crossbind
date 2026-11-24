@@ -555,7 +555,7 @@ async function createWasiCommands(targetParams) {
         const built = await buildWasiCommand(target, { force: !fs.existsSync(distWasm) });
         if (built) publishWasiCommand(target);
         // An app's bin map lays its command out on every build, as the map may be newer than a link that is cached.
-        if (fs.existsSync(`${state.config.paths.build}/${target.wasmName}`)) publishWasiBin(target);
+        if (fs.existsSync(`${state.config.paths.build}/${target.wasmName}`)) await publishWasiBin(target);
     }
 }
 
