@@ -174,7 +174,7 @@
     {
       "source": "ports/catalog.json + ports/*/package.json",
       "output": "ports.json",
-      "sha256": "56a77e2ae8403a94c39117ce27e5f0b85971389f670de42c34c98b981b352e9b"
+      "sha256": "4772370bac75d752240fd1e20b956b81d90c7623f55e6f9ceb6744391aa2b6d6"
     }
   ]
 }
