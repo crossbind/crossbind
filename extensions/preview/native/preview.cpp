@@ -202,6 +202,7 @@ void crossbind_extension_preview(crossbind::Registry &registry) {
     registry.function("preview.account", preview::accountFunction);
     preview::addCloudFunctions(registry);
     preview::addOpenerFunctions(registry);
+    preview::addPageRequests(registry);
     // A link of the app's scheme, or on a phone of crossbind.dev/open, names a session alone, which the app's page opens
     // from the account's list: the preview open ends, so that the page shows again and asks for the link as it loads.
     registry.onOpenUrl([](const crossbind::OpenUrl &open) {
