@@ -46,7 +46,9 @@ export async function serveEndpoint(port) {
 
     function reported(role, body) {
         if (body.id !== undefined) {
-            answers.get(body.id)?.(body);
+            // A step's own answer alone: an id the run never gave reaches nothing.
+            const answer = answers.get(body.id);
+            if (typeof answer === 'function') answer(body);
             answers.delete(body.id);
             return;
         }
