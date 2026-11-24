@@ -326,8 +326,8 @@ export async function standInCloud({ apiPort, snapshotsPort }) {
 }
 
 // A server at the run machine's address on its network, as a session's source: it answers the session's check as it
-// is told, and the gate's paths, its page among them, to a request with the gate's token, a file of { redirect } with a
-// redirect there. Each request is recorded.
+// is told, and the gate's paths, its page among them, to a request with the gate's token, a file of { status, location }
+// with that status alone. Each request is recorded.
 export async function standInSource(address, { key, answer, files = {} }) {
     const asked = [];
     const server = createServer(async (request, response) => {
@@ -342,7 +342,7 @@ export async function standInSource(address, { key, answer, files = {} }) {
         if (request.headers['x-crossbind-preview'] !== gateToken(key)) return response.writeHead(403).end();
         const file = files[url.pathname === '/' ? '/index.html' : url.pathname];
         if (file === undefined) return response.writeHead(404).end();
-        if (file.redirect) return response.writeHead(302, { location: file.redirect }).end();
+        if (file.status) return response.writeHead(file.status, file.location ? { location: file.location } : {}).end();
         return response.writeHead(200, { 'content-type': TYPES[url.pathname.split('.').pop()] ?? TYPES.html }).end(file);
     });
     const port = await listen(server, 0, address);

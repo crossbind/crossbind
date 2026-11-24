@@ -384,9 +384,12 @@ const STEPS_PAGE = '<!doctype html><meta charset="utf-8"><title>e2e project</tit
     + "const api = await import('/__crossbind/app.js'); const { runSteps } = await import('/project-steps.js'); runSteps(api.invoke, api);</script>";
 const stepsModule = () => readFileSync(join(fixture, 'src', 'project-steps.js'), 'utf8');
 
-// A second project, served by a server of the run's own, whose /elsewhere redirects to another host.
+// A second project, served by a server of the run's own, whose /elsewhere redirects to another host and /odd answers a
+// status no webview takes.
 function secondProject(address) {
-    const files = { '/index.html': STEPS_PAGE, '/project-steps.js': stepsModule(), '/elsewhere': { redirect: 'http://127.0.0.1:9/elsewhere' } };
+    const files = {
+        '/index.html': STEPS_PAGE, '/project-steps.js': stepsModule(), '/elsewhere': { status: 302, location: 'http://127.0.0.1:9/elsewhere' }, '/odd': { status: 600 },
+    };
     return listedSource(address, { project: { id: newId(), name: 'e2e second project' } }, asPreview(), files);
 }
 
@@ -778,9 +781,12 @@ async function flow() {
     await openSession(second.session, originName(ACCOUNTS.main, second.session.project.id));
     const secondStorage = await storageOf('project', 'second');
     expect(holdsNone(secondStorage, 'first') && holdsNone(secondStorage, 'second'), `the second project saw ${JSON.stringify(secondStorage)}`);
-    // A source that redirects elsewhere answers the page 502, the redirect unfollowed.
+    // A source that redirects elsewhere answers the page 502, the redirect unfollowed, as one whose status no webview
+    // takes does.
     const elsewhere = await project({ do: 'fetched', path: '/elsewhere' });
     expect(elsewhere.value?.status === 502 && elsewhere.value.text === 'the source answered 302', `a redirect of the source to another host gave the page ${JSON.stringify(elsewhere)}`);
+    const odd = await project({ do: 'fetched', path: '/odd' });
+    expect(odd.value?.status === 502 && odd.value.text === 'the source answered 600', `a status of 600 from the source gave the page ${JSON.stringify(odd)}`);
     await closePreview();
     await openSession(dev, devOrigin);
     const again = await storageOf('project');

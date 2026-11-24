@@ -152,7 +152,8 @@ void verify(const Session &session, const Account &account, const std::string &g
 
 // The proxy of an open preview's origin: each GET and HEAD a fetch of the session's source, with the request's Accept,
 // Accept-Language and Range alone and the gate's token, its answer passed back with its status and the headers PASSED
-// names; a redirect, which no web view follows for an app's origin, and a failure answer 502 with the reason.
+// names; a redirect, which no web view follows for an app's origin, a status no web view takes and a failure answer
+// 502 with the reason.
 class Proxy : public std::enable_shared_from_this<Proxy> {
 public:
     Proxy(Session session, Account account, std::string source, std::string gateToken)
@@ -185,7 +186,7 @@ private:
                     request.respond(502, TEXT, *failure);
                     return;
                 }
-                if (response.status >= 300 && response.status < 400) {
+                if (response.status < 200 || response.status > 599 || (response.status >= 300 && response.status < 400)) {
                     request.respond(502, TEXT, "the source answered " + std::to_string(response.status));
                     return;
                 }
