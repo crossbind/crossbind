@@ -1,0 +1,19 @@
+{
+    "name": "@crossbind/e2e-app-projects",
+    "version": "0.0.0",
+    "private": true,
+    "description": "crossbind - an app that opens its account's previews as the crossbind app does, against a stand-in for crossbind cloud",
+    "license": "MIT",
+    "type": "module",
+    "scripts": {
+        "build": "crossbind app build",
+        "e2e": "node e2e/run.mjs"
+    },
+    "devDependencies": {
+        "@crossbind/core-app-host": "workspace:^",
+        "@crossbind/extension-preview": "workspace:^",
+        "@crossbind/plugin-vite": "workspace:^",
+        "crossbind": "workspace:^",
+        "vite": "^8.2.1"
+    }
+}

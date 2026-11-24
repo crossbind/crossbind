@@ -11,7 +11,7 @@ import {
     PROBE_URLS, REACH_PORT, TRASHED_FILE, TRAY,
 } from './launch.mjs';
 import { UPDATE_PORT, signUpdate } from './updates.mjs';
-import { answerFetch, answerPage, answerPreview } from './endpoint.mjs';
+import { answerFetch, answerPage } from './endpoint.mjs';
 
 // Opens the app `pnpm build` made, whose page runs the conformance suite and logs its summary last, and closes it
 // once the summary is in, or a desktop app once it has opened anew, as its page asks then. With
@@ -656,7 +656,7 @@ function serveReach() {
         reached.push(`${kind} ${request.url} from ${request.socket.remoteAddress}, origin ${request.headers.origin}${preflight}`);
     };
     const server = createServer((request, response) => {
-        if (answerPage(request, response, page) || answerFetch(request, response, fetchCounts) || answerPreview(request, response, null)) return;
+        if (answerPage(request, response, page) || answerFetch(request, response, fetchCounts)) return;
         heard(request, request.method);
         response.writeHead(200, { 'content-type': 'text/plain', 'access-control-allow-origin': '*', 'access-control-allow-private-network': 'true' });
         response.end('ok');

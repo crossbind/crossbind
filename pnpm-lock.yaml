@@ -304,6 +304,24 @@ importers:
         specifier: ^8.3.3
         version: 8.3.8(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.37.0)(yaml@2.9.0)
 
+  e2e/app-projects:
+    devDependencies:
+      '@crossbind/core-app-host':
+        specifier: workspace:^
+        version: link:../../core/app-host
+      '@crossbind/extension-preview':
+        specifier: workspace:^
+        version: link:../../extensions/preview
+      '@crossbind/plugin-vite':
+        specifier: workspace:^
+        version: link:../../plugins/vite
+      crossbind:
+        specifier: workspace:^
+        version: link:../../core/crossbind
+      vite:
+        specifier: ^8.3.3
+        version: 8.3.8(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.37.0)(yaml@2.9.0)
+
   e2e/app-publish:
     devDependencies:
       '@crossbind/core-app-host':
