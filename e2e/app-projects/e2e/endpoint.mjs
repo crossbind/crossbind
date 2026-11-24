@@ -2,7 +2,8 @@ import { createServer } from 'node:http';
 
 // The run's endpoint, which the fixture's hooks ask on the device's loopback: a page's next step, held until the run
 // has one, and the report of each. A page that went with its ask held, as a closed app's, takes no step. What the pages
-// report besides their steps' answers are notes: each load, and the links and ends the extension held.
+// report besides their steps' answers are notes: each load, and the links and ends the extension held. Every report is
+// kept, so that the run can read all that a page got.
 const STEP_MS = 60000;
 const HOLD_MS = 30000;
 
@@ -21,6 +22,7 @@ export async function serveEndpoint(port) {
     const askers = { app: [], project: [] };
     const answers = new Map();
     const notes = [];
+    const reports = [];
     const noteWaiters = [];
     let steps = 0;
 
@@ -45,6 +47,7 @@ export async function serveEndpoint(port) {
     }
 
     function reported(role, body) {
+        reports.push({ role, ...body });
         if (body.id !== undefined) {
             // A step's own answer alone: an id the run never gave reaches nothing.
             const answer = answers.get(body.id);
@@ -117,6 +120,6 @@ export async function serveEndpoint(port) {
     }
 
     return {
-        notes, step, waitForNote, close: () => server.close(),
+        notes, reports, step, waitForNote, close: () => server.close(),
     };
 }

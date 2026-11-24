@@ -101,6 +101,12 @@ export async function standInCloud({ apiPort, snapshotsPort }) {
     const codes = new Map();
     const tokens = new Map([[CLI_TOKEN, { account: ACCOUNTS.main, kind: 'cli' }]]);
     const sessions = new Map();
+    // Every token and key it made or took, for the run to look for where none may be.
+    const secrets = new Set([CLI_TOKEN]);
+    const kept = (secret) => {
+        secrets.add(secret);
+        return secret;
+    };
     const settings = { page: null };
     let api = '';
     const listed = (account) => [...sessions.values()].filter((session) => session.account.id === account.id && (session.source === 'dev' || session.version > 0))
@@ -123,7 +129,7 @@ export async function standInCloud({ apiPort, snapshotsPort }) {
             if (match === undefined) return json(answer, 400, { error: 'matching_required', error_description: 'The code is approved: send the number the page shows.' });
             codes.delete(deviceCode);
             if (match !== code.approval.match) return json(answer, 400, { error: 'access_denied', error_description: MISMATCH });
-            const token = `cbt_${randomBytes(32).toString('base64url')}`;
+            const token = kept(`cbt_${randomBytes(32).toString('base64url')}`);
             tokens.set(token, { account: code.approval.account, kind: 'app' });
             return json(answer, 200, { access_token: token, token_type: 'Bearer', account: code.approval.account });
         },
@@ -161,7 +167,9 @@ export async function standInCloud({ apiPort, snapshotsPort }) {
             const held = signedIn(asked, answer, cli);
             if (!held) return null;
             const known = sessions.get(session);
-            sessions.set(session, { ...JSON.parse(text), id: session, account: held.account, createdAt: known?.createdAt ?? new Date().toISOString() });
+            const registered = JSON.parse(text);
+            kept(registered.key);
+            sessions.set(session, { ...registered, id: session, account: held.account, createdAt: known?.createdAt ?? new Date().toISOString() });
             return json(answer, 200, { id: session, expiresAt: new Date(Date.now() + 600_000).toISOString() });
         }
         if (call === 'DELETE /v1/sessions/<id>') {
@@ -187,7 +195,7 @@ export async function standInCloud({ apiPort, snapshotsPort }) {
             const id = known?.id ?? newId();
             if (!known) {
                 sessions.set(id, {
-                    id, source: 'snapshot', account: held.account, project, addresses: [], protocol, key: newKey(), version: 0, createdAt: new Date().toISOString(), files: new Map(),
+                    id, source: 'snapshot', account: held.account, project, addresses: [], protocol, key: kept(newKey()), version: 0, createdAt: new Date().toISOString(), files: new Map(),
                 });
             }
             return json(answer, 200, { id });
@@ -217,7 +225,7 @@ export async function standInCloud({ apiPort, snapshotsPort }) {
             // A crossbind app signed out may have read the snapshots' keys: they change, as the cloud's do.
             if (held.kind === 'app') {
                 listed(held.account).filter(({ source }) => source === 'snapshot').forEach((found) => {
-                    found.key = newKey();
+                    found.key = kept(newKey());
                 });
             }
             return answer.writeHead(204).end();
@@ -293,17 +301,20 @@ export async function standInCloud({ apiPort, snapshotsPort }) {
             sessions.set(id, {
                 id, account, createdAt: new Date().toISOString(), project: { id: newId(), name: 'e2e project' }, protocol: 1, key: newKey(), ...session,
             });
+            kept(sessions.get(id).key);
             return sessions.get(id);
         },
         // A new key for a snapshot, as a sign-out of a device makes one.
         rekey(id) {
-            sessions.get(id).key = newKey();
+            sessions.get(id).key = kept(newKey());
         },
         // The device page the next sign-in names.
         pageAt(page) {
             settings.page = page;
         },
         snapshotOf: (account) => [...sessions.values()].find((each) => each.source === 'snapshot' && each.account.id === account.id && each.version > 0),
+        // The tokens it gave or took, the sessions' keys and each key's gate's token.
+        secrets: () => [...secrets].flatMap((secret) => (secret.startsWith('cbt_') ? [secret] : [secret, gateToken(secret)])),
         // What crossbind app preview runs with: this cloud, and the home that signs in to it.
         env: { CROSSBIND_CLOUD_URL: api, HOME: home, USERPROFILE: home },
         close() {
@@ -315,7 +326,8 @@ export async function standInCloud({ apiPort, snapshotsPort }) {
 }
 
 // A server at the run machine's address on its network, as a session's source: it answers the session's check as it
-// is told, and the gate's paths, its page among them, to a request with the gate's token. Each request is recorded.
+// is told, and the gate's paths, its page among them, to a request with the gate's token, a file of { redirect } with a
+// redirect there. Each request is recorded.
 export async function standInSource(address, { key, answer, files = {} }) {
     const asked = [];
     const server = createServer(async (request, response) => {
@@ -330,6 +342,7 @@ export async function standInSource(address, { key, answer, files = {} }) {
         if (request.headers['x-crossbind-preview'] !== gateToken(key)) return response.writeHead(403).end();
         const file = files[url.pathname === '/' ? '/index.html' : url.pathname];
         if (file === undefined) return response.writeHead(404).end();
+        if (file.redirect) return response.writeHead(302, { location: file.redirect }).end();
         return response.writeHead(200, { 'content-type': TYPES[url.pathname.split('.').pop()] ?? TYPES.html }).end(file);
     });
     const port = await listen(server, 0, address);

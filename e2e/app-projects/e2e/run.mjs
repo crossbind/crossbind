@@ -322,13 +322,32 @@ const asPreview = (overrides = {}, fields = {}) => (session, challenge) => sessi
     ...overrides,
 });
 
-// The sessions that stop before anything of their project loads, each with the words the app's page gets.
+// The address rule's table: a neighbour of each range of a local address on either side, public addresses, the loopback,
+// names off .local, ports out of their range, and an address with a userinfo, a path or numbers no URL writes.
+const FARAWAY = [
+    '9.255.255.255:5173', '11.0.0.0:5173', '172.15.255.255:5173', '172.32.0.0:5173', '192.167.255.255:5173', '192.169.0.0:5173',
+    '100.63.255.255:5173', '100.128.0.0:5173', '169.253.255.255:5173', '169.255.0.0:5173', '[fbff:ffff::1]:5173', '[fe00::1]:5173',
+    '8.8.8.8:5173', '[2001:db8::1]:5173', 'localhost:5173', '127.0.0.1:5173', 'printer.localhost:5173', 'printer.local.:5173',
+    'printer-local:5173', 'Printer.local:5173', '192.168.001.006:5173', '192.168.1.6:0', '192.168.1.6:65536', '192.168.1.6:05173',
+    '192.168.1.6', 'user@192.168.1.6:5173', '192.168.1.6:5173/x',
+];
+// The listed name's: a control, a mark of direction and 65 characters, none of which a dialog may show.
+const UNSHOWN = ['e2e\u0007project', 'e2e\u202Eproject', 'n'.repeat(65)];
+
+// The sessions that stop before anything of their project loads, each with the words the app's page gets: the tables'
+// stop before any connection, of which a source of the run's own on the loopback, at two of the table's addresses,
+// and the sources of the names' are never asked.
 async function stoppingSessions(address) {
     const closed = await standInSource(address, { key: newKey(), answer: () => null });
     const unreachableAt = closed.address;
     closed.close();
+    const loopback = await standInSource('127.0.0.1', { key: newKey(), answer: () => null });
+    sources.push(loopback);
+    const loopbackPort = loopback.address.split(':').pop();
+    const faraway = [...FARAWAY, loopback.address, `localhost:${loopbackPort}`];
     const stops = {
-        nonlocal: { session: cloud.list(ACCOUNTS.main, { source: 'dev', addresses: ['127.0.0.1:5173'] }) },
+        ...Object.fromEntries(faraway.map((far) => [`faraway ${far}`, { session: cloud.list(ACCOUNTS.main, { source: 'dev', addresses: [far] }) }])),
+        ...Object.fromEntries(await Promise.all(UNSHOWN.map(async (name, index) => [`unshown ${index}`, await listedSource(address, { project: { id: newId(), name } }, asPreview())]))),
         nameless: await listedSource(address, { project: { id: newId(), name: '' } }, asPreview()),
         newer: await listedSource(address, { protocol: 2 }, asPreview()),
         older: await listedSource(address, {}, asPreview({ protocol: 0 }, { update: 'pnpm up crossbind' })),
@@ -338,9 +357,11 @@ async function stoppingSessions(address) {
         none: await listedSource(address, {}, () => null),
     };
     const at = (stop) => stops[stop].session.addresses[0];
+    const nameless = 'crossbind cloud lists this preview with a name crossbind shows on no dialog';
     const words = {
-        nonlocal: `crossbind opens a preview at a local address alone, and crossbind cloud lists this one at ${at('nonlocal')}.`,
-        nameless: 'crossbind cloud lists this preview with a name crossbind shows on no dialog',
+        ...Object.fromEntries(faraway.map((far) => [`faraway ${far}`, `crossbind opens a preview at a local address alone, and crossbind cloud lists this one at ${far}.`])),
+        ...Object.fromEntries(UNSHOWN.map((name, index) => [`unshown ${index}`, nameless])),
+        nameless,
         newer: "this project's crossbind is newer than this app (protocol 2, up to 1): update the crossbind app",
         older: "this project's crossbind is older than this app takes (protocol 0, from 1): update crossbind in the project: pnpm up crossbind",
         other: `crossbind app preview on ${at('other')} runs as other-e2e, and this app is signed in as made-up-e2e: sign in to the same account on both.`,
@@ -349,7 +370,9 @@ async function stoppingSessions(address) {
         none: `${at('none')} is no crossbind preview: run crossbind app preview in the project`,
     };
     const unreachable = cloud.list(ACCOUNTS.main, { source: 'dev', addresses: [unreachableAt] });
-    return { stops, words, unreachable };
+    return {
+        stops, words, unreachable, loopback,
+    };
 }
 
 // A page of the project's steps alone, as a second project's and as a snapshot made without a web build.
@@ -357,9 +380,10 @@ const STEPS_PAGE = '<!doctype html><meta charset="utf-8"><title>e2e project</tit
     + "const { invoke } = await import('/__crossbind/app.js'); const { runSteps } = await import('/project-steps.js'); runSteps(invoke);</script>";
 const stepsModule = () => readFileSync(join(fixture, 'src', 'project-steps.js'), 'utf8');
 
-// A second project, served by a server of the run's own.
+// A second project, served by a server of the run's own, whose /elsewhere redirects to another host.
 function secondProject(address) {
-    return listedSource(address, { project: { id: newId(), name: 'e2e second project' } }, asPreview(), { '/index.html': STEPS_PAGE, '/project-steps.js': stepsModule() });
+    const files = { '/index.html': STEPS_PAGE, '/project-steps.js': stepsModule(), '/elsewhere': { redirect: 'http://127.0.0.1:9/elsewhere' } };
+    return listedSource(address, { project: { id: newId(), name: 'e2e second project' } }, asPreview(), files);
 }
 
 // The snapshot of the dev session's project: on Linux crossbind app preview --cloud uploads e2e/app-preview's web
@@ -400,9 +424,18 @@ async function checkStops(stoppers) {
         expect(checked.error?.startsWith(stoppers.words[stop]), `the check of ${stop} said ${checked.error ?? JSON.stringify(checked.value)}, not "${stoppers.words[stop]}"`);
         expect(served === false, `the check of ${stop} left its origin served`);
         expect(open.error === WORDS.checkFirst, `${stop} opened after its check stopped: ${JSON.stringify(open)}`);
-        said[stop] = checked.error;
+        const table = stop.split(' ')[0];
+        if (table === 'faraway' || table === 'unshown') said[table] = (said[table] ?? 0) + 1;
+        else said[stop] = checked.error;
     }
-    expect(stoppers.stops.newer.source.asked.length === 0, `the session of a newer protocol was asked ${stoppers.stops.newer.source.asked.length} times`);
+    // Before any connection: the stops of a protocol, of the names and of the loopback ask their sources nothing.
+    const silent = [stoppers.stops.newer.source, ...UNSHOWN.map((name, index) => stoppers.stops[`unshown ${index}`].source), stoppers.loopback];
+    expect(silent.every((source) => source.asked.length === 0), `a source a check stops before was asked: ${JSON.stringify(silent.map((source) => source.asked))}`);
+    // No source that stops is sent the gate's token: the others were asked for the session's check alone, with none.
+    for (const [stop, { source }] of Object.entries(stoppers.stops)) {
+        const odd = (source?.asked ?? []).filter(({ path, gate }) => path !== '/__crossbind/session' || gate !== undefined);
+        expect(odd.length === 0, `the source of ${stop}, which stops, was asked ${JSON.stringify(odd)}`);
+    }
     const { messages, checked } = await valueOf('the check of a source not reached', { do: 'unreachable', session: stoppers.unreachable.id });
     const on = stoppers.unreachable.addresses[0];
     if (isApple) {
@@ -674,6 +707,16 @@ async function checkStore(keyring) {
     expect(gone.account === null, `after the deletion the app was signed in as ${JSON.stringify(gone)}`);
 }
 
+// Part 14's 1: nothing a page got, the app printed or the preview's terminal printed holds a token, a session's key or a
+// gate's token, of all the stand-in cloud gave, took or made.
+function checkSecrets() {
+    const said = [terminal.text(), device.text(), JSON.stringify(endpoint.reports)].join('\n');
+    const secrets = cloud.secrets();
+    const held = secrets.filter((secret) => said.includes(secret));
+    expect(held.length === 0, `what the pages got or the app and the terminal printed holds ${held.length} of the ${secrets.length} tokens, keys and gates' tokens`);
+    return secrets.length;
+}
+
 async function flow() {
     const address = await defaultRouteAddress();
     expect(address, 'this machine has no address on a network, at which a device reaches a dev server');
@@ -728,6 +771,9 @@ async function flow() {
     await openSession(second.session, originName(ACCOUNTS.main, second.session.project.id));
     const secondStorage = await storageOf('project', 'second');
     expect(holdsNone(secondStorage, 'first') && holdsNone(secondStorage, 'second'), `the second project saw ${JSON.stringify(secondStorage)}`);
+    // A source that redirects elsewhere answers the page 502, the redirect unfollowed.
+    const elsewhere = await project({ do: 'fetched', path: '/elsewhere' });
+    expect(elsewhere.value?.status === 502 && elsewhere.value.text === 'the source answered 302', `a redirect of the source to another host gave the page ${JSON.stringify(elsewhere)}`);
     await closePreview();
     await openSession(dev, devOrigin);
     const again = await storageOf('project');
@@ -750,8 +796,9 @@ async function flow() {
     const source = `http://${dev.addresses[0]}`;
     const other = await checkOtherMachine(source, gateToken(dev.key));
     const dependency = await checkOptimizedDependency(source, gateToken(dev.key));
+    const secrets = checkSecrets();
     console.log(`PROJECTS CHECKS ${JSON.stringify({
-        platform: devicePlatform, keyring, stops, first, ranges, other, dependency,
+        platform: devicePlatform, keyring, stops, first, ranges, other, dependency, secrets,
     })}`);
     console.log(`TIMING a JavaScript edit to the page: ${first.js} ms`);
     console.log(`ok: ${devicePlatform} projects of e2e/app-projects`);
