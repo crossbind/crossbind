@@ -568,7 +568,7 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
             CrossbindActivity activity = current;
             if (activity != null) activity.dialogsGone((dialog) -> dialog.origin.equals(ended));
             if (activity == null || activity.webView == null || activity.webView.getUrl() == null) return;
-            if (ended.equals(originOf(Uri.parse(activity.webView.getUrl())))) activity.webView.loadUrl(activity.firstUrl);
+            if (ended.equals(documentOriginOf(activity.webView.getUrl()))) activity.webView.loadUrl(activity.firstUrl);
         });
     }
 
@@ -1045,9 +1045,15 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
         return url.getScheme() + "://" + url.getHost() + (url.getPort() == -1 ? "" : ":" + url.getPort());
     }
 
+    // A page's URL, or the URL inside it where the page is a blob: document, which is of the origin of the page that made
+    // it.
+    private static Uri documentUriOf(String url) {
+        return Uri.parse(url.startsWith("blob:") ? url.substring(5) : url);
+    }
+
     // The origin of the document at a page's URL: a blob: URL's is the origin inside it, of the page that made it.
     private static String documentOriginOf(String url) {
-        return originOf(Uri.parse(url.startsWith("blob:") ? url.substring(5) : url));
+        return originOf(documentUriOf(url));
     }
 
     // The page that asks, by its URL, from the WebView's two accounts of it, on the UI thread: the page it shows names the
@@ -1203,11 +1209,11 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
         // another origin, which page-navigation loaded, asks for none.
         @Override
         public void onPageStarted(WebView view, String url, Bitmap favicon) {
-            if (url == null || isOwn(originOf(Uri.parse(url)))) return;
+            if (url == null || isOwn(documentOriginOf(url))) return;
             nativeNewPage(url.getBytes(StandardCharsets.UTF_8));
             // A page of an origin that ended while it was on its way, which endOrigin() did not see, gives way to the
             // app's first page as well.
-            if (isServedForm(Uri.parse(url))) view.loadUrl(firstUrl);
+            if (isServedForm(documentUriOf(url))) view.loadUrl(firstUrl);
         }
 
         @Override
@@ -1288,7 +1294,7 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
         }
 
         private boolean pageDialog(String url, Extension.PageDialog.Kind kind, String message, String defaultText, JsResult result) {
-            String origin = url == null ? "" : originOf(Uri.parse(url));
+            String origin = url == null ? "" : documentOriginOf(url);
             if (!isOwn(origin)) {
                 result.cancel();
                 return true;
@@ -1307,7 +1313,7 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
             Extension owner = Extensions.ROLES.get("page-files");
             if (owner == null) return false;
             String page = view.getUrl();
-            Extension.FileInput input = new Extension.FileInput(params, files, page == null ? "" : roleOf(originOf(Uri.parse(page))));
+            Extension.FileInput input = new Extension.FileInput(params, files, page == null ? "" : roleOf(documentOriginOf(page)));
             ask("page-files", () -> owner.onFileInput(CrossbindActivity.this, input), input::cancel);
             if (input.isLeft()) return false;
             if (pendingFiles != null) pendingFiles.cancel();
