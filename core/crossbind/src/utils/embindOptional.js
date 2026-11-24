@@ -3,8 +3,8 @@
 // optional null and lets null stand for one, as undefined does. The type keeps its `optional` flag, with which embind
 // lets a last argument be left out.
 
-// The release glue spells it on one line, the debug glue with spaces.
-const OPTIONAL_TYPE = /Object\.assign\(\{optional:\s*true\},\s*EmValType\)/;
+// The release glue spells it on one line, the debug glue with spaces, and a multithreaded build's debug glue across lines.
+const OPTIONAL_TYPE = /Object\.assign\(\{\s*optional:\s*true\s*\},\s*EmValType\)/;
 const NULL_OPTIONAL_TYPE = 'Object.assign({optional:true},EmValType,{'
     + 'fromWireType:handle=>{var value=EmValType.fromWireType(handle);return value===undefined?null:value},'
     + 'toWireType:(destructors,value)=>EmValType.toWireType(destructors,value===null?undefined:value)})';
