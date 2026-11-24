@@ -1,5 +1,23 @@
 # @crossbind/docker
 
+## Image family 1.0.24
+
+### Patch Changes
+
+- Moved swig to crossbind/swig `d1ad8a01`. A constructor that `%extend` adds to a class in a
+  hand-written interface now binds. Such a constructor is a function that returns the new object:
+  its registration named a constructor of the class itself, which the class does not have, so the
+  call threw "this class cannot be constructed from these arguments", and with a reference or a C
+  string argument, or without the shared_ptr features, the bridge did not compile. One with the
+  argument count of a constructor the class has itself is still left out, with a line in the
+  build. The bridges of interfaces without such a constructor are byte-identical to those of
+  `63612ba3`.
+- Rebuilding brings the Debian packages up to date: krb5 1.21.3-5+deb13u2 and linux-libc-dev
+  6.12.118-1 in `base` and every image built on it, and OpenJDK 21.0.13.1 in `windows` and
+  `android-app`. They fix what the daily scan finds in the published 1.0.23 images: 6 CVEs in
+  OpenJDK (4 HIGH, 2 CRITICAL) since 20 November, and 14 in krb5 and 19 in the kernel's headers
+  (HIGH) since 23 November.
+
 ## Image family 1.0.23
 
 ### Patch Changes
