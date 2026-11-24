@@ -179,7 +179,11 @@ console.log(await result.get(0));`,
         },
         {
             type: 'p',
-            text: "Set `dts: 'promise'` in `crossbind.config.js` so the generated types return promises too. `initNative.terminate()` stops the worker; the next `initNative()` starts a fresh one.",
+            text: "Set `dts: 'promise'` in `crossbind.config.js` so the generated types return promises too.",
+        },
+        {
+            type: 'p',
+            text: '`initNative.terminate()` stops the worker, and the calls it has not answered reject with an `AbortError`: that is how a page stops a call that is still running. The next `initNative()` starts a fresh one.',
         },
 
         { type: 'h2', id: 'logging', text: 'Logging and environment' },
