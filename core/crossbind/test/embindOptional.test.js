@@ -28,6 +28,27 @@ const DEBUG = [
     '    };',
 ].join('\n');
 
+// The same code in a multithreaded build's debug glue, which emscripten prints within its wrapper, an object across lines.
+const MULTITHREADED_DEBUG = [
+    'var EmValType = {',
+    '  name: "emscripten::val",',
+    '  fromWireType: handle => {',
+    '    var rv = Emval.toValue(handle);',
+    '    __emval_decref(handle);',
+    '    return rv;',
+    '  },',
+    '  toWireType: (destructors, value) => Emval.toHandle(value),',
+    '  readValueFromPointer: readPointer,',
+    '  destructorFunction: null',
+    '};',
+    'var EmValOptionalType = Object.assign({',
+    '  optional: true',
+    '}, EmValType);',
+    'var __embind_register_optional = (rawOptionalType, rawType) => {',
+    '  registerType(rawOptionalType, EmValOptionalType);',
+    '};',
+].map((line) => `\t\t\t${line}`).join('\n');
+
 // Runs a glue's optional type against a handle table like emscripten's: C++ reads undefined as an empty optional.
 function optionalType(glue) {
     const values = [];
@@ -45,7 +66,7 @@ function optionalType(glue) {
     };
 }
 
-describe.each([['release', RELEASE], ['debug', DEBUG]])('an empty optional in a %s glue', (kind, glue) => {
+describe.each([['release', RELEASE], ['debug', DEBUG], ['multithreaded debug', MULTITHREADED_DEBUG]])('an empty optional in a %s glue', (kind, glue) => {
     const { text, missed } = emptyOptionalAsNull(glue);
 
     test('arrives as null, and a value as itself', () => {
