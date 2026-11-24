@@ -106,6 +106,15 @@ double numberIn(NSDictionary *ask, NSString *key) {
 
 id known(double value, bool isKnown) { return isKnown ? @(value) : NSNull.null; }
 
+// The page the window of this webview shows now, as the host names it once the page commits, before any script of the
+// page can ask: none once the window closed.
+std::optional<crossbind::Page> pageIn(WKWebView *webView) {
+    for (const crossbind::Window &window : crossbind::openWindows()) {
+        if (window.webView() == (__bridge void *)webView) return window.page();
+    }
+    return std::nullopt;
+}
+
 // An origin as the page's scripts name it, as "crossbind://app" or "http://localhost:5173".
 std::string originOf(WKSecurityOrigin *origin) {
     std::string text = std::string(origin.protocol.UTF8String ?: "") + "://" + std::string(origin.host.UTF8String ?: "");
@@ -159,10 +168,11 @@ bool always(const Ask &) { return true; }
     // Ticks while the page asks, answering the asks held too long, and stops CoreLocation once none came for a while.
     NSTimer *_clock;
     NSDate *_lastAsk;
-    // Whether page-permissions lets the page of an origin have the location, which the host asks it once in the app's
-    // run for each, and the asks that wait for its answer.
-    std::map<std::string, bool> _allowed;
-    std::map<std::string, std::vector<std::pair<NSDictionary *, Reply>>> _undecided;
+    // Whether page-permissions lets the page each window shows have the location, by the window's id with the page's,
+    // which the host asks once for each page, as a watch asks after each position: a new page of the window is asked
+    // for again. And the asks of each page that wait for its answer.
+    std::map<uint64_t, std::pair<uint64_t, bool>> _allowed;
+    std::map<uint64_t, std::vector<std::pair<NSDictionary *, Reply>>> _undecided;
 }
 
 - (instancetype)init {
@@ -174,8 +184,8 @@ bool always(const Ask &) { return true; }
     return self;
 }
 
-// Only the top frame learns where the app's user is, once page-permissions allows its origin, which the host refuses
-// for another origin than the app's own.
+// Only the top frame of a window's page learns where the app's user is, once page-permissions allows the page, which
+// the host asks by the page's origin and refuses for an origin of no role.
 - (void)userContentController:(WKUserContentController *)controller
       didReceiveScriptMessage:(WKScriptMessage *)message
                  replyHandler:(void (^)(id, NSString *))replyHandler {
@@ -185,29 +195,37 @@ bool always(const Ask &) { return true; }
         reply(failureOf(1, @"crossbind: a frame inside the page has no location"));
         return;
     }
+    const std::optional<crossbind::Page> page = pageIn(message.webView);
+    if (!page) {
+        reply(failureOf(1, @"User denied Geolocation"));
+        return;
+    }
     NSString *body = [message.body isKindOfClass:NSString.class] ? message.body : @"";
     id ask = [NSJSONSerialization JSONObjectWithData:[body dataUsingEncoding:NSUTF8StringEncoding allowLossyConversion:YES] options:0 error:nil];
-    [self decide:[ask isKindOfClass:NSDictionary.class] ? ask : @{} origin:originOf(message.frameInfo.securityOrigin) reply:std::move(reply)];
+    [self decide:[ask isKindOfClass:NSDictionary.class] ? ask : @{} page:*page origin:originOf(message.frameInfo.securityOrigin) reply:std::move(reply)];
 }
 
 // The page has a position once page-permissions allows it, which a watch would otherwise ask after each position;
 // without that extension the page has none, as WebKit gives a macOS page none of its own.
-- (void)decide:(NSDictionary *)ask origin:(std::string)origin reply:(Reply)reply {
-    if (const auto decided = _allowed.find(origin); decided != _allowed.end()) {
-        if (decided->second) [self ask:ask reply:std::move(reply)];
+- (void)decide:(NSDictionary *)ask page:(const crossbind::Page &)page origin:(std::string)origin reply:(Reply)reply {
+    if (const auto decided = _allowed.find(page.windowId()); decided != _allowed.end() && decided->second.first == page.id()) {
+        if (decided->second.second) [self ask:ask reply:std::move(reply)];
         else reply(failureOf(1, @"User denied Geolocation"));
         return;
     }
-    auto &waiting = _undecided[origin];
+    auto &waiting = _undecided[page.id()];
     waiting.emplace_back(ask, std::move(reply));
     if (waiting.size() > 1) return;
-    crossbind::askPagePermission({"location"}, origin, [self, origin](bool isAllowed) { [self decided:isAllowed origin:origin]; });
+    crossbind::askPagePermission({"location"}, origin, [self, window = page.windowId(), asking = page.id()](bool isAllowed) {
+        [self decided:isAllowed window:window page:asking];
+    });
 }
 
-- (void)decided:(bool)isAllowed origin:(const std::string &)origin {
-    _allowed[origin] = isAllowed;
-    auto waiting = std::move(_undecided[origin]);
-    _undecided.erase(origin);
+- (void)decided:(bool)isAllowed window:(uint64_t)window page:(uint64_t)page {
+    // Kept while the window shows the page that asked: one that went asks no more.
+    if (const auto shown = crossbind::windowOf(window); shown && shown->page().id() == page) _allowed[window] = {page, isAllowed};
+    auto waiting = std::move(_undecided[page]);
+    _undecided.erase(page);
     for (auto &[ask, reply] : waiting) {
         if (isAllowed) [self ask:ask reply:std::move(reply)];
         else reply(failureOf(1, @"User denied Geolocation"));
