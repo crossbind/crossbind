@@ -69,6 +69,12 @@ async function range({ path, asked }) {
     return { status: answer.status, range: answer.headers.get('content-range'), bytes: [...new Uint8Array(await answer.arrayBuffer())] };
 }
 
+// A path of the page's source as the page fetches it: its status and its text.
+async function fetched({ path }) {
+    const answer = await fetch(path, { cache: 'no-store' });
+    return { status: answer.status, text: await answer.text() };
+}
+
 function refused({ names }, invoke) {
     return Promise.all(names.map(async (name) => [name, (await outcome(invoke(`preview.${name}`, {}))).error ?? 'answered'])).then(Object.fromEntries);
 }
@@ -79,7 +85,9 @@ export async function runSteps(invoke) {
         if (status !== 200) throw new Error(`the run answered ${path} with ${status}`);
         return text ? JSON.parse(text) : null;
     };
-    const steps = { refused: (step) => refused(step, invoke), storage, range };
+    const steps = {
+        refused: (step) => refused(step, invoke), storage, range, fetched,
+    };
     await ask('/report', { loaded: location.origin });
     for (;;) {
         const step = await ask('/next');
