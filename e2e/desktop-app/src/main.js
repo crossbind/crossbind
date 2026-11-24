@@ -19,7 +19,6 @@ import { reportWebFeatures } from './web-features.js';
 import {
     checkPageApi, checkServedReports, goWithinTheAppFirst, isServedPage, runPageApiTrip, runProjectPage, runServedRoundTrip,
 } from './served-origins.js';
-import { runPreview } from './preview.js';
 import {
     ACTIVITIES, AGAIN_FILE, FIRST_ARGS, FIRST_FILES, LAUNCH_ARGS, LAUNCH_URL, NOTIFICATION, OPENED_FILE, PHONE_FILE_TEXT, PHONE_FILES, PHONE_LINKS,
     PHONE_URL, PROBE_URLS, SHORTCUTS, TRASHED_FILE, TRAY,
@@ -1066,8 +1065,6 @@ if (otherWindow) runOtherWindow(otherWindow);
 else if (isServedPage()) runProjectPage();
 else if (!goWithinTheAppFirst()) initNative().then(async (m) => {
     try {
-        // A launch of e2e/preview.mjs opens a preview in place of the suite.
-        if (await runPreview()) return;
         // Markup can make a crossbind:// request as well, so one without the page's token must be refused. On Android the
         // bytes travel over the page's port alone, and the page's origin serves no such request; during development that
         // origin is the dev server's, which answers any path with the page.

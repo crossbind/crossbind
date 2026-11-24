@@ -18,6 +18,7 @@ on:
             - e2e/app-page-requests/**
             - e2e/app-bare/**
             - e2e/app-preview/**
+            - e2e/app-projects/**
             - e2e/conformance/**
             - e2e/conformance-rust/**
             - tooling/bridge-tools/**
@@ -42,6 +43,7 @@ on:
             - e2e/app-page-requests/**
             - e2e/app-bare/**
             - e2e/app-preview/**
+            - e2e/app-projects/**
             - e2e/conformance/**
             - e2e/conformance-rust/**
             - tooling/bridge-tools/**
@@ -233,8 +235,10 @@ jobs:
                   retention-days: 1
             - name: Run the conformance suite in the app as its disk image holds it
               run: node e2e/desktop-app/e2e/run.mjs --installed
-            - name: Open a page of JavaScript alone in the app as a preview
-              run: pnpm --filter=@crossbind/e2e-desktop-app run e2e:preview ../app-preview
+            - name: Build an app that opens its account's previews as the crossbind app does
+              run: pnpm --filter=@crossbind/e2e-app-projects run build
+            - name: Open the previews of made-up accounts in it, against a stand-in for crossbind cloud
+              run: pnpm --filter=@crossbind/e2e-app-projects run e2e
             # The e2e app above has app.updater, whose extension links what an app without it would lack.
             - name: Build an app without the host's optional extensions
               run: pnpm --filter=@crossbind/e2e-app-page-requests run build
@@ -333,6 +337,10 @@ jobs:
                       e2e/desktop-app/.crossbind/build/bridge/*.i.cpp
                       e2e/desktop-app/.crossbind/build/bridge/*.i.cpp.exports.json
                   retention-days: 1
+            - name: Build an app that opens its account's previews as the crossbind app does
+              run: pnpm --filter=@crossbind/e2e-app-projects run build
+            - name: Open the previews of made-up accounts in it in the Simulator, against a stand-in for crossbind cloud
+              run: pnpm --filter=@crossbind/e2e-app-projects run e2e
             # sccache finishes the cache writes it still holds as it stops, and reports what the job took from the cache.
             - name: Stop the compiler cache
               if: ${{ always() && env.CROSSBIND_SCCACHE == '1' }}
@@ -472,6 +480,8 @@ jobs:
               run: pnpm --filter=@crossbind/e2e-app-page-requests run build
             - name: Build an app with none of crossbind's own extensions
               run: pnpm --filter=@crossbind/e2e-app-bare run build
+            - name: Build an app that opens its account's previews as the crossbind app does
+              run: pnpm --filter=@crossbind/e2e-app-projects run build
             - name: Install the app's Debian package, whose dependencies bring the WebKitGTK it runs on
               # The run starts a session bus of its own, on which e2e/tray-host.py plays a tray and a notification
               # server.
@@ -486,11 +496,12 @@ jobs:
               run: |
                   xvfb-run -a pnpm --filter=@crossbind/e2e-desktop-app run e2e:prod
                   xvfb-run -a node e2e/desktop-app/e2e/run.mjs --installed
-            - name: Open a page of JavaScript alone in the app as a preview
+            - name: Open the previews of made-up accounts in an app, against a stand-in for crossbind cloud
+              # No keyring runs here: the app keeps its token for the run alone, which the run holds it to.
               env:
                   WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: '1'
                   WEBKIT_DISABLE_COMPOSITING_MODE: '1'
-              run: xvfb-run -a pnpm --filter=@crossbind/e2e-desktop-app run e2e:preview ../app-preview
+              run: xvfb-run -a pnpm --filter=@crossbind/e2e-app-projects run e2e
             - name: Answer the host's own page dialogs as the app's user would
               env:
                   WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: '1'
@@ -544,6 +555,8 @@ jobs:
               run: pnpm --filter=@crossbind/e2e-app-page-requests run build
             - name: Build an app with none of crossbind's own extensions
               run: pnpm --filter=@crossbind/e2e-app-bare run build
+            - name: Build an app that opens its account's previews as the crossbind app does
+              run: pnpm --filter=@crossbind/e2e-app-projects run build
             - name: Check that the app loads the system DLLs it imports from System32 alone
               # A file of their name in the app's folder, as in one it was downloaded to, would otherwise run inside it.
               run: |
@@ -575,6 +588,16 @@ jobs:
                   path: |
                       e2e/app-page-requests/dist/crossbind-e2e-app-page-requests-win32-x64/
                       e2e/app-page-requests/dist/crossbind-e2e-app-page-requests-win32-arm64/
+                  retention-days: 1
+            - name: Keep the app that opens previews for the runners that open it
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+              with:
+                  name: windows-projects
+                  if-no-files-found: error
+                  overwrite: true
+                  path: |
+                      e2e/app-projects/dist/crossbind-e2e-app-projects-win32-x64/
+                      e2e/app-projects/dist/crossbind-e2e-app-projects-win32-arm64/
                   retention-days: 1
     app-windows-run:
         # Each Windows runner opens the app built for it, on its own WebView2 Runtime. The checkout's directory has a
@@ -613,7 +636,7 @@ jobs:
             - name: Install the conformance kit, and what previews e2e/app-preview
               # The leg's config imports the kit; nothing is built on these runners. The preview imports the app host's
               # crossbind/app in Node, which reaches crossbind through the host's own development packages.
-              run: pnpm install --frozen-lockfile --filter "@crossbind/e2e-desktop-app..." --filter "@crossbind/e2e-app-preview..."
+              run: pnpm install --frozen-lockfile --filter "@crossbind/e2e-desktop-app..." --filter "@crossbind/e2e-app-preview..." --filter "@crossbind/e2e-app-projects..."
             - name: Restore the app
               uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
               with:
@@ -638,8 +661,13 @@ jobs:
                   Set-NetFirewallProfile -All -NotifyOnListen False
             - name: Run the conformance suite in the app
               run: node e2e/desktop-app/e2e/run.mjs
-            - name: Open a page of JavaScript alone in the app as a preview
-              run: node e2e/desktop-app/e2e/preview.mjs e2e/app-preview
+            - name: Restore the app that opens previews
+              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+              with:
+                  name: windows-projects
+                  path: ünicode/e2e/app-projects/dist
+            - name: Open the previews of made-up accounts in it, against a stand-in for crossbind cloud
+              run: node e2e/app-projects/e2e/run.mjs
             - name: Restore e2e/app-page-requests
               uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
               with:
@@ -841,6 +869,8 @@ jobs:
               run: pnpm --filter=@crossbind/e2e-desktop-app run build
             - name: Build an app with none of crossbind's own extensions
               run: pnpm --filter=@crossbind/e2e-app-bare run build
+            - name: Build an app that opens its account's previews as the crossbind app does
+              run: pnpm --filter=@crossbind/e2e-app-projects run build
             - name: Enable KVM
               run: |
                   echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -854,4 +884,7 @@ jobs:
                   arch: x86_64
                   emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
                   disable-animations: true
-                  script: pnpm --filter=@crossbind/e2e-desktop-app run e2e:prod
+                  # Then the previews of made-up accounts in an app, against a stand-in for crossbind cloud.
+                  script: |
+                      pnpm --filter=@crossbind/e2e-desktop-app run e2e:prod
+                      pnpm --filter=@crossbind/e2e-app-projects run e2e

@@ -2,7 +2,7 @@
     "name": "@crossbind/e2e-app-preview",
     "version": "0.0.0",
     "private": true,
-    "description": "crossbind - a page of JavaScript alone, which the conformance app opens as a preview",
+    "description": "crossbind - a page of JavaScript alone, which e2e/app-projects opens as a preview",
     "license": "MIT",
     "type": "module",
     "dependencies": {

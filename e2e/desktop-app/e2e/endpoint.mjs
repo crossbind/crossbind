@@ -91,15 +91,6 @@ export function answerPage(request, response, dist) {
     return true;
 }
 
-// The open: line of the crossbind app preview e2e/preview.mjs runs, which src/preview.js opens, or 404 where the run
-// opens no preview; true once answered.
-export function answerPreview(request, response, line) {
-    if (pathOf(request) !== '/preview') return false;
-    if (line) response.writeHead(200, { 'content-type': 'text/plain' }).end(line);
-    else response.writeHead(404, { 'content-type': 'text/plain' }).end('this run opens no preview');
-    return true;
-}
-
 // Writes the pattern until total bytes went, or the host closed the answer, as it does once it has given up.
 function stream(response, total) {
     let left = total;
