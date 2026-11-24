@@ -418,9 +418,11 @@ void crossbind_extension_clipboard(crossbind::Registry &registry) {
   host's `page-dialogs` shows a dialog over the page's own window. Not on Android.
 - `askPagePermission(kinds, origin, done)`: Asks the holder of `page-permissions`, as the webview does, whether the
   page of `origin` may use these kinds, of the table in [the page's requests](#the-pages-requests): for an extension
-  that gives the page what its webview lacks, as the host's `page-location` gives a macOS page its location. From any
-  thread; `done` gets the answer once, on the main thread, false without a holder and for its `useDefault()`. Not on
-  Android.
+  that gives the page what its webview lacks, as the host's `page-location` gives a macOS page its location. The
+  request's `page()` is of the origin's role and label, `app` for the app's own and a served origin's own two, as a
+  page of it would be, and names no page and no window, `0` for both, as an origin may show in several; one of another
+  origin is denied before the holder hears of it. From any thread; `done` gets the answer once, on the main thread,
+  false without a holder and for its `useDefault()`. Not on Android.
 - `appName()`, `appId()`: The app's name, as its window and dialogs show it, and its id, as `app.id` gives it: its
   bundle identifier on Apple's platforms, its application id on Android.
 - `registerForPush()`: On iOS and macOS, asks the system for the app's push token, from any thread: each extension's

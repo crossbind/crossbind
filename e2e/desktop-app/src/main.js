@@ -457,7 +457,8 @@ async function checkClipboard(isIos) {
 }
 
 // The page's dialogs and what it asks to use reach the app's own page-dialogs and page-permissions, which answer at
-// once: a dialog of the message "cancel" cancelled, a prompt() with what it was asked, and the location denied.
+// once: a dialog of the message "cancel" cancelled, a prompt() with what it was asked, and the location denied, asked
+// for with the page's role, as well where page-location asks by the page's origin, on macOS.
 async function checkPageRequests() {
     alert('alert');
     if (!confirm('confirm') || confirm('cancel')) throw new Error("confirm() did not give page-dialogs' answers");
@@ -473,8 +474,8 @@ async function checkPageRequests() {
     });
     if (code !== GeolocationPositionError.PERMISSION_DENIED) throw new Error(`the location page-permissions denied ended with code ${code}`);
     const asked = await invoke('page-permissions.asked');
-    if (!asked.some(({ kinds, origin, isListed }) => kinds.join() === 'location' && origin === location.origin && isListed)) {
-        throw new Error(`page-permissions was not asked for the page's location: ${JSON.stringify(asked)}`);
+    if (!asked.some(({ kinds, origin, isListed, role }) => kinds.join() === 'location' && origin === location.origin && isListed && role === 'app')) {
+        throw new Error(`page-permissions was not asked for the page's location with the role app: ${JSON.stringify(asked)}`);
     }
 }
 

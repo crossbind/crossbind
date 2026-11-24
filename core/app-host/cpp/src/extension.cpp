@@ -1332,10 +1332,13 @@ Page pageOf(const void *webView) {
     return make<Page>(uint64_t{0}, uint64_t{0});
 }
 
-Page pageAt(const std::string &page, const std::string &heard) {
-    if (documentOriginOf(page) == documentOriginOf(heard)) return pageOf(nullptr);
-    PageOrigin origin = pageOriginOf(page);
+Page pageOfOrigin(const std::string &url) {
+    PageOrigin origin = pageOriginOf(url);
     return make<Page>(uint64_t{0}, uint64_t{0}, std::move(origin.role), std::move(origin.label));
+}
+
+Page pageAt(const std::string &page, const std::string &heard) {
+    return documentOriginOf(page) == documentOriginOf(heard) ? pageOf(nullptr) : pageOfOrigin(page);
 }
 
 Page pageOfWindow(uint64_t window) {
@@ -1659,7 +1662,8 @@ void askPagePermission(std::vector<std::string> kinds, std::string origin, std::
             done(false);
             return;
         }
-        app::askPagePermission(app::pagePermission(app::pageOf(nullptr), std::move(kinds), std::move(origin), [done = std::move(done)](app::PermissionAnswer answer) {
+        Page page = app::pageOfOrigin(origin);
+        app::askPagePermission(app::pagePermission(std::move(page), std::move(kinds), std::move(origin), [done = std::move(done)](app::PermissionAnswer answer) {
             done(answer == app::PermissionAnswer::allow);
         }));
     });

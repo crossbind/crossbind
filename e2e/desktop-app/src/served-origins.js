@@ -554,6 +554,26 @@ async function afterBlobEnd(reports) {
     show('blob-end', { back: location.href });
 }
 
+// 19. On macOS, where page-location asks page-permissions for a page's location by the page's origin, a project's page
+// asks it with its origin's role and label, as the other platforms' webviews ask with the page.
+async function askLocation(key) {
+    if (device.platform !== 'macos') return;
+    const code = await new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition(() => resolve(0), (error) => resolve(error.code));
+    });
+    await invoke('probe.report', { key, value: { origin: location.origin, code } });
+}
+
+async function checkProjectLocation({ projectLocation }) {
+    if (device.platform !== 'macos') return;
+    const asked = (await invoke('page-permissions.asked')).filter(({ kinds, origin }) => kinds.join() === 'location' && origin === projectLocation?.origin)
+        .map(({ role, label }) => ({ role, label }));
+    if (projectLocation.code !== GeolocationPositionError.PERMISSION_DENIED || asked[0]?.role !== 'project' || asked[0].label !== PROJECT_LABEL) {
+        throw new Error(`the project's page got the code ${projectLocation.code} for its location, of page-permissions asked as ${JSON.stringify(asked)}, not of the role project and the label ${PROJECT_LABEL}`);
+    }
+    show('location', { code: projectLocation.code, asked });
+}
+
 // The app's page at the stage the round trip reached: false once it sent the window elsewhere, else what the project's
 // pages reported, at its end.
 export async function runServedRoundTrip(isAndroid) {
@@ -566,7 +586,7 @@ export async function runServedRoundTrip(isAndroid) {
     if (stage === 'start') return start(isAndroid).then(() => false);
     if (stage === 'no-role') return afterNoRole(isAndroid, reports).then(() => false);
     if (stage === 'ended') return afterTheEnd(isAndroid, reports).then(() => false);
-    if (stage === 'done') return openPageApi(SOURCE).then(() => false);
+    if (stage === 'done') return checkProjectLocation(reports).then(() => openPageApi(SOURCE)).then(() => false);
     if (stage === 'page-api-done') return checkEndClosedMessage(reports).then(openWait).then(() => false);
     if (stage === 'wait-done') return checkEndCancelledDialog().then(openSoon).then(() => false);
     if (stage === 'soon-done') return checkSoonGone().then(() => openFirst(isAndroid)).then(() => false);
@@ -831,6 +851,7 @@ async function projectStage(m, isAndroid) {
     show('label', { project: await checkLabel(PROJECT_LABEL) });
     const prompted = JSON.parse(prompt('role', '') ?? 'null');
     if (prompted?.role !== 'project' || prompted.label !== PROJECT_LABEL) throw new Error(`page-dialogs heard a project's prompt() as ${JSON.stringify(prompted)}`);
+    await askLocation('projectLocation');
     localStorage.setItem('e2e-mark', 'kept');
     await endFromWithin();
 }
