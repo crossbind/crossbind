@@ -29,6 +29,8 @@ const BLOB_PAGE = 'page-blob.html';
 const BLOB_ELSEWHERE = 'https://crossbind-e2e.invalid/blob';
 // The first link elsewhere of the second page of no role, which public/no-role.html opens on Android.
 const NO_ROLE_SECOND_ELSEWHERE = 'https://crossbind-e2e.invalid/no-role-second';
+// Where the frame's redirect public/page-accounts.html's probe asks of goes.
+const ACCOUNTS_FRAME_REDIRECT = 'mailto:frame-redirect@crossbind-e2e.invalid';
 // What arms the app's first page after page-first.html's end to go within the app at once, for the window's session.
 const FIRST_ARMED = 'e2e-first-navigation';
 // Where page-first.html's first script goes first, which page-navigation refuses.
@@ -486,7 +488,8 @@ async function afterFirst(reports) {
 // goes while one is; of two origins, the request is refused. The app's page, given its user's activation so that a
 // Back toward it can be on its way, opens page-accounts.html, whose probe asks the host's WebView client as the WebView
 // would: with a Back on its way and then a load of the app's page, a navigation toward the app's origin is refused
-// each time, and a redirect of that load, which is the load's own, loads.
+// each time, and a redirect of that load, which is the load's own, loads; a frame's redirect, which is its frame's and
+// asks as any other request, is refused before page-navigation hears of it.
 async function openAccounts() {
     const page = `${under(await invoke('probe.serveOrigin', { name: ACCOUNTS, source: SOURCE }), ACCOUNTS_PAGE)}?app=${encodeURIComponent(location.origin)}`;
     await invoke('probe.setStage', { stage: 'accounts' });
@@ -504,6 +507,9 @@ async function afterAccounts(reports) {
     if (asked.back !== true) throw new Error("a navigation toward the app's origin, asked of a project's page as a Back toward the app's page was on its way, loaded");
     if (asked.load !== true) throw new Error("a navigation toward the app's origin, asked of a project's page as a load of the app's page was on its way, loaded");
     if (asked.redirect !== false) throw new Error("a redirect toward the app's origin of the host's own load of the app's page was refused");
+    const frameRedirect = (await invoke('page-navigation.asked')).find(({ url }) => url === ACCOUNTS_FRAME_REDIRECT);
+    if (frameRedirect) throw new Error(`page-navigation heard a frame's redirect, asked of a project's page as a load of the app's page was on its way, as ${JSON.stringify(frameRedirect)}`);
+    if (asked.frameRedirect !== true) throw new Error("a frame's redirect, asked of a project's page as a load of the app's page was on its way, loaded");
     show('accounts', asked);
 }
 

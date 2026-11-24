@@ -1053,13 +1053,15 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
     // The page that asks, by its URL, from the WebView's two accounts of it, on the UI thread: the page it shows names the
     // page that is coming while a load the activity began is on its way, and its history's current page names where a
     // Back goes while one is. Of one origin, they are the page that asks; of two, it is one of them and the WebView does
-    // not say which, so null refuses the request. A redirect is that load's own, which the page shown names.
-    private static String pageAsking(WebView view, boolean isRedirect) {
+    // not say which, so null refuses the request. A redirect of the top frame is that load's own, which the page shown
+    // names; a frame's redirect is its frame's, and asks as any other request.
+    private static String pageAsking(WebView view, WebResourceRequest request) {
         String shown = view.getUrl();
         WebHistoryItem item = view.copyBackForwardList().getCurrentItem();
         String current = item == null ? null : item.getUrl();
         if (shown == null) return current == null ? "" : current;
-        if (current == null || isRedirect || documentOriginOf(shown).equals(documentOriginOf(current))) return shown;
+        boolean isTopRedirect = request.isRedirect() && request.isForMainFrame();
+        if (current == null || isTopRedirect || documentOriginOf(shown).equals(documentOriginOf(current))) return shown;
         return null;
     }
 
@@ -1114,7 +1116,7 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
             Uri url = request.getUrl();
-            String page = pageAsking(view, request.isRedirect());
+            String page = pageAsking(view, request);
             int answer = page == null ? REFUSE
                     : nativeNavigation(url.toString().getBytes(StandardCharsets.UTF_8), page.getBytes(StandardCharsets.UTF_8), request.isForMainFrame(), request.hasGesture());
             if (answer == LOAD) return false;
@@ -1135,10 +1137,9 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
         // and for POST_ANSWER_MS at most: one not answered in time is refused.
         private int decidePost(WebView view, WebResourceRequest request, BiFunction<byte[], byte[], Integer> decide) {
             Uri url = request.getUrl();
-            boolean isRedirect = request.isRedirect();
             CompletableFuture<Integer> answer = new CompletableFuture<>();
             MAIN.post(() -> {
-                String page = pageAsking(view, isRedirect);
+                String page = pageAsking(view, request);
                 answer.complete(page == null ? REFUSE : decide.apply(url.toString().getBytes(StandardCharsets.UTF_8), page.getBytes(StandardCharsets.UTF_8)));
             });
             try {

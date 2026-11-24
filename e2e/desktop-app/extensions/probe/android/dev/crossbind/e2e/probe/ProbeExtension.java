@@ -46,8 +46,8 @@ public final class ProbeExtension implements Extension {
         resumes += 1;
     }
 
-    // A GET of the top frame with no gesture, as the WebView hands its client one.
-    private static WebResourceRequest topRequest(String url, boolean isRedirect) {
+    // A GET with no gesture, of the top frame or of a frame, as the WebView hands its client one.
+    private static WebResourceRequest requestOf(String url, boolean isForMainFrame, boolean isRedirect) {
         return new WebResourceRequest() {
             @Override
             public Uri getUrl() {
@@ -56,7 +56,7 @@ public final class ProbeExtension implements Extension {
 
             @Override
             public boolean isForMainFrame() {
-                return true;
+                return isForMainFrame;
             }
 
             @Override
@@ -145,18 +145,19 @@ public final class ProbeExtension implements Extension {
                 }
                 // What the activity's WebView client answers, asked as the WebView asks it, in this one turn of the UI
                 // thread, with a project's page shown: once a Back toward the app's page is on its way, of a navigation
-                // toward the app's origin; once a load of the app's page is, of the same and of a redirect of that load.
-                // True for what it refused. The load goes on.
+                // toward the app's origin; once a load of the app's page is, of the same, of a redirect of that load, and
+                // of a frame's redirect toward frameRedirect. True for what it refused. The load goes on.
                 case "askAsTheWebView" -> {
                     WebView view = host.webView();
                     WebViewClient client = view.getWebViewClient();
                     String app = options.getString("app");
                     JSONObject asked = new JSONObject().put("canGoBack", view.canGoBack());
                     view.goBack();
-                    asked.put("back", client.shouldOverrideUrlLoading(view, topRequest(app + "/?from=accounts-back", false)));
+                    asked.put("back", client.shouldOverrideUrlLoading(view, requestOf(app + "/?from=accounts-back", true, false)));
                     view.loadUrl(app + "/?from=accounts-load");
-                    asked.put("load", client.shouldOverrideUrlLoading(view, topRequest(app + "/?from=accounts-asked", false)));
-                    asked.put("redirect", client.shouldOverrideUrlLoading(view, topRequest(app + "/?from=accounts-redirect", true)));
+                    asked.put("load", client.shouldOverrideUrlLoading(view, requestOf(app + "/?from=accounts-asked", true, false)));
+                    asked.put("redirect", client.shouldOverrideUrlLoading(view, requestOf(app + "/?from=accounts-redirect", true, true)));
+                    asked.put("frameRedirect", client.shouldOverrideUrlLoading(view, requestOf(options.getString("frameRedirect"), false, true)));
                     call.resolve(asked);
                 }
                 // Messages before the answer, each with a byte of its own, from a thread of the probe's.
