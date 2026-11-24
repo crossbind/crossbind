@@ -8,6 +8,7 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { defaultRouteAddress } from 'crossbind/src/utils/previewAddress.js';
+import { previewRefusal } from 'crossbind/src/utils/previewModule.js';
 import config from '../crossbind.config.mjs';
 import {
     ACCOUNTS, CLI_TOKEN, COMPILED, gateToken, newId, newKey, sessionAnswer, standInCloud, standInSource,
@@ -35,6 +36,9 @@ const SETTLE_MS = 1000;
 const NUMBER = 47;
 const PREVIEW_LISTED = /Projects lists it in the crossbind app on every device signed in as made-up-e2e/;
 const ROLE_REFUSAL = (name) => `a page of the role project does not reach ${name}, which pages of the role app call`;
+// What a preview refuses through the project's crossbind/app, one of each kind: a function that belongs to the built
+// app, one that would end the preview, one of a name refused whole, and a file dialog.
+const MODULE_REFUSED = ['app.paths', 'app.quit', 'shell.openPath', 'windows.set', 'dialog.open'];
 const PLATFORMS = { darwin: 'macos', linux: 'linux', win32: 'windows' };
 const WORDS = {
     signedOut: 'Sign in to open your projects. crossbind app preview lists each project it runs on the account it is signed in with.',
@@ -377,7 +381,7 @@ async function stoppingSessions(address) {
 
 // A page of the project's steps alone, as a second project's and as a snapshot made without a web build.
 const STEPS_PAGE = '<!doctype html><meta charset="utf-8"><title>e2e project</title><script type="module">'
-    + "const { invoke } = await import('/__crossbind/app.js'); const { runSteps } = await import('/project-steps.js'); runSteps(invoke);</script>";
+    + "const api = await import('/__crossbind/app.js'); const { runSteps } = await import('/project-steps.js'); runSteps(api.invoke, api);</script>";
 const stepsModule = () => readFileSync(join(fixture, 'src', 'project-steps.js'), 'utf8');
 
 // A second project, served by a server of the run's own, whose /elsewhere redirects to another host.
@@ -489,7 +493,7 @@ async function checkLoad(from) {
     expect(load.secure === true, `the previewed page is no secure context: ${loaded.text}`);
     const pathsLine = await terminal.waitFor(/PREVIEW (paths|failure) /, LINE_MS, "the page's app.paths()", loaded.index);
     const paths = jsonOf(pathsLine, 'PREVIEW paths ');
-    expect(paths.includes(ROLE_REFUSAL('app.paths')), `the page's app.paths() got ${paths}`);
+    expect(paths.includes(previewRefusal('app.paths')), `the page's app.paths() got ${paths}`);
     const dialog = jsonOf(await terminal.waitFor(/PREVIEW dialog /, LINE_MS, "the page's dialog", loaded.index), 'PREVIEW dialog ');
     expect(dialog.dialog === 'shown' && dialog.answer.startsWith('AbortError'), `dialog.message did not wait for its user until cancelled: ${JSON.stringify(dialog)}`);
     const asked = terminal.lines.filter((line) => line.text.includes('asked this dev server for /__crossbind/app.js'));
@@ -592,10 +596,13 @@ async function checkProject(terminalFrom) {
     for (const fn of PREVIEW_FUNCTIONS) {
         expect(refusals[fn]?.includes(ROLE_REFUSAL(`preview.${fn}`)), `a project's page called preview.${fn} and got ${refusals[fn]}`);
     }
+    // 6.1's words, which the project's own import of crossbind/app gives: one of each kind it refuses.
+    const { value: words } = await project({ do: 'throughModule', names: MODULE_REFUSED });
+    for (const name of MODULE_REFUSED) expect(words[name] === `Error: ${previewRefusal(name)}`, `the project's ${name}() through its crossbind/app got ${words[name]}`);
     const first = await storageOf('project', 'first');
     expect(holdsNone(first, 'first') && holdsNone(first, 'second'), `the first project's storage held marks at its first open: ${JSON.stringify(first)}`);
     return {
-        load, js, refusals, storage: first,
+        load, js, refusals, words, storage: first,
     };
 }
 

@@ -79,14 +79,22 @@ function refused({ names }, invoke) {
     return Promise.all(names.map(async (name) => [name, (await outcome(invoke(`preview.${name}`, {}))).error ?? 'answered'])).then(Object.fromEntries);
 }
 
-export async function runSteps(invoke) {
+// What each of these functions of crossbind/app answers through the page's own import of it, as "dialog.open".
+function throughModule({ names }, api) {
+    return Promise.all(names.map(async (name) => {
+        const [space, member] = name.split('.');
+        return [name, (await outcome(api[space][member]({}))).error ?? 'answered'];
+    })).then(Object.fromEntries);
+}
+
+export async function runSteps(invoke, api) {
     const ask = async (path, body) => {
         const { status, text } = await invoke('e2e-hooks.ask', body === undefined ? { path } : { path, body: JSON.stringify(body) });
         if (status !== 200) throw new Error(`the run answered ${path} with ${status}`);
         return text ? JSON.parse(text) : null;
     };
     const steps = {
-        refused: (step) => refused(step, invoke), storage, range, fetched,
+        refused: (step) => refused(step, invoke), throughModule: (step) => throughModule(step, api), storage, range, fetched,
     };
     await ask('/report', { loaded: location.origin });
     for (;;) {

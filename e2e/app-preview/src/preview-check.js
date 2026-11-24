@@ -1,12 +1,13 @@
 // What e2e/app-projects/e2e/run.mjs reads of a previewed page, each line in the preview's terminal through Vite's console
-// forwarding: the page loads with the device's platform and the crossbind app's crossbind/app; a function of the app's
-// own pages is refused naming the role, after the project's own initNative() where it has one; the system's message
+// forwarding: the page loads with the device's platform and the crossbind app's crossbind/app; a function that belongs
+// to the built app is refused in a preview's words, after the project's own initNative() where it has one; the system's message
 // dialog waits for its user, as the page first loads, until the page cancels its call; and an edit of
 // preview-greeting.js comes in place, the page's state kept. Then the page takes the run's steps (project-steps.js).
-import { app, device, invoke } from 'crossbind/app';
+import * as api from 'crossbind/app';
 import { greeting } from './preview-greeting.js';
 import { runSteps } from './project-steps.js';
 
+const { app, device, invoke } = api;
 const MESSAGE = "crossbind e2e: a preview's dialog";
 const QUIET_MS = 3000;
 const ANSWER_MS = 10000;
@@ -39,7 +40,7 @@ export async function checkPreview(initNative) {
         if (initNative) await initNative();
         say('paths', await answered(app.paths()));
         if (!isReload) await checkDialog();
-        await runSteps(invoke);
+        await runSteps(invoke, api);
     } catch (error) {
         say('failure', failure(error));
     }
