@@ -116,7 +116,8 @@ void addOriginFunctions(crossbind::Registry &registry) {
     });
     // Ends the origin of this name at once, or after afterMs on a thread of its own, as an app's own code would. On Android,
     // with holdUiMs, the UI thread's Java messages then wait that long behind the way back the end gives the window, so
-    // the host hears of the app's first page only after its first scripts.
+    // the host hears of the app's first page only after its first scripts; with afterMs and holdFirstMs, they wait that
+    // long from the end, the way back among them, so a page of the origin stays shown that long after its end.
     registry.function("probe.endOrigin", PAGES, [](Call call) {
         const std::string name = call.options()["name"].asString();
         const double afterMs = call.options()["afterMs"].asNumber(0);
@@ -138,8 +139,14 @@ void addOriginFunctions(crossbind::Registry &registry) {
             if (holdUiMs > 0) crossbind::android::callJava("probe", "holdUi", Value::Object{{"ms", holdUiMs}}, [](std::optional<std::string>, Value) {});
 #endif
         } else {
-            std::thread([origin = *ending, afterMs] {
+            const double holdFirstMs = call.options()["holdFirstMs"].asNumber(0);
+            std::thread([origin = *ending, afterMs, holdFirstMs] {
                 std::this_thread::sleep_for(std::chrono::duration<double, std::milli>(afterMs));
+#if defined(__ANDROID__)
+                if (holdFirstMs > 0) crossbind::android::callJava("probe", "holdUi", Value::Object{{"ms", holdFirstMs}}, [](std::optional<std::string>, Value) {});
+#else
+                (void)holdFirstMs;
+#endif
                 origin.end();
             }).detach();
         }

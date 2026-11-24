@@ -102,7 +102,7 @@ std::string attach(Core &core, void *webView, const char *devUrl, uint64_t windo
         core.reset(window, url);
         // A page of an origin that ended while it was on its way, which originEnded() did not see, gives way to the
         // app's first page as well.
-        const std::string origin = originOf(url);
+        const std::string origin = documentOriginOf(url);
         if (isServedForm(origin) && servedNameOf(origin).empty()) loadOwnPage(webView, firstUrl);
     });
     takeDownloads(webView);

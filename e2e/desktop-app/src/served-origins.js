@@ -17,6 +17,7 @@ const SOON = 'e2e-soon';
 const FIRST = 'e2e-first';
 const ACCOUNTS = 'e2e-accounts';
 const BLOB = 'e2e-blob';
+const BLOB_END = 'e2e-blob-end';
 const FRAME_PAGE = 'frame-probe.html';
 const NO_ROLE_PAGE = 'no-role.html';
 const PAGE_API_PAGE = 'page-api.html';
@@ -25,6 +26,7 @@ const SOON_PAGE = 'page-soon.html';
 const FIRST_PAGE = 'page-first.html';
 const ACCOUNTS_PAGE = 'page-accounts.html';
 const BLOB_PAGE = 'page-blob.html';
+const BLOB_END_PAGE = 'page-blob-end.html';
 // The link elsewhere of public/page-blob.html's blob document.
 const BLOB_ELSEWHERE = 'https://crossbind-e2e.invalid/blob';
 // The first link elsewhere of the second page of no role, which public/no-role.html opens on Android.
@@ -535,6 +537,23 @@ async function afterBlob(reports) {
     show('blob', { back: reports.blob.back, elsewhere: { role: heard.role } });
 }
 
+// 18. An ended origin's page gives way to the app's first page and reaches no function, whatever its URL, a blob
+// document of its own as well. page-blob-end.html has its origin end soon and goes to a blob document of its own: at the
+// end the app's first page comes, and on Android, where the blob document has its origin's token and the UI thread's
+// Java messages wait from the end, the blob document's call in that while reaches nothing.
+async function openBlobEnd() {
+    const page = under(await invoke('probe.serveOrigin', { name: BLOB_END, source: SOURCE }), BLOB_END_PAGE);
+    await invoke('probe.setStage', { stage: 'blob-end' });
+    location.href = page;
+    await sleep(ANSWER_MS);
+    throw new Error(`the window did not open ${page}`);
+}
+
+async function afterBlobEnd(reports) {
+    if ('blob-end' in reports) throw new Error(`a blob document's call after its origin's end reached the probe: ${JSON.stringify(reports['blob-end'])}`);
+    show('blob-end', { back: location.href });
+}
+
 // The app's page at the stage the round trip reached: false once it sent the window elsewhere, else what the project's
 // pages reported, at its end.
 export async function runServedRoundTrip(isAndroid) {
@@ -553,7 +572,8 @@ export async function runServedRoundTrip(isAndroid) {
     if (stage === 'soon-done') return checkSoonGone().then(() => openFirst(isAndroid)).then(() => false);
     if (stage === 'first') return afterFirst(reports).then(() => (isAndroid ? openAccounts() : openBlob())).then(() => false);
     if (stage === 'accounts') return afterAccounts(reports).then(openBlob).then(() => false);
-    if (stage === 'blob') return afterBlob(reports).then(openSlowly).then(() => false);
+    if (stage === 'blob') return afterBlob(reports).then(openBlobEnd).then(() => false);
+    if (stage === 'blob-end') return afterBlobEnd(reports).then(openSlowly).then(() => false);
     if (stage === 'first-load') return afterFirstLoad(reports);
     throw new Error(`the app's page opened at ${location.href} at the stage ${stage}${stage === 'refused' ? ", which the project's page navigated to" : ''}`);
 }

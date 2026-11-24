@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>blob end</title>
+</head>
+<body>
+<script>
+// A page of a served origin, which src/served-origins.js opens: it has its origin end soon and goes to a blob document
+// of its own, which gives way to the app's first page at that end, as any page of the origin. On Android, where the blob
+// document has its origin's token, the UI thread's Java messages wait from the end, the way back among them, and the
+// blob document calls the probe in that while: the call must reach nothing.
+(async () => {
+    const END_AFTER_MS = 1500;
+    const HELD_MS = 3000;
+    // Past the end, the hold and the app's first page.
+    const STAYED_MS = 10000;
+    let api;
+    try {
+        api = await import('/__crossbind/app.js');
+    } catch (error) {
+        console.error(`CONFORMANCE ERR: ${location.origin}: page-blob-end.html could not import /__crossbind/app.js, ${error?.message ?? error}`);
+        return;
+    }
+    const blobDocument = async (callAtMs, stayedMs) => {
+        setTimeout(() => console.error(`CONFORMANCE ERR: ${location.origin}: a blob document stayed shown past its origin's end`), stayedMs);
+        if (!globalThis.__crossbind_token) return;
+        const own = await import(`${location.origin}/__crossbind/app.js`);
+        await new Promise((resolve) => { setTimeout(resolve, callAtMs); });
+        try {
+            await own.invoke('probe.report', { key: 'blob-end', value: 'answered after the end' });
+        } catch (error) {
+            console.log(`PAGE GETS served-blob-end-call ${JSON.stringify(String(error?.message ?? error))}`);
+        }
+    };
+    const script = `(${blobDocument})(${END_AFTER_MS + 500}, ${STAYED_MS});`;
+    await api.invoke('probe.endOrigin', { name: 'e2e-blob-end', afterMs: END_AFTER_MS, holdFirstMs: HELD_MS });
+    location.href = URL.createObjectURL(new Blob([`<!doctype html><title>blob end</title><script>${script}<\/script>`], { type: 'text/html' }));
+})();
+</script>
+</body>
+</html>
