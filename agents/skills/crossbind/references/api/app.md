@@ -607,7 +607,8 @@ std::string databasePath() { return crossbind::app::paths().data + "/notes.sqlit
   page of an origin an extension serves of the role `project` calls it too ([Origins](./extensions.md#origins)), whose
   dialog is titled with the origin's label where a window shows a title, holds that page's window alone, as a sheet of
   it on macOS, and closes as the page goes. The app's own pages' dialog holds the app, as a macOS app's panels do.
-- `shell.openExternal(url)` (desktop, iOS): An http, https or mailto address in the default browser or mail app.
+- `shell.openExternal(url)` (desktop, iOS): An http, https or mailto address in the default browser or mail app; a page
+  of an origin an extension serves of the role `project` calls it too.
 - `shell.openPath(path)` (desktop): A file in the app the system opens its kind with.
 - `shell.revealInFolder(path)` (desktop): A file, selected, in the system's file manager, or on Linux without one its
   folder.
@@ -1304,8 +1305,8 @@ and a Java side that R8, off by default, would shrink. What a sample app weighs 
   ([Origins](./extensions.md#origins)): `crossbind://<name>` on Apple's platforms and Linux, `http://<name>.localhost`
   on Android and Windows. The top frame of each page of one gets a token of that origin's in each window, which the
   host takes at that origin alone, and calls with the origin's role: it reaches the functions that name the role, and
-  never the module, the events the app holds, `crossbind/app`'s functions but `dialog.message` or another function of
-  the role `app`; it hears only the events sent to its page. It imports `crossbind/app` from `/__crossbind/app.js`,
+  never the module, the events the app holds, `crossbind/app`'s functions but `dialog.message` and `shell.openExternal`,
+  or another function of the role `app`; it hears only the events sent to its page. It imports `crossbind/app` from `/__crossbind/app.js`,
   which the host answers from the app's own files, never the origin's handler. It loads neither the app's own origins
   nor another served one, which the host refuses it before any holder of `page-navigation` hears of them. Its dialogs,
   file inputs, downloads, drops and device requests reach their holders with its role, and the host's own
