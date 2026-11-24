@@ -52,17 +52,30 @@ std::string wordsOf(OSStatus status) {
     return "the keychain answered " + std::to_string(status) + (message ? ": " + std::string(message.UTF8String) : "");
 }
 
-// One keychain operation, on a queue of its own, as the file-based keychain may wait for its user's answer: in the data
-// protection keychain, then, on a Mac whose build lacks its entitlement, as a development build does, in the file-based
-// one, which asks its user once a build. Such a build's lookup finds nothing in the data protection keychain, where its
-// write is refused, so a lookup goes on to the file-based one.
-void inKeychain(bool isLookup, std::function<OSStatus(bool isDataProtection)> operation, std::function<void(OSStatus)> done) {
-    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-        OSStatus status = operation(true);
-#if !TARGET_OS_IPHONE
-        if (status == errSecMissingEntitlement || (isLookup && status == errSecItemNotFound)) status = operation(false);
+// Whether the app's signing gives it the data protection keychain, as the Mac App Store's does with the application
+// identifier its profile names: asked once. A build without it, as a development build, keeps its token in the
+// file-based keychain alone, which asks its user once a build; one with it never reads the file-based one.
+bool hasDataProtection() {
+#if TARGET_OS_IPHONE
+    return true;
+#else
+    static const bool isGiven = [] {
+        SecTaskRef task = SecTaskCreateFromSelf(nullptr);
+        if (!task) return false;
+        CFTypeRef identifier = SecTaskCopyValueForEntitlement(task, CFSTR("com.apple.application-identifier"), nullptr);
+        CFRelease(task);
+        if (!identifier) return false;
+        CFRelease(identifier);
+        return true;
+    }();
+    return isGiven;
 #endif
-        done(status);
+}
+
+// One keychain operation, on a queue of its own, as the file-based keychain may wait for its user's answer.
+void inKeychain(std::function<OSStatus(bool isDataProtection)> operation, std::function<void(OSStatus)> done) {
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        done(operation(hasDataProtection()));
     });
 }
 
@@ -89,7 +102,7 @@ std::string randomBytes(std::size_t count) {
 void readSecret(const std::string &cloud, std::function<void(Failure failure, std::optional<std::string> secret)> done) {
     auto found = std::make_shared<std::optional<std::string>>();
     inKeychain(
-        true, [cloud, found](bool isDataProtection) {
+        [cloud, found](bool isDataProtection) {
             NSMutableDictionary *item = itemOf(cloud, isDataProtection);
             item[(__bridge id)kSecReturnData] = @YES;
             item[(__bridge id)kSecMatchLimit] = (__bridge id)kSecMatchLimitOne;
@@ -109,7 +122,7 @@ void readSecret(const std::string &cloud, std::function<void(Failure failure, st
 
 void writeSecret(const std::string &cloud, const std::string &secret, Done done) {
     inKeychain(
-        false, [cloud, secret](bool isDataProtection) {
+        [cloud, secret](bool isDataProtection) {
             NSData *data = [NSData dataWithBytes:secret.data() length:secret.size()];
             NSMutableDictionary *item = itemOf(cloud, isDataProtection);
             const OSStatus updated = SecItemUpdate((__bridge CFDictionaryRef)item, (__bridge CFDictionaryRef) @{(__bridge id)kSecValueData: data});
@@ -127,7 +140,7 @@ void writeSecret(const std::string &cloud, const std::string &secret, Done done)
 }
 
 void deleteSecret(const std::string &cloud, Done done) {
-    inKeychain(true, [cloud](bool isDataProtection) { return SecItemDelete((__bridge CFDictionaryRef)itemOf(cloud, isDataProtection)); },
+    inKeychain([cloud](bool isDataProtection) { return SecItemDelete((__bridge CFDictionaryRef)itemOf(cloud, isDataProtection)); },
         [done](OSStatus status) { done(status == errSecSuccess || status == errSecItemNotFound ? Failure() : Failure(wordsOf(status))); });
 }
 
