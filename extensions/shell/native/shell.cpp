@@ -174,7 +174,8 @@ void crossbind_extension_shell(crossbind::Registry &registry) {
     using crossbind::Call;
     // Opening a program runs it: the page opens files where the app lets it alone.
     const std::vector<std::string> openPlaces = placesOf(registry.options()["openPath"]);
-    registry.function("shell.openExternal", [](Call call) { openUrl(checkedUrl(call.options()["url"].asString("")), answered(call)); });
+    // An http, https or mailto address leaves the app whoever asks, a page of the role project as a project's among them.
+    registry.function("shell.openExternal", {"app", "project"}, [](Call call) { openUrl(checkedUrl(call.options()["url"].asString("")), answered(call)); });
     registry.function("shell.openPath", [openPlaces](Call call) {
         const std::string path = pathIn(call, "openPath");
         if (call.isFromPage()) {

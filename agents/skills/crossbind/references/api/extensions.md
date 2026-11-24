@@ -606,7 +606,7 @@ What its pages reach:
 - The app's module, `events.held()` and the functions of the role `app`, which `function(name, fn)` adds and
   `crossbind/app`'s own functions are, refuse it, naming the function and both roles: "crossbind: a page of the role
   project does not reach app.paths, which pages of the role app call". Of `crossbind/app`'s functions, the host's
-  `dialog.message` takes pages of the role `project` as well. Of the events, it hears the ones
+  `dialog.message` and `shell.openExternal` take pages of the role `project` as well. Of the events, it hears the ones
   `emit(name, value, page)` sends it.
 - `crossbind/app`, which it imports from `/__crossbind/app.js`: the host answers that path for every served origin from
   a file the app's build puts beside the host's own, in a built app and during development alike, so the page gets the

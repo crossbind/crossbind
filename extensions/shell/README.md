@@ -17,7 +17,9 @@ await shell.revealInFolder(path);
 
 `app.openPath` lists where `shell.openPath` may open files: `data`, `cache`, `logs` and `picked`. Without it, nowhere,
 since opening a program runs it. `shell.revealInFolder` and `shell.trash` reach the app's own folders and what a dialog
-picked during this run. The app's native code, calling these by name with `invoke()`, reaches any path.
+picked during this run. The app's native code, calling these by name with `invoke()`, reaches any path. A page of the
+role `project`, of an origin an extension serves, reaches `shell.openExternal` alone, for an http, https or mailto
+address as any page.
 
 ## Platforms
 
