@@ -156,6 +156,14 @@ void answer(std::vector<Ask> &asks, const std::string &text, IsDue isDue) {
 
 bool always(const Ask &) { return true; }
 
+// page-permissions' answer for a page of a window, and the origin it was asked for, which answers that page's later
+// asks of that origin alone.
+struct Kept {
+    uint64_t page;
+    std::string origin;
+    bool isAllowed;
+};
+
 }  // namespace
 
 // The positions CoreLocation gives the app, which asks its user first, with app.permissions.location's reason.
@@ -168,11 +176,11 @@ bool always(const Ask &) { return true; }
     // Ticks while the page asks, answering the asks held too long, and stops CoreLocation once none came for a while.
     NSTimer *_clock;
     NSDate *_lastAsk;
-    // Whether page-permissions lets the page each window shows have the location, by the window's id with the page's,
-    // which the host asks once for each page, as a watch asks after each position: a new page of the window is asked
-    // for again. And the asks of each page that wait for its answer.
-    std::map<uint64_t, std::pair<uint64_t, bool>> _allowed;
-    std::map<uint64_t, std::vector<std::pair<NSDictionary *, Reply>>> _undecided;
+    // Whether page-permissions lets the page each window shows have the location, by the window's id, which the host
+    // asks once for each page and origin, as a watch asks after each position: a new page of the window, or an ask of
+    // another origin, is asked for again. And the asks of each page and origin that wait for its answer.
+    std::map<uint64_t, Kept> _allowed;
+    std::map<std::pair<uint64_t, std::string>, std::vector<std::pair<NSDictionary *, Reply>>> _undecided;
 }
 
 - (instancetype)init {
@@ -208,24 +216,28 @@ bool always(const Ask &) { return true; }
 // The page has a position once page-permissions allows it, which a watch would otherwise ask after each position;
 // without that extension the page has none, as WebKit gives a macOS page none of its own.
 - (void)decide:(NSDictionary *)ask page:(const crossbind::Page &)page origin:(std::string)origin reply:(Reply)reply {
-    if (const auto decided = _allowed.find(page.windowId()); decided != _allowed.end() && decided->second.first == page.id()) {
-        if (decided->second.second) [self ask:ask reply:std::move(reply)];
+    // An ask may reach the app once the next page of its window has come, as one from a process WebKit left may: it is
+    // judged by its own origin, and is answered from what was kept, or waits with another, only for that origin.
+    if (const auto decided = _allowed.find(page.windowId());
+        decided != _allowed.end() && decided->second.page == page.id() && decided->second.origin == origin) {
+        if (decided->second.isAllowed) [self ask:ask reply:std::move(reply)];
         else reply(failureOf(1, @"User denied Geolocation"));
         return;
     }
-    auto &waiting = _undecided[page.id()];
+    auto &waiting = _undecided[{page.id(), origin}];
     waiting.emplace_back(ask, std::move(reply));
     if (waiting.size() > 1) return;
-    crossbind::askPagePermission({"location"}, origin, [self, window = page.windowId(), asking = page.id()](bool isAllowed) {
-        [self decided:isAllowed window:window page:asking];
+    crossbind::askPagePermission({"location"}, origin, [self, window = page.windowId(), asking = page.id(), origin](bool isAllowed) {
+        [self decided:isAllowed window:window page:asking origin:origin];
     });
 }
 
-- (void)decided:(bool)isAllowed window:(uint64_t)window page:(uint64_t)page {
+- (void)decided:(bool)isAllowed window:(uint64_t)window page:(uint64_t)page origin:(const std::string &)origin {
     // Kept while the window shows the page that asked: one that went asks no more.
-    if (const auto shown = crossbind::windowOf(window); shown && shown->page().id() == page) _allowed[window] = {page, isAllowed};
-    auto waiting = std::move(_undecided[page]);
-    _undecided.erase(page);
+    if (const auto shown = crossbind::windowOf(window); shown && shown->page().id() == page) _allowed[window] = {page, origin, isAllowed};
+    const std::pair<uint64_t, std::string> asked{page, origin};
+    auto waiting = std::move(_undecided[asked]);
+    _undecided.erase(asked);
     for (auto &[ask, reply] : waiting) {
         if (isAllowed) [self ask:ask reply:std::move(reply)];
         else reply(failureOf(1, @"User denied Geolocation"));
