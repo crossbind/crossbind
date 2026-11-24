@@ -39,6 +39,19 @@ void crossbind_extension_e2e_hooks(crossbind::Registry &registry) {
             else call.resolve();
         });
     });
+    // The event note, to every page of the role app or to the calling page alone, whatever its role.
+    const crossbind::Events events = registry.events();
+    registry.function("e2e-hooks.emit", PAGES, [events](Call call) {
+        const Value &value = call.options()["value"];
+        if (call.options()["to"].asString() == "own") events.emit("note", value, call.page());
+        else events.emit("note", value);
+        call.resolve();
+    });
+    // A path the app's page may reach from now on through the shell's functions, as one its user picked.
+    registry.function("e2e-hooks.allow", [](Call call) {
+        crossbind::allowPath(call.options()["path"].asString());
+        call.resolve();
+    });
     registry.function("e2e-hooks.served", PAGES, [](Call call) {
         const std::string name = call.options()["name"].asString();
         try {

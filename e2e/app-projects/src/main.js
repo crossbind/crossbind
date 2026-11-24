@@ -86,6 +86,7 @@ const STEPS = {
     remove: ({ session }) => preview.removeSnapshot(session),
     handLink: ({ url }) => invoke('e2e-hooks.handLink', { url }),
     breakKey: () => invoke('e2e-hooks.breakKey'),
+    allow: ({ path }) => invoke('e2e-hooks.allow', { path }),
 };
 
 async function run() {

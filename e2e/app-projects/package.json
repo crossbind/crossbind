@@ -11,6 +11,7 @@
     },
     "devDependencies": {
         "@crossbind/core-app-host": "workspace:^",
+        "@crossbind/extension-clipboard": "workspace:^",
         "@crossbind/extension-preview": "workspace:^",
         "@crossbind/plugin-vite": "workspace:^",
         "crossbind": "workspace:^",

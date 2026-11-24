@@ -1,7 +1,8 @@
 // What a project's page does for e2e/app-projects/e2e/run.mjs, as the fixture opens it as a preview: it says it loaded,
 // then takes each step from the run through the fixture's hooks, as the app's page does, and reports what each
-// answered: the preview extension's functions called, each refused to it; its origin's storage; a ranged read of its
-// source; and the preview's end, with a message dialog of its own up or none. Its storage step is the app's page's too.
+// answered: every function the app may register, called past its crossbind/app, and some through it; the events it
+// hears; its origin's storage; reads of its source; and the preview's end, with a message dialog of its own up or none.
+// Its storage step is the app's page's too.
 const DIALOG = "crossbind e2e: a project's dialog, which its preview's end closes";
 const SHOWN_MS = 1500;
 
@@ -75,8 +76,38 @@ async function fetched({ path }) {
     return { status: answer.status, text: await answer.text() };
 }
 
-function refused({ names }, invoke) {
-    return Promise.all(names.map(async (name) => [name, (await outcome(invoke(`preview.${name}`, {}))).error ?? 'answered'])).then(Object.fromEntries);
+// What each of these functions answers the page that calls it itself, past its crossbind/app, with options none of them
+// takes, so that one that runs fails as it reads them; on a phone after the page put a text of its own on the clipboard,
+// which a read of it gives back without the system asking its user.
+async function sweep({ names, text }, invoke) {
+    if (text) await invoke('clipboard.writeText', { text });
+    return Promise.all(names.map(async (name) => {
+        const answered = await outcome(invoke(name, { filters: 1 }));
+        return [name, answered.error ?? `answered ${JSON.stringify(answered.value)}`];
+    })).then(Object.fromEntries);
+}
+
+// What the page hears of the hooks' event note: one sent to every page of the role app, then one sent to this page
+// alone, which it waits for.
+async function heard({ ms }, api, invoke) {
+    const got = [];
+    let own = null;
+    const isOwn = new Promise((done) => { own = done; });
+    const stop = api.events.on('e2e-hooks.note', (value) => {
+        got.push(value);
+        if (value === 'own') own();
+    });
+    await invoke('e2e-hooks.emit', { to: 'every', value: 'every' });
+    await invoke('e2e-hooks.emit', { to: 'own', value: 'own' });
+    await Promise.race([isOwn, sleep(ms)]);
+    stop();
+    return got;
+}
+
+// What the shell's file functions answer the page for a path the app's own page may reach.
+function picked({ path }, invoke) {
+    const names = ['shell.openPath', 'shell.revealInFolder', 'shell.trash'];
+    return Promise.all(names.map(async (name) => [name, (await outcome(invoke(name, { path }))).error ?? 'answered'])).then(Object.fromEntries);
 }
 
 // What each of these functions of crossbind/app answers through the page's own import of it, as "dialog.open".
@@ -94,7 +125,13 @@ export async function runSteps(invoke, api) {
         return text ? JSON.parse(text) : null;
     };
     const steps = {
-        refused: (step) => refused(step, invoke), throughModule: (step) => throughModule(step, api), storage, range, fetched,
+        sweep: (step) => sweep(step, invoke),
+        heard: (step) => heard(step, api, invoke),
+        picked: (step) => picked(step, invoke),
+        throughModule: (step) => throughModule(step, api),
+        storage,
+        range,
+        fetched,
     };
     await ask('/report', { loaded: location.origin });
     for (;;) {

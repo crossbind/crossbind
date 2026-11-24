@@ -1,7 +1,7 @@
 // What e2e/app-projects/e2e/run.mjs reads of a previewed page, each line in the preview's terminal through Vite's console
 // forwarding: the page loads with the device's platform and the crossbind app's crossbind/app; a function that belongs
-// to the built app is refused in a preview's words, after the project's own initNative() where it has one; the system's message
-// dialog waits for its user, as the page first loads, until the page cancels its call; and an edit of
+// to the built app is refused in a preview's words, after the project's own initNative() where it has one; the
+// system's message dialog waits for its user, as the page first loads, until the page cancels its call; and an edit of
 // preview-greeting.js comes in place, the page's state kept. Then the page takes the run's steps (project-steps.js).
 import * as api from 'crossbind/app';
 import { greeting } from './preview-greeting.js';
