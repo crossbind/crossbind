@@ -394,7 +394,7 @@
       "npm": "@crossbind/port-zstd",
       "category": "compression",
       "summary": "Zstandard compression",
-      "nativeVersion": "1.5.7",
+      "nativeVersion": "1.6.0",
       "license": "BSD-3-Clause OR GPL-2.0-only",
       "homepage": "https://crossbind.dev/ports/zstd/",
       "targets": [
