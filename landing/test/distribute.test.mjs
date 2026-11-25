@@ -10,9 +10,13 @@ const textOf = (page) => JSON.stringify([page.lede, page.blocks]);
 const VARIABLE = /CROSSBIND_[A-Z0-9_]+/g;
 const PUBLISHERS = { 'app-store': 'app-store', 'google-play': 'google-play', 'github-releases': 'github' };
 
-const sourcesUnder = (directory) => readdirSync(new URL(directory, ROOT), { recursive: true })
-    .filter((file) => /(\.m?js|\.cmake|CMakeLists\.txt)$/.test(file) && !file.split('/').includes('node_modules'))
-    .map((file) => `${directory}${file}`);
+// A package's own packages stay unopened: their links may lead back to the folder itself.
+const sourcesUnder = (directory) => readdirSync(new URL(directory, ROOT), { withFileTypes: true }).flatMap((entry) => {
+    if (entry.name === 'node_modules') return [];
+    const file = `${directory}${entry.name}`;
+    if (entry.isDirectory()) return sourcesUnder(`${file}/`);
+    return /(\.m?js|\.cmake|CMakeLists\.txt)$/.test(entry.name) ? [file] : [];
+});
 
 test('every workflow and store listing on the Distribute pages is the one app.md gives', () => {
     const fenced = [...read('docs/api/app.md').matchAll(/^```[a-z]*\n([\s\S]*?)\n```$/gm)].map(([, code]) => code);
