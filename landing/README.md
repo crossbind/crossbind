@@ -35,9 +35,8 @@ catalog are generated from one verified release snapshot, so they cannot disagre
    note's frontmatter and the table's SHA-256, and converts the note into the guide's block model
    (`scripts/release/release-notes-blocks.mjs` - headings, paragraphs, lists, fenced code, pipe
    tables and quotes; images, HTML and other heading levels fail the build);
-4. resolves `@crossbind/plugin-vite` and `create-crossbind` through the same dist-tag and checks
-   that the plugin's `crossbind` range admits the resolved version - each package keeps its own
-   version, nothing is copied across;
+4. resolves `create-crossbind`, which the Quick Start scaffolds with, through the same dist-tag -
+   each package keeps its own version, nothing is copied across;
 5. builds the Libraries catalog (`scripts/site/build-ports-catalog.mjs`) from `ports/catalog.json`,
    every port's `package.json` and `build.mjs`, and what npm serves for each variant on the same
    dist-tag - a variant counts as published only when the registry has it - and the Apps guide's

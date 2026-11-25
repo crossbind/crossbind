@@ -308,8 +308,7 @@ the `/changelog/` page and the Quick Start install commands. Every earlier publi
 release that carries a manifest is verified the same way and gets its release row on `/changelog/`,
 so `#<version>` links survive later trains; entries without a manifest are shown from `CHANGELOG.md`
 without a row. The same dist-tag also resolves
-`@crossbind/plugin-vite` and `create-crossbind`, and the plugin's `crossbind` range must admit the
-resolved version, and the `/ports/` catalog marks a port variant as published only when npm serves
+`create-crossbind`, and the `/ports/` catalog marks a port variant as published only when npm serves
 it on that dist-tag. It never uses GitHub's generic latest-release endpoint and never falls back to
 another channel, fixture or older version: a missing or inconsistent piece of metadata fails the
 build, and a failed build never reaches `wrangler pages deploy`.

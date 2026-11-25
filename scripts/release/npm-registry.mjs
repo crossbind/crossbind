@@ -117,10 +117,6 @@ export class NpmCliRegistry {
         return this.run(['view', `${packageName}@${spec}`, 'version', '--json'], { allowMissing: true });
     }
 
-    viewDependencies(packageName, version) {
-        return this.run(['view', `${packageName}@${version}`, 'dependencies', '--json'], { allowMissing: true });
-    }
-
     attestations(version) {
         return this.run(['view', `${this.packageName}@${version}`, 'dist.attestations', '--json'], { allowMissing: true });
     }
