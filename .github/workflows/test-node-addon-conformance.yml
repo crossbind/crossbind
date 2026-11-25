@@ -878,7 +878,8 @@ jobs:
                   api-level: 36
                   target: default
                   arch: x86_64
-                  emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+                  # A front camera, which a project's page reaches only where the device has one.
+                  emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front emulated
                   disable-animations: true
                   # Then the previews of made-up accounts in an app, against a stand-in for crossbind cloud.
                   script: |
