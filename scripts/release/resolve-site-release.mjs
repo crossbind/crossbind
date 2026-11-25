@@ -23,15 +23,14 @@ import { releaseNotesBlocks } from './release-notes-blocks.mjs';
 //
 // Besides the current release the snapshot carries every earlier `crossbind@*` GitHub Release
 // that has a manifest, verified the same way, so /changelog/<version>/ links keep working after
-// the channel moves on. It also records the versions the same dist-tag resolves for the packages
-// the Quick Start installs alongside `crossbind`, and proves the plugin's `crossbind` range
-// admits the resolved version instead of copying one version onto every package.
+// the channel moves on. It also records the version the same dist-tag resolves for
+// create-crossbind, which the Quick Start scaffolds with, instead of copying one version onto
+// every package.
 
 export const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const GITHUB_REPOSITORY = 'crossbind/crossbind';
 export const SITE_CHANNELS = Object.freeze({ beta: 'beta', rc: 'next', stable: 'latest' });
 export const SNAPSHOT_SOURCES = Object.freeze(['live', 'fixture']);
-export const COMPANION_PLUGIN = '@crossbind/plugin-vite';
 export const COMPANION_CREATOR = 'create-crossbind';
 export const FIXTURE_ENVIRONMENT_VARIABLE = 'CROSSBIND_SITE_RELEASE_FIXTURE';
 // The resolver hands this token to the build it spawns, and the generated module carries the same
@@ -46,9 +45,6 @@ export const SITE_CLIENT_TIMEOUT_MS = 30 * 1000;
 
 const COMMIT_SHA = /^[0-9a-f]{40}$/;
 const TAG_PREFIX = `${PACKAGE_NAME}@`;
-const VERSION = /^(\d+)\.(\d+)\.(\d+)(?:-(beta|rc)\.(\d+))?$/;
-const CARET_RANGE = /^\^(\d+\.\d+\.\d+(?:-(?:beta|rc)\.\d+)?)$/;
-const PRERELEASE_ORDER = { beta: 0, rc: 1 };
 
 export function channelDistTag(channel) {
     const distTag = SITE_CHANNELS[channel];
@@ -66,37 +62,6 @@ export function badgeLabel({ channel, version }) {
     if (channel === 'rc') return `RC · v${version}`;
     channelDistTag(channel);
     return `v${version}`;
-}
-
-function parseVersion(version) {
-    const match = VERSION.exec(String(version));
-    if (!match) throw new Error(`Unsupported version "${version}"; expected X.Y.Z, X.Y.Z-beta.N or X.Y.Z-rc.N.`);
-    const tuple = [Number(match[1]), Number(match[2]), Number(match[3])];
-    const prerelease = match[4] ? [PRERELEASE_ORDER[match[4]], Number(match[5])] : null;
-    return { tuple, prerelease };
-}
-
-function compareLists(left, right) {
-    for (let index = 0; index < left.length; index += 1) {
-        if (left[index] !== right[index]) return left[index] < right[index] ? -1 : 1;
-    }
-    return 0;
-}
-
-// The workspace publishes plain caret ranges, so only that form is understood; anything else
-// fails closed rather than being guessed at. Follows npm semver: a prerelease version only
-// satisfies a range whose base has the same X.Y.Z tuple and an equal-or-lower prerelease.
-export function satisfiesCaret(range, version) {
-    const base = CARET_RANGE.exec(String(range));
-    if (!base) throw new Error(`Unsupported dependency range "${range}"; only ^X.Y.Z[-beta.N|-rc.N] is understood.`);
-    const wanted = parseVersion(base[1]);
-    const actual = parseVersion(version);
-    if (wanted.tuple[0] !== actual.tuple[0]) return false;
-    const tuples = compareLists(actual.tuple, wanted.tuple);
-    if (actual.prerelease) {
-        return tuples === 0 && wanted.prerelease !== null && compareLists(actual.prerelease, wanted.prerelease) >= 0;
-    }
-    return tuples >= 0;
 }
 
 function githubReleaseUrl(tag) {
@@ -217,30 +182,13 @@ async function verifyRelease({ release, registry, github, root, call }) {
     };
 }
 
-// The packages the Quick Start installs next to `crossbind`, resolved through the same dist-tag.
-// Their versions are reported as they are; the plugin's own `crossbind` range must admit the
-// resolved version, which is the compatibility proof the page relies on.
-async function resolveCompanions({ distTag, version, registry, call }) {
-    const [pluginVersion, creatorVersion] = await Promise.all([
-        call(`npm view ${COMPANION_PLUGIN}@${distTag}`, () => registry.viewVersion(COMPANION_PLUGIN, distTag)),
-        call(`npm view ${COMPANION_CREATOR}@${distTag}`, () => registry.viewVersion(COMPANION_CREATOR, distTag)),
-    ]);
-    if (!pluginVersion)
-        throw new Error(`npm dist-tag ${distTag} for ${COMPANION_PLUGIN} is absent; the Quick Start install command would not resolve.`);
+// The package the Quick Start scaffolds with next to `crossbind`, resolved through the same
+// dist-tag; its version is reported as it is.
+async function resolveCompanions({ distTag, call, registry }) {
+    const creatorVersion = await call(`npm view ${COMPANION_CREATOR}@${distTag}`, () => registry.viewVersion(COMPANION_CREATOR, distTag));
     if (!creatorVersion)
         throw new Error(`npm dist-tag ${distTag} for ${COMPANION_CREATOR} is absent; the Quick Start create command would not resolve.`);
-    const dependencies = await call(`npm view ${COMPANION_PLUGIN}@${pluginVersion} dependencies`, () =>
-        registry.viewDependencies(COMPANION_PLUGIN, pluginVersion),
-    );
-    const crossbindRange = dependencies?.[PACKAGE_NAME];
-    if (!crossbindRange) throw new Error(`${COMPANION_PLUGIN}@${pluginVersion} declares no ${PACKAGE_NAME} dependency.`);
-    if (!satisfiesCaret(crossbindRange, version)) {
-        throw new Error(`${COMPANION_PLUGIN}@${pluginVersion} requires ${PACKAGE_NAME} ${crossbindRange}, which does not admit ${version}.`);
-    }
-    return {
-        [COMPANION_PLUGIN]: { version: pluginVersion, crossbindRange },
-        [COMPANION_CREATOR]: { version: creatorVersion },
-    };
+    return { [COMPANION_CREATOR]: { version: creatorVersion } };
 }
 
 export async function resolveSiteRelease({
@@ -326,7 +274,6 @@ export function createFixtureClients(fixture) {
                 const entry = npm.packages?.[packageName];
                 return entry?.distTags?.[spec] ?? (entry?.versions?.[spec] ? spec : null);
             },
-            viewDependencies: async (packageName, version) => npm.packages?.[packageName]?.versions?.[version]?.dependencies ?? null,
         },
         github: {
             repository: GITHUB_REPOSITORY,

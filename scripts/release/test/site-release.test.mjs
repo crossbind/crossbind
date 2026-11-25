@@ -11,14 +11,12 @@ import {
     badgeLabel,
     channelDistTag,
     COMPANION_CREATOR,
-    COMPANION_PLUGIN,
     createFixtureClients,
     distTagSuffix,
     FIXTURE_ENVIRONMENT_VARIABLE,
     renderSnapshotModule,
     resolveSiteRelease,
     resolveSiteReleaseForBuild,
-    satisfiesCaret,
     SITE_RESOLVE_ATTEMPTS,
 } from '../resolve-site-release.mjs';
 
@@ -104,7 +102,6 @@ function fixture() {
     const tags = {};
     const files = { 'core/crossbind/src/assets/toolchain-digests.json': DIGEST_TABLE };
     const versions = {};
-    const plugin = { distTags: { latest: '2.0.0-beta.50', beta: '2.0.0-beta.56', next: '2.0.0-rc.1' }, versions: {} };
     for (const [version, channel, distTag, prerelease, publishedAt] of RELEASES) {
         const tag = `crossbind@${version}`;
         versions[version] = { integrity: INTEGRITY, tarball: `https://registry.npmjs.org/crossbind/-/crossbind-${version}.tgz` };
@@ -122,14 +119,12 @@ function fixture() {
         };
         tags[tag] = COMMIT;
         files[`releases/crossbind/${version}.md`] = notesFor(version);
-        plugin.versions[version] = { dependencies: { crossbind: `^${version}` } };
     }
     return structuredClone({
         npm: {
             distTags: { latest: '0.0.1', beta: '2.0.0-beta.56', next: '2.0.0-rc.1' },
             versions,
             packages: {
-                [COMPANION_PLUGIN]: plugin,
                 [COMPANION_CREATOR]: { distTags: { latest: '2.0.0-beta.50', beta: '2.0.0-beta.57', next: '2.0.0-rc.1' } },
             },
         },
@@ -158,21 +153,6 @@ test('channels map to the documented npm dist-tags and install suffixes', () => 
     assert.equal(badgeLabel({ channel: 'beta', version: '2.0.0-beta.56' }), 'Beta · v2.0.0-beta.56');
     assert.equal(badgeLabel({ channel: 'rc', version: '2.0.0-rc.1' }), 'RC · v2.0.0-rc.1');
     assert.equal(badgeLabel({ channel: 'stable', version: '2.0.0' }), 'v2.0.0');
-});
-
-test('caret ranges follow npm prerelease semantics and other forms fail closed', () => {
-    assert.equal(satisfiesCaret('^2.0.0-beta.56', '2.0.0-beta.56'), true);
-    assert.equal(satisfiesCaret('^2.0.0-beta.56', '2.0.0-beta.57'), true);
-    assert.equal(satisfiesCaret('^2.0.0-beta.56', '2.0.0-rc.1'), true);
-    assert.equal(satisfiesCaret('^2.0.0-beta.56', '2.0.0'), true);
-    assert.equal(satisfiesCaret('^2.0.0-beta.56', '2.1.0'), true);
-    assert.equal(satisfiesCaret('^2.0.0-beta.56', '2.0.0-beta.55'), false);
-    assert.equal(satisfiesCaret('^2.0.0-beta.56', '2.0.1-beta.1'), false);
-    assert.equal(satisfiesCaret('^2.0.0', '2.1.0-beta.1'), false);
-    assert.equal(satisfiesCaret('^2.0.0', '3.0.0'), false);
-    assert.equal(satisfiesCaret('^1.0.4', '2.0.0-beta.56'), false);
-    assert.throws(() => satisfiesCaret('>=2.0.0', '2.0.0'), /Unsupported dependency range/);
-    assert.throws(() => satisfiesCaret('workspace:^', '2.0.0'), /Unsupported dependency range/);
 });
 
 test('the beta channel resolves to the exact beta tag, commit and badge', async () => {
@@ -208,7 +188,6 @@ test('the rc channel resolves through next to the RC badge', async () => {
 test('an explicitly selected stable channel resolves through latest without a suffix', async () => {
     const data = fixture();
     data.npm.distTags.latest = '2.0.0';
-    data.npm.packages[COMPANION_PLUGIN].distTags.latest = '2.0.0';
     data.npm.packages[COMPANION_CREATOR].distTags.latest = '2.0.0';
     const snapshot = await resolve('stable', data);
     assert.equal(snapshot.version, '2.0.0');
@@ -241,28 +220,13 @@ test('GitHub releases are selected by exact tag prefix, never through the generi
     assert.ok(!snapshot.history.some((entry) => entry.gitTag.startsWith('cpp.js@')));
 });
 
-test('companion packages resolve through the same dist-tag and the plugin range must admit the version', async () => {
+test('the create command resolves through the same dist-tag', async () => {
     const snapshot = await resolve('beta');
-    assert.deepEqual(snapshot.companions, {
-        [COMPANION_PLUGIN]: { version: '2.0.0-beta.56', crossbindRange: '^2.0.0-beta.56' },
-        [COMPANION_CREATOR]: { version: '2.0.0-beta.57' },
-    });
-
-    const incompatible = fixture();
-    incompatible.npm.packages[COMPANION_PLUGIN].versions['2.0.0-beta.56'].dependencies.crossbind = '^2.0.0-beta.57';
-    await assert.rejects(resolve('beta', incompatible), /requires crossbind \^2\.0\.0-beta\.57, which does not admit 2\.0\.0-beta\.56/);
+    assert.deepEqual(snapshot.companions, { [COMPANION_CREATOR]: { version: '2.0.0-beta.57' } });
 
     const missingCreator = fixture();
     delete missingCreator.npm.packages[COMPANION_CREATOR].distTags.beta;
     await assert.rejects(resolve('beta', missingCreator), /create-crossbind is absent/);
-
-    const missingPlugin = fixture();
-    delete missingPlugin.npm.packages[COMPANION_PLUGIN].distTags.beta;
-    await assert.rejects(resolve('beta', missingPlugin), /@crossbind\/plugin-vite is absent/);
-
-    const noDependency = fixture();
-    noDependency.npm.packages[COMPANION_PLUGIN].versions['2.0.0-beta.56'].dependencies = {};
-    await assert.rejects(resolve('beta', noDependency), /declares no crossbind dependency/);
 });
 
 test('every manifest-bearing crossbind release keeps its own page, newest first', async () => {
@@ -284,7 +248,6 @@ test('an older changelog page survives the channel moving to a newer release and
 
     const data = fixture();
     data.npm.distTags.beta = '2.0.0-beta.57';
-    data.npm.packages[COMPANION_PLUGIN].distTags.beta = '2.0.0-beta.57';
     const after = await resolve('beta', data);
     assert.equal(after.version, '2.0.0-beta.57');
     assert.equal(after.badge, 'Beta · v2.0.0-beta.57');
