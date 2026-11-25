@@ -108,8 +108,8 @@ test("a library's packages all open the library's page, which holds its releases
 });
 
 test('a package page holds its releases newest first, each with its day and the notes of its train where the changelog has them', () => {
-    const page = pageOf('core-embind-rust');
-    const history = catalog.histories['core/embind-rust'];
+    const page = pageOf('create-crossbind');
+    const history = catalog.histories['tooling/create-app'];
 
     assert.equal(findSitePage(page.href), page);
     assert.deepEqual(
@@ -124,8 +124,8 @@ test('a package page holds its releases newest first, each with its day and the 
 });
 
 test("a release lists the changes to the package's own code, says so where there were none, and the first one says nothing", () => {
-    const page = pageOf('core-embind-rust');
-    const history = catalog.histories['core/embind-rust'];
+    const page = pageOf('create-crossbind');
+    const history = catalog.histories['tooling/create-app'];
     const after = (version) => page.blocks[page.blocks.findIndex(({ id }) => id === version) + 2];
 
     for (const release of history.filter(({ changes }) => changes?.length)) {
@@ -157,7 +157,7 @@ test('search and llms.txt read every package with its version, under the heading
         assert.ok(items[index].includes(row.version ?? 'not published yet'), row.name);
     });
     assert.match(renderLlmsIndex(), /\n## Packages\n\n- \[Packages\]\(https:\/\/crossbind\.dev\/packages\.md\)/);
-    assert.match(renderLlmsIndex(), /\(https:\/\/crossbind\.dev\/packages\/core-embind-rust\.md\)/);
+    assert.match(renderLlmsIndex(), /\(https:\/\/crossbind\.dev\/packages\/create-crossbind\.md\)/);
 });
 
 test("a page of releases is named as one, so the tab, search and llms.txt tell it from the library's own page", () => {
