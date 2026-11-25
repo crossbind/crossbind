@@ -5,7 +5,6 @@
 // and the preview's end, with a message dialog of its own up or none. Its storage step is the app's page's too.
 const DIALOG = "crossbind e2e: a project's dialog, which its preview's end closes";
 const SHOWN_MS = 1500;
-const LOCATION_MS = 5000;
 
 const failure = (error) => `${error?.name ?? 'Error'}: ${error?.message ?? error}`;
 const outcome = (promise) => promise.then((value) => ({ value: value ?? null }), (error) => ({ error: failure(error) }));
@@ -122,7 +121,9 @@ function throughModule({ names }, api) {
 // What a request for these kinds answers once it ends: allowed, denied, or what else ended it, as a device the machine
 // lacks; the location allowed with no position as its code. By the page's own web API, or by the fixture's hook, which
 // asks for the page's origin as an extension asks.
-async function requested({ kinds, via }, invoke) {
+// A location request waits for its answer with no time of its own unless the run gives it one: Chromium counts the time
+// a question is up against it.
+async function requested({ kinds, via, positionMs }, invoke) {
     if (via === 'hook') {
         const { allowed } = await invoke('e2e-hooks.askPermission', { kinds, origin: location.origin });
         return allowed ? 'allowed' : 'denied';
@@ -130,7 +131,7 @@ async function requested({ kinds, via }, invoke) {
     if (kinds.includes('location')) {
         return new Promise((done) => {
             navigator.geolocation.getCurrentPosition(() => done('allowed'), (error) => done(error.code === 1 ? 'denied' : `allowed, code ${error.code}`), {
-                timeout: LOCATION_MS, maximumAge: 0,
+                maximumAge: 0, ...(positionMs ? { timeout: positionMs } : {}),
             });
         });
     }
