@@ -1,5 +1,6 @@
-// The sheet of the app's window, as its user reads it, and its buttons and keys as its user presses them: the run's way
-// to the preview extension's question on macOS.
+// The sheet of the app's window, as its user reads it, and its buttons pressed as its user's click: the run's way to the
+// preview extension's question on macOS. A sheet takes keys only while its app is in front, which a run's app standing
+// behind another's is not, so the run reads the keys its buttons take and sends Escape's command itself.
 #include "crossbind/extension.h"
 
 #import <AppKit/AppKit.h>
@@ -32,7 +33,8 @@ NSMutableArray<NSButton *> *buttonsOf(NSWindow *sheet, Value::Array &texts) {
 
 }  // namespace
 
-// What the sheet up shows, or null: its texts, its buttons, the one Return presses and the one with the focus.
+// What the sheet up shows, or null: its texts, its buttons, the one Return presses, the one Escape does, and the one with
+// the focus.
 void questionUp(Call call) {
     crossbind::onMainThread([call] {
         NSWindow *sheet = sheetUp();
@@ -43,15 +45,17 @@ void questionUp(Call call) {
         Value::Array texts;
         Value::Array titles;
         Value preferred;
+        Value escape;
         Value focused;
         // The button Return presses: the window's default, or one whose own key is Return.
         NSButton *byWindow = [sheet.defaultButtonCell.controlView isKindOfClass:NSButton.class] ? (NSButton *)sheet.defaultButtonCell.controlView : nil;
         for (NSButton *button in buttonsOf(sheet, texts)) {
             titles.emplace_back(textOf(button.title));
             if (button == byWindow || [button.keyEquivalent isEqualToString:@"\r"]) preferred = textOf(button.title);
+            if ([button.keyEquivalent isEqualToString:@"\x1b"]) escape = textOf(button.title);
             if (sheet.firstResponder == button) focused = textOf(button.title);
         }
-        call.resolve(Value::Object{{"texts", texts}, {"buttons", titles}, {"preferred", preferred}, {"focused", focused}});
+        call.resolve(Value::Object{{"texts", texts}, {"buttons", titles}, {"preferred", preferred}, {"escape", escape}, {"focused", focused}});
     });
 }
 
@@ -70,29 +74,15 @@ void pressInQuestion(Call call) {
     });
 }
 
-// A key's press and release, as the sheet's user's: Escape, Return or Space.
-void keyInQuestion(Call call) {
-    const std::string key = call.options()["key"].asString();
-    crossbind::onMainThread([call, key] {
+// Escape's command, which AppKit sends along the responders of the sheet when none of its buttons takes Escape.
+void cancelInQuestion(Call call) {
+    crossbind::onMainThread([call] {
         NSWindow *sheet = sheetUp();
         if (!sheet) {
-            call.reject("crossbind e2e: no sheet is up for a key");
+            call.reject("crossbind e2e: no sheet is up for Escape's command");
             return;
         }
-        NSString *characters = key == "Escape" ? @"\x1b" : key == "Return" ? @"\r" : @" ";
-        const unsigned short code = key == "Escape" ? 53 : key == "Return" ? 36 : 49;
-        for (const NSEventType type : {NSEventTypeKeyDown, NSEventTypeKeyUp}) {
-            [sheet sendEvent:[NSEvent keyEventWithType:type
-                                              location:NSZeroPoint
-                                         modifierFlags:0
-                                             timestamp:NSProcessInfo.processInfo.systemUptime
-                                          windowNumber:sheet.windowNumber
-                                               context:nil
-                                            characters:characters
-                           charactersIgnoringModifiers:characters
-                                             isARepeat:NO
-                                               keyCode:code]];
-        }
+        [(sheet.firstResponder ?: sheet) tryToPerform:@selector(cancelOperation:) with:nil];
         call.resolve();
     });
 }

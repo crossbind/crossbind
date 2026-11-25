@@ -63,7 +63,7 @@ export async function checkConsents(run) {
     // What a run before left.
     store.remove();
     const report = {
-        first: null, left: [], defaultKey: null, reach: {}, system: [], store: {}, notification: null,
+        first: null, left: [], defaultKey: null, reach: {}, system: [], store: {}, notification: null, pressedBy: [],
     };
 
     let tags = 0;
@@ -117,7 +117,10 @@ export async function checkConsents(run) {
         asking = message;
         return question;
     }
-    const press = (button) => questions.press('project', button, asking);
+    const press = async (button) => {
+        const way = await questions.press('project', button, asking);
+        if (way && !report.pressedBy.includes(way)) report.pressedBy.push(way);
+    };
     // The question up once its default reads as Don't Allow.
     async function settled() {
         const deadline = Date.now() + QUESTION_MS;
@@ -175,6 +178,8 @@ export async function checkConsents(run) {
     const steady = isDefaultRead ? await settled() : await questions.read('project');
     report.settled = { preferred: steady?.preferred ?? null, focused: steady?.focused ?? null };
     expect(isDefaultRead || steady?.preferred === null, `the question's default is ${JSON.stringify(steady)}`);
+    // Where the run reads the keys its buttons take, as on macOS, Escape is none's.
+    expect(!steady?.escape, `Escape presses the question's ${steady?.escape}`);
     expect(isDontAllowOrNone(steady?.focused ?? null), `the question's focus is ${JSON.stringify(steady)}`);
     for (const [way, send] of questions.waysOut('project')) {
         await send();
@@ -210,13 +215,11 @@ export async function checkConsents(run) {
     await expectDenied(firstTag, `the ${firstKind}'s request after Don't Allow`);
     await questionOf('project', secondTag, SECOND, [secondKind]);
     // Where the run's key reaches the question, it presses Don't Allow, the default, which the key that left it up
-    // before is thus shown to reach as well; Android's Enter may find no focus and press nothing. macOS gives a sheet its
-    // default once it shows, so the key goes once the run reads the default there.
-    if (platform === 'macos') await settled();
-    report.defaultKey = await questions.pressDefaultKey('project');
+    // before is thus shown to reach as well; Android's Enter may find no focus and press nothing.
+    report.defaultKey = questions.pressDefaultKey();
     if (report.defaultKey) await sleep(SETTLED_MS);
     const isUpAfterKey = await questions.read('project') !== null;
-    expect(!isUpAfterKey || !['macos', 'linux'].includes(platform), `${report.defaultKey} as the question came up pressed none of its buttons`);
+    expect(!isUpAfterKey || platform !== 'linux', `${report.defaultKey} as the question came up pressed none of its buttons`);
     if (isUpAfterKey) await press("Don't Allow");
     report.keyPressed = report.defaultKey && !isUpAfterKey ? "Don't Allow" : 'nothing';
     await expectDenied(secondTag, `the ${secondKind}'s request after Don't Allow`);

@@ -176,7 +176,7 @@ export async function runSteps(invoke, api) {
         request: (step) => request(step, invoke, (body) => ask('/report', body)),
         question: () => invoke('e2e-hooks.question'),
         press: ({ button, words }) => invoke('e2e-hooks.press', { button, words }),
-        key: ({ key }) => invoke('e2e-hooks.key', { key }),
+        cancel: () => invoke('e2e-hooks.cancel'),
         notified,
     };
     // On Windows, where a task dialog up holds the page's answers, the run calls through DevTools.

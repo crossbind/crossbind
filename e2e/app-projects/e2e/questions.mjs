@@ -74,7 +74,9 @@ function androidSystemQuestion(nodes) {
 }
 
 // A task dialog of the app's process titled with the app's name, read through UI Automation, or pressed at a button of
-// its name, or sent the command Escape gives a dialog and the close of its window.
+// its name, or sent the command Escape gives a dialog and the close of its window. UI Automation shows a task dialog's
+// button as a pane of the class CCPushButton, which hosts a button window of its own: it is pressed by UI Automation's
+// Invoke where it offers one, else clicked at that window, and the press says which.
 const WINDOWS_SCRIPT = String.raw`
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 Add-Type -TypeDefinition @'
@@ -84,6 +86,8 @@ using System.Text;
 public static class Question {
     delegate bool EnumProc(IntPtr window, IntPtr data);
     [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc proc, IntPtr data);
+    [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr parent, EnumProc proc, IntPtr data);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr SendMessageW(IntPtr window, uint message, IntPtr w, StringBuilder l);
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassNameW(IntPtr window, StringBuilder name, int size);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowTextW(IntPtr window, StringBuilder text, int size);
@@ -104,12 +108,25 @@ public static class Question {
         }, IntPtr.Zero);
         return found;
     }
+    public static IntPtr Button(IntPtr dialog, string title) {
+        IntPtr found = IntPtr.Zero;
+        EnumChildWindows(dialog, (window, data) => {
+            var type = new StringBuilder(256);
+            var text = new StringBuilder(512);
+            GetClassNameW(window, type, type.Capacity);
+            SendMessageW(window, 0x000D, (IntPtr)text.Capacity, text);
+            if (type.ToString() != "Button" || text.ToString() != title) return true;
+            found = window;
+            return false;
+        }, IntPtr.Zero);
+        return found;
+    }
 }
 '@
 $dialog = [Question]::Find([uint32]$env:CROSSBIND_E2E_PID, $env:CROSSBIND_E2E_TITLE)
 if ($dialog -eq [IntPtr]::Zero) { 'null'; exit }
 $all = [System.Windows.Automation.AutomationElement]::FromHandle($dialog).FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
-$buttons = @($all | Where-Object { $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -and $_.Current.Name })
+$buttons = @($all | Where-Object { $_.Current.Name -and ($_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -or $_.Current.ClassName -eq 'CCPushButton') })
 switch ($env:CROSSBIND_E2E_MODE) {
     'read' {
         $texts = @($all | Where-Object { $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Text -and $_.Current.Name } | ForEach-Object { $_.Current.Name })
@@ -121,8 +138,16 @@ switch ($env:CROSSBIND_E2E_MODE) {
     'press' {
         $button = $buttons | Where-Object { $_.Current.Name -eq $env:CROSSBIND_E2E_BUTTON } | Select-Object -First 1
         if (-not $button) { throw "the dialog has no button $env:CROSSBIND_E2E_BUTTON" }
-        $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
-        'pressed'
+        $invoke = $null
+        if ($button.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invoke)) {
+            $invoke.Invoke()
+            'invoked'
+            break
+        }
+        $window = [Question]::Button($dialog, $env:CROSSBIND_E2E_BUTTON)
+        if ($window -eq [IntPtr]::Zero) { throw "the button $env:CROSSBIND_E2E_BUTTON offers no Invoke and has no window: $(@($button.GetSupportedPatterns() | ForEach-Object { $_.ProgrammaticName }) -join ', ')" }
+        [void][Question]::PostMessageW($window, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
+        'clicked'
     }
     'escape' { [void][Question]::PostMessageW($dialog, 0x0111, [IntPtr]2, [IntPtr]::Zero); 'sent' }
     'close' { [void][Question]::PostMessageW($dialog, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero); 'sent' }
@@ -157,12 +182,10 @@ export function questionsOn({
             if (platform === 'android') return androidQuestion(screenOf(adb()), applicationId());
             return byPage(role, { do: 'question' });
         },
-        // Its button of this title, the question known by its words where the hook reads them first, as on iOS.
+        // Its button of this title, the question known by its words where the hook reads them first, as on iOS. On
+        // Windows, how it was pressed.
         async press(role, button, words) {
-            if (platform === 'windows') {
-                await windows('press', button);
-                return;
-            }
+            if (platform === 'windows') return windows('press', button);
             if (platform !== 'android') {
                 await byPage(role, { do: 'press', button, words });
                 return;
@@ -173,23 +196,19 @@ export function questionsOn({
             adbShell('input', 'tap', ...centerOf(node));
         },
         // The keys and closes its user may try, each a way out the question must not take, where the run can send
-        // them: Escape on macOS, through the fixture's hook, and on Linux; Back and Escape on Android; Escape's command
-        // and the window's close on Windows. None on iOS.
+        // them: Escape's command on macOS, through the fixture's hook; Escape on Linux; Back and Escape on Android;
+        // Escape's command and the window's close on Windows. None on iOS.
         waysOut(role) {
             const ways = {
-                macos: { Escape: () => byPage(role, { do: 'key', key: 'Escape' }) },
+                macos: { "Escape's command": () => byPage(role, { do: 'cancel' }) },
                 linux: { Escape: () => keyToLinuxDialog(appTitle, 'Escape') },
                 android: { Back: () => adbShell('input', 'keyevent', 'KEYCODE_BACK'), Escape: () => adbShell('input', 'keyevent', 'KEYCODE_ESCAPE') },
                 windows: { "Escape's command": () => windows('escape'), 'the close': () => windows('close') },
             };
             return Object.entries(ways[platform] ?? {});
         },
-        // A key that would press the default button, as it comes up: Return on macOS and Linux, Enter on Android.
-        async pressDefaultKey(role) {
-            if (platform === 'macos') {
-                await byPage(role, { do: 'key', key: 'Return' });
-                return 'Return';
-            }
+        // A key that would press the default button: Return on Linux, Enter on Android.
+        pressDefaultKey() {
             if (platform === 'linux') {
                 keyToLinuxDialog(appTitle, 'Return');
                 return 'Return';
