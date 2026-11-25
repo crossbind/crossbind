@@ -20,7 +20,7 @@ export default {
             rows: [
                 ['`cpp.js`, the CLI and core', '`crossbind`'],
                 ['`create-cpp.js`', '`create-crossbind`'],
-                ['`@cpp.js/plugin-*`, the seven plugins', '`@crossbind/plugin-*`, the same seven names'],
+                ['`@cpp.js/plugin-*`, the seven plugins', '`crossbind()` from `crossbind`, one plugin for every bundler ([step 4](#bundler))'],
                 ['`@cpp.js/core-embind-jsi`', '`@crossbind/core-embind-jsi`'],
                 ['`@cpp.js/package-<name>`, every platform in one package', '`@crossbind/port-<name>`, split per platform: `-wasm`, `-android`, `-ios`, `-wasi`'],
                 ['`cppjs.config.js`', '`crossbind.config.js`'],
@@ -58,7 +58,7 @@ export default {
             type: 'code',
             file: 'shell',
             code: `npm uninstall cpp.js @cpp.js/plugin-vite @cpp.js/package-gdal
-npm install -D crossbind${suffix} @crossbind/plugin-vite${suffix}
+npm install -D crossbind${suffix}
 npm install @crossbind/port-gdal-wasm${suffix}`,
         },
         {
@@ -129,15 +129,15 @@ export default {
             file: 'vite.config.js',
             code: `import { defineConfig } from 'vite';
 // was: import viteCppjsPlugin from '@cpp.js/plugin-vite';
-import viteCrossbindPlugin from '@crossbind/plugin-vite';
+import crossbind from 'crossbind';
 
 export default defineConfig({
-    plugins: [viteCrossbindPlugin()],
+    plugins: [crossbind()],
 });`,
         },
         {
             type: 'p',
-            text: 'Rollup, Webpack, Rspack, Metro and the React Native plugin follow the same rename; how each one is registered is unchanged. See [Bundler plugins](/guide/bundler-plugins/) and [React Native](/guide/react-native/#metro).',
+            text: "Rollup, Webpack and Rspack take the same `crossbind()` where the cpp.js plugin was; Webpack and Rspack also drop the plugin's `getRule()` and `getDevServerConfig()` lines, as `crossbind()` adds both. Metro's config goes inside `crossbind(...)`, and a React Native app installs `@crossbind/extension-react-native` and `@crossbind/extension-react-native-ios` in place of `@cpp.js/plugin-react-native`. See [Bundler plugins](/guide/bundler-plugins/) and [React Native](/guide/react-native/#metro).",
         },
 
         { type: 'h2', id: 'code', text: '5. Update the JavaScript' },

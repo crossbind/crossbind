@@ -39,7 +39,7 @@ export default {
         {
             type: 'code',
             file: 'shell',
-            code: `npm install -D crossbind${suffix} @crossbind/plugin-vite${suffix} @crossbind/core-app-host${suffix}`,
+            code: `npm install -D crossbind${suffix} @crossbind/core-app-host${suffix}`,
         },
         {
             type: 'code',
@@ -52,7 +52,7 @@ export default {
         },
         {
             type: 'p',
-            text: '`vite.config.js` registers the [Vite plugin](/guide/bundler-plugins/#vite) as for the browser. C++ goes in `src/native`, and the page imports its headers as a web page does:',
+            text: '`vite.config.js` has [`crossbind()`](/guide/bundler-plugins/#vite) in its plugins, as for the browser. C++ goes in `src/native`, and the page imports its headers as a web page does:',
         },
         {
             type: 'code',

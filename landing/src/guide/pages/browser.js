@@ -18,7 +18,7 @@ export default {
         { type: 'code', file: 'shell', code: `${CREATE_COMMAND} my-app Web React Vite` },
         {
             type: 'p',
-            text: 'In an existing app, add the plugin ([Bundler plugins](/guide/bundler-plugins/)) and this config:',
+            text: 'In an existing app, add `crossbind()` to your bundler ([Bundler plugins](/guide/bundler-plugins/)) and this config:',
         },
         {
             type: 'code',

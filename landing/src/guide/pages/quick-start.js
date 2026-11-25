@@ -4,7 +4,6 @@ import {
 } from '../../data.js';
 import { RELEASE, WEB_IMAGE } from '../../release.js';
 
-const PLUGIN = RELEASE.companions['@crossbind/plugin-vite'];
 const CREATOR = RELEASE.companions['create-crossbind'];
 
 // These three come from data.js on purpose: the hero's setup modal, the landing's scaffolder
@@ -14,7 +13,7 @@ export default {
     slug: 'quick-start',
     title: 'Quick start',
     description: 'Prerequisites, a new project or an existing one, and your first call into C++.',
-    lede: `Scaffold a new project, or add ${BRAND} to an app you already have. Either way you end up with a bundler plugin, a \`crossbind.config.js\` and a header you import from JavaScript.`,
+    lede: `Scaffold a new project, or add ${BRAND} to an app you already have. Either way you end up with \`crossbind()\` in your bundler's config, a \`crossbind.config.js\` and a header you import from JavaScript.`,
     blocks: [
         {
             type: 'callout',
@@ -56,7 +55,7 @@ docker pull ${WEB_IMAGE}   # optional: the first build pulls it anyway`,
         { type: 'h2', id: 'new-project', text: 'A new project' },
         {
             type: 'p',
-            text: 'The scaffolder sets up the bundler, its plugin and a starter `crossbind.config.js`. Answer the prompts; if unsure, pick Web, React and Vite. For a desktop or mobile app, pick Desktop and App, then follow [Apps](/guide/apps/).',
+            text: 'The scaffolder sets up the bundler with `crossbind()` and a starter `crossbind.config.js`. Answer the prompts; if unsure, pick Web, React and Vite. For a desktop or mobile app, pick Desktop and App, then follow [Apps](/guide/apps/).',
         },
         { type: 'code', file: 'shell', code: CREATE_COMMAND },
         {
@@ -88,36 +87,36 @@ npm run dev`,
         { type: 'h2', id: 'existing-project', text: 'An existing project' },
         {
             type: 'p',
-            text: 'Install the plugin for your bundler and register it. Vite is shown here; Webpack, Rspack and Rollup are on [Bundler plugins](/guide/bundler-plugins/), Metro on [React Native](/guide/react-native/#metro).',
+            text: "Install crossbind and add `crossbind()` to your bundler's plugins. Vite is shown here; Webpack, Rspack and Rollup are on [Bundler plugins](/guide/bundler-plugins/), Metro on [React Native](/guide/react-native/#metro).",
         },
-        { type: 'code', file: 'shell', code: installCommand('@crossbind/plugin-vite') },
+        { type: 'code', file: 'shell', code: installCommand(BRAND) },
         {
             type: 'callout',
             tone: 'note',
             title: 'Versions on this page',
             text: `${RELEASE.distTagSuffix ? `Install commands here follow the npm \`${RELEASE.distTag}\` tag` : 'Install commands here follow the default npm tag'}. `
-                + `When this page was built, that meant \`${BRAND}@${RELEASE.version}\` ([changelog](${changelogHref(RELEASE.version)})), `
-                + `\`@crossbind/plugin-vite@${PLUGIN.version}\` (for \`${BRAND} ${PLUGIN.crossbindRange}\`) and \`create-crossbind@${CREATOR.version}\`. `
+                + `When this page was built, that meant \`${BRAND}@${RELEASE.version}\` ([changelog](${changelogHref(RELEASE.version)})) `
+                + `and \`create-crossbind@${CREATOR.version}\`. `
                 + 'To set up the same versions later, pin them:',
         },
         {
             type: 'code',
             file: 'shell',
-            code: `npm create crossbind@${CREATOR.version} my-app Web React Vite\nnpm install -D @crossbind/plugin-vite@${PLUGIN.version} ${BRAND}@${RELEASE.version}`,
+            code: `npm create crossbind@${CREATOR.version} my-app Web React Vite\nnpm install -D ${BRAND}@${RELEASE.version}`,
         },
         {
             type: 'code',
             file: 'vite.config.js',
             code: `import { defineConfig } from 'vite';
-import viteCrossbindPlugin from '@crossbind/plugin-vite';
+import crossbind from 'crossbind';
 
 export default defineConfig({
-    plugins: [viteCrossbindPlugin()],
+    plugins: [crossbind()],
 });`,
         },
         {
             type: 'p',
-            text: 'The plugin reads `crossbind.config.js` from your project root. The minimal one sets `paths.config`, which every other path resolves from:',
+            text: '`crossbind()` reads `crossbind.config.js` from your project root. The minimal one sets `paths.config`, which every other path resolves from:',
         },
         {
             type: 'code',
@@ -173,7 +172,7 @@ console.log(await MySampleClass.sample());`,
         { type: 'h2', id: 'build', text: 'Build for production' },
         {
             type: 'p',
-            text: "Your bundler's build compiles a release build through the plugin.",
+            text: "Your bundler's build compiles a release build through `crossbind()`.",
         },
         { type: 'code', file: 'shell', code: 'npm run build' },
         {

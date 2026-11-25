@@ -3,16 +3,10 @@ import { RELEASE } from '../../release.js';
 
 const tag = RELEASE.distTagSuffix;
 
-const metroConfig = (imports) => `${imports}
-const CrossbindMetroPlugin = require('@crossbind/plugin-metro');
+const metroConfig = (from) => `const { getDefaultConfig } = require('${from}');
+const crossbind = require('crossbind');
 
-const defaultConfig = getDefaultConfig(__dirname);
-
-const config = {
-    ...CrossbindMetroPlugin(defaultConfig),
-};
-
-module.exports = mergeConfig(defaultConfig, config);`;
+module.exports = crossbind(getDefaultConfig(__dirname));`;
 
 export default {
     slug: 'react-native',
@@ -23,15 +17,15 @@ export default {
         { type: 'h2', id: 'setup', text: 'Set up' },
         {
             type: 'p',
-            text: 'Install the runtime packages as dependencies, so React Native autolinks them, and the Metro plugin as a dev dependency. `crossbind` itself comes with `@crossbind/plugin-react-native`.',
+            text: 'Install the runtime packages as dependencies, so React Native autolinks them, and `crossbind` as a dev dependency.',
         },
         {
             type: 'code',
             file: 'shell',
-            code: `npm install @crossbind/plugin-react-native${tag} \\
-    @crossbind/plugin-react-native-ios-helper${tag} \\
+            code: `npm install @crossbind/extension-react-native${tag} \\
+    @crossbind/extension-react-native-ios${tag} \\
     @crossbind/core-embind-jsi${tag}
-npm install --save-dev @crossbind/plugin-metro${tag}`,
+npm install --save-dev crossbind${tag}`,
         },
         {
             type: 'p',
@@ -77,12 +71,12 @@ export default function App() {
         { type: 'h2', id: 'metro', text: 'Metro' },
         {
             type: 'p',
-            text: '`@crossbind/plugin-metro` turns header, `.i` and `.rs` imports into JavaScript modules and writes the C++ bridge for each header while Metro bundles. Wrap the default config with it:',
+            text: '`crossbind()` turns header, `.i` and `.rs` imports into JavaScript modules and writes the C++ bridge for each header while Metro bundles. Metro has no plugin list, so it wraps the config, as the outermost wrapper:',
         },
-        { type: 'code', file: 'metro.config.js', code: metroConfig("const { getDefaultConfig, mergeConfig } = require('@react-native/metro-config');") },
+        { type: 'code', file: 'metro.config.js', code: metroConfig('@react-native/metro-config') },
         {
             type: 'p',
-            text: 'In a monorepo, also add the workspace root to `watchFolders`, or Metro cannot resolve the workspace packages.',
+            text: 'A config of your own merges inside it: `crossbind(mergeConfig(getDefaultConfig(__dirname), config))`. In a monorepo, also add the workspace root to `watchFolders`, or Metro cannot resolve the workspace packages.',
         },
 
         { type: 'h2', id: 'ios', text: 'iOS' },
@@ -117,7 +111,7 @@ npm run ios`,
             type: 'ul',
             items: [
                 'ABIs: `arm64-v8a` and `x86_64`, narrowed to the app\'s `reactNativeArchitectures`.',
-                'CMake 3.28 or newer, which the plugin\'s CMake script requires.',
+                'CMake 3.28 or newer, which the extension\'s CMake script requires.',
                 'Your C++ compiles with the app\'s NDK at its `minSdkVersion`, 24 when the app sets none. The port libraries come prebuilt from crossbind\'s Android image, built against API level 33.',
             ],
         },
@@ -125,27 +119,32 @@ npm run ios`,
         { type: 'h2', id: 'expo', text: 'Expo' },
         {
             type: 'p',
-            text: 'Expo Go cannot load your C++, so the app needs native projects of its own, which `expo prebuild` generates. Install the same packages as above and add the config plugin to `app.json` before prebuilding:',
+            text: "Expo Go cannot load your C++, so the app needs native projects of its own, which `expo prebuild` generates. Install the same packages as above, add `crossbind` to `app.json`'s plugins and list the React Native extension in `crossbind.config.mjs` before prebuilding; `crossbind add @crossbind/extension-react-native` installs and lists it in one step.",
         },
         {
             type: 'code',
             file: 'app.json',
             code: `{
     "expo": {
-        "plugins": ["@crossbind/plugin-react-native"]
+        "plugins": ["crossbind"]
     }
 }`,
         },
         {
-            type: 'p',
-            text: 'During prebuild the plugin sets up the iOS project for crossbind: arm64 simulators only, iOS 15.1 at least, and the UIScene lifecycle iOS 27 requires. Wrap Expo\'s own Metro config; it exports no `mergeConfig`, so also install `metro-config` as a dev dependency (`npm install --save-dev metro-config`):',
+            type: 'code',
+            file: 'crossbind.config.mjs',
+            code: `import reactNative from '@crossbind/extension-react-native/crossbind.extension.js';
+
+export default {
+    extensions: [reactNative()],
+    paths: { config: import.meta.url },
+};`,
         },
         {
-            type: 'code',
-            file: 'metro.config.js',
-            code: metroConfig(`const { getDefaultConfig } = require('expo/metro-config');
-const { mergeConfig } = require('metro-config');`),
+            type: 'p',
+            text: "During prebuild the extension sets up the iOS project for crossbind: arm64 simulators only, iOS 15.1 at least, and the UIScene lifecycle iOS 27 requires. Wrap Expo's own Metro config the same way:",
         },
+        { type: 'code', file: 'metro.config.js', code: metroConfig('expo/metro-config') },
         {
             type: 'code',
             file: 'shell',
@@ -155,13 +154,13 @@ npx expo run:android`,
         },
         {
             type: 'p',
-            text: 'Expo\'s web build compiles the same imports to WebAssembly, single-threaded unless `target.runtime` is `\'mt\'`, which needs COOP/COEP headers from the host. Stage the web dependencies before Metro starts, and link the wasm in after an export:',
+            text: "Expo's web build compiles the same imports to WebAssembly, single-threaded unless `target.runtime` is `'mt'`, which needs COOP/COEP headers from the host. With `react-native-web` installed, Expo's own commands do it all: `crossbind()` stages the web dependencies as Metro starts, and Expo's export carries the compiled module.",
         },
         {
             type: 'code',
             file: 'shell',
-            code: `npx crossbind-metro prepare-web && npx expo start --web
-npx crossbind-metro prepare-web && npx expo export -p web --clear && npx crossbind-metro export-web dist`,
+            code: `npx expo start --web
+npx expo export -p web --clear`,
         },
 
         { type: 'h2', id: 'threads-files', text: 'Threads and files' },

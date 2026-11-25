@@ -89,10 +89,10 @@ export const OVERVIEW_PAGE = {
         { type: 'code', file: 'shell', code: CREATE_COMMAND },
         {
             type: 'p',
-            text: 'An existing app: install the plugin for your bundler, add a two-line `crossbind.config.js`, import a header '
+            text: 'An existing app: install crossbind, add `crossbind()` to your bundler, add a two-line `crossbind.config.js`, import a header '
                 + `from JavaScript and call \`initNative()\` once. Both paths are in the [quick start](${guideHref('quick-start')}).`,
         },
-        { type: 'code', file: 'shell', code: installCommand('@crossbind/plugin-vite') },
+        { type: 'code', file: 'shell', code: installCommand('crossbind') },
         {
             type: 'p',
             text: `With a coding agent: install the ${BRAND} skill once, then ask the agent to add ${BRAND}; see [Agent setup](${AGENT_URL}).`,

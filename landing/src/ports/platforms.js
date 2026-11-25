@@ -56,16 +56,10 @@ const WRANGLER_CONFIG = `name = "my-worker"
 main = "index.js"
 compatibility_date = "2024-09-08"`;
 
-const METRO_CONFIG = `const { getDefaultConfig, mergeConfig } = require('@react-native/metro-config');
-const CrossbindMetroPlugin = require('@crossbind/plugin-metro');
+const METRO_CONFIG = `const { getDefaultConfig } = require('@react-native/metro-config');
+const crossbind = require('crossbind');
 
-const defaultConfig = getDefaultConfig(__dirname);
-
-const config = {
-    ...CrossbindMetroPlugin(defaultConfig),
-};
-
-module.exports = mergeConfig(defaultConfig, config);`;
+module.exports = crossbind(getDefaultConfig(__dirname));`;
 
 // More than two packages go one to a line, so the command stays readable without scrolling.
 const install = (packages, devPackages = []) =>
@@ -222,7 +216,7 @@ function reactNativeBlocks(port) {
         {
             type: 'code',
             file: 'shell',
-            code: `${install(['@crossbind/plugin-react-native', '@crossbind/plugin-react-native-ios-helper', '@crossbind/core-embind-jsi', ...mobile.map((variant) => variant.package)], ['@crossbind/plugin-metro'])}${ios ? '\ncd ios && pod install' : ''}`,
+            code: `${install(['@crossbind/extension-react-native', '@crossbind/extension-react-native-ios', '@crossbind/core-embind-jsi', ...mobile.map((variant) => variant.package)], ['crossbind'])}${ios ? '\ncd ios && pod install' : ''}`,
         },
         { type: 'code', file: 'crossbind.config.mjs', code: configCode(port, mobile) },
         { type: 'code', file: 'metro.config.js', code: METRO_CONFIG },
