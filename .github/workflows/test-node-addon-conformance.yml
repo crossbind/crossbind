@@ -606,9 +606,7 @@ jobs:
                     - { runner: windows-latest, arch: x64 }
                     - { runner: windows-11-arm, arch: arm64 }
         runs-on: ${{ matrix.runner }}
-        # The previews' run reads each question through a Windows PowerShell of its own, which takes seconds to start on
-        # the arm64 runner.
-        timeout-minutes: 30
+        timeout-minutes: 15
         env:
             # The common name of the signer the updater holds an update to, once the runner trusts the build's key:
             # e2e/run.mjs checks the app named it.
