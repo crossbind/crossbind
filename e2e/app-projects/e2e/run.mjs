@@ -656,7 +656,7 @@ async function checkFunctions() {
     for (const name of names) {
         const answer = answers[name];
         if (answer === ABSENT(name)) {
-            expect(!Object.hasOwn(open, name) || name === 'shell.openExternal', `the app has no ${name}, which a project's page reaches`);
+            expect(!Object.hasOwn(open, name), `the app has no ${name}, which a project's page reaches`);
             counted.absent += 1;
         } else if (Object.hasOwn(open, name)) {
             expect(open[name](answer), `a project's page called ${name} and got ${answer}`);
