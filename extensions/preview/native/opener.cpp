@@ -383,7 +383,8 @@ void serve(const Call &call, const Checked &found) {
             openProxy = proxy;
         }
         if (found.session.source == "snapshot") noteOpened(found.session.id, found.session.version);
-        call.resolve(Value::Object{{"url", origin.url()}});
+        // The page goes to the origin once its requests' holder knows the preview they are of.
+        serveConsents({origin.url(), found.originName, found.session.projectName}, [call, url = origin.url()] { call.resolve(Value::Object{{"url", url}}); });
     } catch (const std::exception &error) {
         call.reject(error.what());
     }
@@ -418,6 +419,8 @@ void endPreview(const std::string &words, const std::string &session) {
         ending.swap(openOrigin);
         openProxy.reset();
     }
+    // Its question closes unanswered, and what it asked for is denied, before the origin ends.
+    endConsents();
     ending->end();
     if (!words.empty()) holdEvent("ended", Value::Object{{"message", words}});
 }

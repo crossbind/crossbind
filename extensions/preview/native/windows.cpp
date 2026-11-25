@@ -1,12 +1,17 @@
 // Windows' own for the preview extension: the Credential Manager keeps the app's token, CNG makes HMAC-SHA256, SHA-256
-// and random bytes, and the default browser shows the page that approves a sign-in.
+// and random bytes, the default browser shows the page that approves a sign-in, and a project's question is a task
+// dialog of its window.
 #include "preview.h"
 
 #include <windows.h>
 
 #include <bcrypt.h>
+#include <commctrl.h>
 #include <wincred.h>
 
+#include <cstdio>
+#include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <thread>
 
@@ -46,6 +51,29 @@ std::optional<std::string> digestOf(bool isHmac, const std::string &key, const s
 void answerDigest(const std::optional<std::string> &digest, const Digest &done) {
     if (digest) done(std::nullopt, *digest);
     else done(std::string("crossbind: Windows made no SHA-256"), {});
+}
+
+// The question's own buttons, numbered past the common ones, IDOK to IDCONTINUE.
+constexpr int DONT_ALLOW_BUTTON = 100;
+constexpr int ALLOW_BUTTON = 101;
+
+// The question's task dialog once it shows, and whether it was closed unanswered.
+struct Asked {
+    std::mutex mutex;
+    HWND dialog = nullptr;
+    bool isClosed = false;
+};
+
+HRESULT CALLBACK onQuestion(HWND dialog, UINT notification, WPARAM, LPARAM, LONG_PTR data) {
+    auto *asked = reinterpret_cast<Asked *>(data);
+    std::lock_guard<std::mutex> lock(asked->mutex);
+    if (notification == TDN_CREATED) {
+        asked->dialog = dialog;
+        if (asked->isClosed) PostMessageW(dialog, TDM_CLICK_BUTTON, DONT_ALLOW_BUTTON, 0);
+    } else if (notification == TDN_DESTROYED) {
+        asked->dialog = nullptr;
+    }
+    return S_OK;
 }
 
 }  // namespace
@@ -118,5 +146,56 @@ std::string systemVersion() {
 }
 
 bool asksForLocalNetwork() { return false; }
+
+// A task dialog of the window, modal to it alone and titled with the app's name: Don't Allow its default button, which
+// Return and its first focus take; with no cancel of its own, Escape, Alt+F4 and its close button leave it up. Its modal
+// loop runs in a task of the main thread, which holds the answers of the window's pages until it closes, as a message
+// dialog's does; it closes by a message of its own, which passes that.
+std::function<void()> showConsent(uint64_t window, const std::string &message, const std::string &detail,
+    std::function<void(std::optional<bool> isAllowed)> done) {
+    auto asked = std::make_shared<Asked>();
+    crossbind::onMainThread([window, message, detail, done, asked] {
+        const std::optional<crossbind::Window> open = crossbind::windowOf(window);
+        HWND parent = static_cast<HWND>(open ? open->native() : crossbind::appWindow());
+        if (!parent) {
+            done(std::nullopt);
+            return;
+        }
+        const std::wstring title = wide(crossbind::appName());
+        const std::wstring instruction = wide(message);
+        const std::wstring content = wide(detail);
+        const TASKDIALOG_BUTTON buttons[] = {{ALLOW_BUTTON, L"Allow"}, {DONT_ALLOW_BUTTON, L"Don't Allow"}};
+        TASKDIALOGCONFIG config{};
+        config.cbSize = sizeof config;
+        config.hwndParent = parent;
+        config.dwFlags = TDF_POSITION_RELATIVE_TO_WINDOW;
+        config.pszWindowTitle = title.c_str();
+        config.pszMainIcon = TD_INFORMATION_ICON;
+        config.pszMainInstruction = instruction.c_str();
+        config.pszContent = content.c_str();
+        config.cButtons = 2;
+        config.pButtons = buttons;
+        config.nDefaultButton = DONT_ALLOW_BUTTON;
+        config.pfCallback = onQuestion;
+        config.lpCallbackData = reinterpret_cast<LONG_PTR>(asked.get());
+        int clicked = 0;
+        const HRESULT shown = TaskDialogIndirect(&config, &clicked, nullptr, nullptr);
+        {
+            std::lock_guard<std::mutex> lock(asked->mutex);
+            if (asked->isClosed) return;
+        }
+        if (SUCCEEDED(shown)) {
+            done(clicked == ALLOW_BUTTON);
+            return;
+        }
+        std::fprintf(stderr, "crossbind: preview's question could not show: 0x%08lx\n", static_cast<unsigned long>(shown));
+        done(std::nullopt);
+    });
+    return [asked] {
+        std::lock_guard<std::mutex> lock(asked->mutex);
+        asked->isClosed = true;
+        if (asked->dialog) PostMessageW(asked->dialog, TDM_CLICK_BUTTON, DONT_ALLOW_BUTTON, 0);
+    };
+}
 
 }  // namespace preview

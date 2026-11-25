@@ -66,6 +66,10 @@ void dropListed(const std::string &id);
 // Each snapshot's version as it was opened last, from the app's data folder.
 std::optional<int> openedVersion(const std::string &id);
 void noteOpened(const std::string &id, int version);
+// A file of the extension's own in the app's data folder, as preview/versions.json: its text, none where it cannot be
+// read; and its text written whole, which a read sees all of or none of: why it could not be, or none.
+std::optional<std::string> readDataFile(const std::string &name);
+Failure writeDataFile(const std::string &name, const std::string &text);
 // Holds the event preview.<name> for the app's page, which asks for it with events.held() as it loads.
 void holdEvent(const std::string &name, const Value &value);
 
@@ -79,6 +83,29 @@ void addOpenerFunctions(crossbind::Registry &registry);
 // requests.cpp: what a page asks to use and the files dropped on it, by the page's role, as the holder of the host's
 // page-permissions and page-drops.
 void addPageRequests(crossbind::Registry &registry);
+
+// consents.cpp: the camera, the microphone and the location a project's page asks for, which its user allows at the
+// app's own question or not, for the preview the extension serves: its origin's URL, the origin's name its answers are
+// kept under, and the project's name from the account's list, which the question shows. then runs once whatever takes
+// the page's requests knows it. The preview's end closes the question unanswered and denies what waits for it.
+struct Served {
+    std::string url;
+    std::string name;
+    std::string project;
+};
+void serveConsents(Served served, std::function<void()> then);
+void endConsents();
+#if !defined(__ANDROID__)
+// A request of a page whose role is a served origin's, which the extension's own question decides; Android's are its
+// Java's.
+void askConsent(crossbind::PagePermission request);
+// The platform's own question over the window of this id, the app's oldest for 0, on the main thread: modal to that
+// window alone, its default button Don't Allow, its two buttons its only way out. done gets whether its user pressed
+// Allow, once, on the main thread, or none where it could not be shown; the function it gives closes it unanswered,
+// from any thread, as a Windows task dialog holds the main thread's queue, and done hears nothing of that.
+std::function<void()> showConsent(uint64_t window, const std::string &message, const std::string &detail,
+    std::function<void(std::optional<bool> isAllowed)> done);
+#endif
 
 // cloud.cpp: a call of crossbind cloud's, with the app's token where one is given: done gets why it failed, or its
 // status and its answer's JSON, null for none or for one that is no JSON.

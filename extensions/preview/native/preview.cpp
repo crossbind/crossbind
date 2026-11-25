@@ -30,18 +30,16 @@ bool keyring = true;
 std::vector<Session> list;
 
 std::mutex versionsMutex;
+const std::string VERSIONS = "versions.json";
 
 fs::path pathOf(const std::string &text) { return fs::path(std::u8string(text.begin(), text.end())); }
 
-fs::path versionsFile() { return pathOf(crossbind::app::paths().data) / "preview" / "versions.json"; }
+fs::path dataFileOf(const std::string &name) { return pathOf(crossbind::app::paths().data) / "preview" / pathOf(name); }
 
 Value readVersions() {
-    std::ifstream in(versionsFile(), std::ios::binary);
-    if (!in) return Value::Object{};
-    std::stringstream text;
-    text << in.rdbuf();
+    const std::optional<std::string> text = readDataFile(VERSIONS);
     try {
-        Value versions = parseJson(text.str());
+        Value versions = text ? parseJson(*text) : Value();
         return versions.isObject() ? versions : Value(Value::Object{});
     } catch (const std::exception &) {
         return Value::Object{};
@@ -181,16 +179,34 @@ void noteOpened(const std::string &id, int version) {
         if (session != id) versions.emplace_back(session, opened);
     }
     versions.emplace_back(id, version);
-    const fs::path file = versionsFile();
+    writeDataFile(VERSIONS, Value(std::move(versions)).json());
+}
+
+std::optional<std::string> readDataFile(const std::string &name) {
+    std::ifstream in(dataFileOf(name), std::ios::binary);
+    if (!in) return std::nullopt;
+    std::stringstream text;
+    text << in.rdbuf();
+    return text.str();
+}
+
+Failure writeDataFile(const std::string &name, const std::string &text) {
+    const fs::path file = dataFileOf(name);
     std::error_code error;
     fs::create_directories(file.parent_path(), error);
+    if (error) return error.message();
     const fs::path written = fs::path(file).concat(".new");
     {
         std::ofstream out(written, std::ios::binary | std::ios::trunc);
-        out << Value(std::move(versions)).json();
-        if (!out) return;
+        out << text;
+        out.close();
+        if (!out) return std::string("the file could not be written");
     }
     fs::rename(written, file, error);
+    if (!error) return std::nullopt;
+    std::error_code ignored;
+    fs::remove(written, ignored);
+    return error.message();
 }
 
 }  // namespace preview

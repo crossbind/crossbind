@@ -1,5 +1,6 @@
 // Apple's own for the preview extension: the keychain keeps the app's token, CommonCrypto makes HMAC-SHA256 and SHA-256,
-// and ASWebAuthenticationSession shows the page that approves a sign-in, never the default browser.
+// ASWebAuthenticationSession shows the page that approves a sign-in, never the default browser, and a project's
+// question is a sheet of its window on macOS and an alert on iOS.
 #include "preview.h"
 
 #include <cstdlib>
@@ -12,6 +13,8 @@
 #import <Security/Security.h>
 #if TARGET_OS_IPHONE
 #import <UIKit/UIKit.h>
+#else
+#import <AppKit/AppKit.h>
 #endif
 
 @interface CBPreviewSheetAnchor : NSObject <ASWebAuthenticationPresentationContextProviding>
@@ -188,5 +191,94 @@ std::string systemVersion() {
 }
 
 bool asksForLocalNetwork() { return true; }
+
+#if TARGET_OS_IPHONE
+namespace {
+
+// Whether the question's alert shows, and whether it was closed, on the main thread.
+struct Shown {
+    bool isShown = false;
+    bool isClosed = false;
+};
+
+}  // namespace
+
+// An alert over whatever the window shows on top, a page's own alert among it: Don't Allow its preferred action, which
+// a keyboard's Return presses, and neither of the cancel style, which Escape would press. It closes once it shows, as a
+// dismissal during its presentation does not take.
+std::function<void()> showConsent(uint64_t window, const std::string &message, const std::string &detail,
+    std::function<void(std::optional<bool> isAllowed)> done) {
+    const std::optional<crossbind::Window> open = crossbind::windowOf(window);
+    UIViewController *top = ((__bridge UIWindow *)(open ? open->native() : crossbind::appWindow())).rootViewController;
+    while (top.presentedViewController) top = top.presentedViewController;
+    if (!top || top.isBeingDismissed) {
+        done(std::nullopt);
+        return nullptr;
+    }
+    auto state = std::make_shared<Shown>();
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:stringOf(message)
+                                                                   message:stringOf(detail)
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+    UIAlertAction *dontAllow = [UIAlertAction actionWithTitle:@"Don't Allow"
+                                                        style:UIAlertActionStyleDefault
+                                                      handler:^(UIAlertAction *) {
+                                                          if (!state->isClosed) done(false);
+                                                      }];
+    [alert addAction:dontAllow];
+    [alert addAction:[UIAlertAction actionWithTitle:@"Allow"
+                                              style:UIAlertActionStyleDefault
+                                            handler:^(UIAlertAction *) {
+                                                if (!state->isClosed) done(true);
+                                            }]];
+    alert.preferredAction = dontAllow;
+    __weak UIAlertController *shown = alert;
+    [top presentViewController:alert
+                      animated:YES
+                    completion:^{
+                        state->isShown = true;
+                        if (state->isClosed) [shown.presentingViewController dismissViewControllerAnimated:NO completion:nil];
+                    }];
+    return [state, shown] {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            state->isClosed = true;
+            if (state->isShown) [shown.presentingViewController dismissViewControllerAnimated:NO completion:nil];
+        });
+    };
+}
+#else
+// A sheet of the window, which leaves the menu bar and the app's other windows working: Don't Allow its first button,
+// which Return presses, and Escape none, as NSAlert gives Escape to a button named Cancel alone.
+std::function<void()> showConsent(uint64_t window, const std::string &message, const std::string &detail,
+    std::function<void(std::optional<bool> isAllowed)> done) {
+    const std::optional<crossbind::Window> open = crossbind::windowOf(window);
+    NSWindow *parent = (__bridge NSWindow *)(open ? open->native() : crossbind::appWindow());
+    if (!parent) {
+        done(std::nullopt);
+        return nullptr;
+    }
+    NSAlert *alert = [NSAlert new];
+    alert.messageText = stringOf(message);
+    alert.informativeText = stringOf(detail);
+    [alert addButtonWithTitle:@"Don't Allow"].keyEquivalent = @"\r";
+    [alert addButtonWithTitle:@"Allow"].keyEquivalent = @"";
+    auto isClosed = std::make_shared<bool>(false);
+    [alert beginSheetModalForWindow:parent
+                  completionHandler:^(NSModalResponse response) {
+                      if (*isClosed) return;
+                      if (response == NSAlertFirstButtonReturn) done(false);
+                      else if (response == NSAlertSecondButtonReturn) done(true);
+                  }];
+    __weak NSAlert *shown = alert;
+    __weak NSWindow *weakParent = parent;
+    // A sheet asked while another shows waits behind it among the window's sheets, which endSheet takes it from.
+    return [isClosed, shown, weakParent] {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            *isClosed = true;
+            NSWindow *sheet = shown.window;
+            if (sheet && [weakParent.sheets containsObject:sheet]) [weakParent endSheet:sheet returnCode:NSModalResponseAbort];
+        });
+    };
+}
+#endif
 
 }  // namespace preview
