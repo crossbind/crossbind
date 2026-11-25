@@ -22,7 +22,8 @@ function cloudOf(cloud, snapshots) {
 // The crossbind app's previews of the account it is signed in to: the device sign-in and the token in the system's
 // store, the account's list, the opener and the proxy of a session's origin, with links of the app's own scheme and,
 // on a phone, of crossbind.dev/open; and what a page asks to use and the files dropped on it, by the page's role, in
-// place of the host's page-permissions and page-drops.
+// place of the host's page-permissions and page-drops, a project's camera, microphone and location at the app's own
+// question.
 export default function preview({ cloud = 'production', snapshots } = {}) {
     const asked = cloudOf(cloud, snapshots);
     const apple = {
@@ -42,10 +43,10 @@ export default function preview({ cloud = 'production', snapshots } = {}) {
         app: {
             urlSchemes: ['dev.crossbind.app'],
             links: ['crossbind.dev/open'],
-            sources: ['native/preview.cpp', 'native/cloud.cpp', 'native/opener.cpp', 'native/requests.cpp', 'native/values.cpp'],
+            sources: ['native/preview.cpp', 'native/cloud.cpp', 'native/opener.cpp', 'native/requests.cpp', 'native/consents.cpp', 'native/values.cpp'],
             macos: apple,
             ios: apple,
-            windows: { sources: ['native/windows.cpp'], libraries: ['advapi32', 'bcrypt'] },
+            windows: { sources: ['native/windows.cpp'], libraries: ['advapi32', 'bcrypt', 'comctl32'] },
             linux: { sources: ['native/linux.cpp'], packages: LIBSECRET, libraries: ['secret-1'], depends: ['libsecret-1-0'] },
             android: {
                 sources: ['native/android.cpp'],

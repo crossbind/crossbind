@@ -1,12 +1,14 @@
 // Linux's own for the preview extension: the Secret Service keeps the app's token, through libsecret, and where no
 // keyring runs the extension keeps it for the run alone; GLib makes HMAC-SHA256 and SHA-256; the default browser shows
-// the page that approves a sign-in.
+// the page that approves a sign-in; and a project's question is a dialog of its window.
 #include "preview.h"
 
+#include <gtk/gtk.h>
 #include <libsecret/secret.h>
 #include <sys/random.h>
 
 #include <fstream>
+#include <memory>
 #include <thread>
 
 namespace preview {
@@ -25,6 +27,27 @@ std::string wordsOf(GError *error) {
     if (error) g_error_free(error);
     return words;
 }
+
+constexpr int DONT_ALLOW_RESPONSE = 0;
+constexpr int ALLOW_RESPONSE = 1;
+
+// The question's dialog while it is up, and its answer's: on the main thread.
+struct Asked {
+    std::function<void(std::optional<bool>)> done;
+    GtkWidget *dialog = nullptr;
+};
+
+// Escape and the window manager's close come as another response, which leaves it up.
+void onQuestion(GtkDialog *dialog, gint response, gpointer data) {
+    if (response != ALLOW_RESPONSE && response != DONT_ALLOW_RESPONSE) return;
+    const std::shared_ptr<Asked> asked = *static_cast<std::shared_ptr<Asked> *>(data);
+    gtk_widget_destroy(GTK_WIDGET(dialog));
+    asked->done(response == ALLOW_RESPONSE);
+}
+
+void onQuestionGone(GtkWidget *, gpointer data) { (*static_cast<std::shared_ptr<Asked> *>(data))->dialog = nullptr; }
+
+void forget(gpointer data, GClosure *) { delete static_cast<std::shared_ptr<Asked> *>(data); }
 
 }  // namespace
 
@@ -115,5 +138,40 @@ std::string systemVersion() {
 }
 
 bool asksForLocalNetwork() { return false; }
+
+// A dialog of the window, modal to it, titled with the app's name: Don't Allow its default response, which Return takes,
+// and its first focus; neither Escape nor the window manager's close answers it. It shows without a loop of its own, so
+// the pages' calls go on meanwhile.
+std::function<void()> showConsent(uint64_t window, const std::string &message, const std::string &detail,
+    std::function<void(std::optional<bool> isAllowed)> done) {
+    const std::optional<crossbind::Window> open = crossbind::windowOf(window);
+    GtkWindow *parent = static_cast<GtkWindow *>(open ? open->native() : crossbind::appWindow());
+    if (!parent) {
+        done(std::nullopt);
+        return nullptr;
+    }
+    GtkWidget *dialog = gtk_message_dialog_new(parent, static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT), GTK_MESSAGE_QUESTION,
+        GTK_BUTTONS_NONE, "%s", message.c_str());
+    gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(dialog), "%s", detail.c_str());
+    gtk_window_set_title(GTK_WINDOW(dialog), crossbind::appName().c_str());
+    gtk_window_set_deletable(GTK_WINDOW(dialog), FALSE);
+    // In GNOME's order, the default on the right; a label's underscores stay as they are.
+    GtkWidget *allow = gtk_dialog_add_button(GTK_DIALOG(dialog), "Allow", ALLOW_RESPONSE);
+    GtkWidget *dontAllow = gtk_dialog_add_button(GTK_DIALOG(dialog), "Don't Allow", DONT_ALLOW_RESPONSE);
+    gtk_button_set_use_underline(GTK_BUTTON(allow), FALSE);
+    gtk_button_set_use_underline(GTK_BUTTON(dontAllow), FALSE);
+    gtk_dialog_set_default_response(GTK_DIALOG(dialog), DONT_ALLOW_RESPONSE);
+    const auto asked = std::make_shared<Asked>(Asked{std::move(done), dialog});
+    g_signal_connect(dialog, "delete-event", G_CALLBACK(gtk_true), nullptr);
+    g_signal_connect_data(dialog, "response", G_CALLBACK(onQuestion), new std::shared_ptr<Asked>(asked), forget, GConnectFlags(0));
+    g_signal_connect_data(dialog, "destroy", G_CALLBACK(onQuestionGone), new std::shared_ptr<Asked>(asked), forget, GConnectFlags(0));
+    gtk_widget_show_all(dialog);
+    gtk_widget_grab_focus(dontAllow);
+    return [asked] {
+        crossbind::onMainThread([asked] {
+            if (asked->dialog) gtk_widget_destroy(asked->dialog);
+        });
+    };
+}
 
 }  // namespace preview
