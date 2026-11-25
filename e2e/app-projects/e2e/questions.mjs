@@ -78,8 +78,9 @@ function androidSystemQuestion(nodes) {
 
 // A task dialog of the app's process titled with the app's name, read through UI Automation, or pressed at a button of
 // its name, or sent the command Escape gives a dialog and the close of its window. UI Automation shows a task dialog's
-// button as a pane of the class CCPushButton, which hosts a button window of its own: it is pressed by UI Automation's
-// Invoke where it offers one, else clicked at that window, and the press says which. Its own types are compiled once,
+// button as a pane of the class CCPushButton, which hosts a button window of its own: the dialog brought to the front,
+// as a click on it would, the button is pressed by UI Automation's Invoke where it offers one, then, while the dialog
+// stays, clicked at that window; the press says which went, or fails with what it tried. Its own types are compiled once,
 // before the run's checks, into a library of the system's temporary folder named by the script, which each call after
 // loads.
 const WINDOWS_SCRIPT = String.raw`
@@ -99,6 +100,27 @@ public static class Question {
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowTextW(IntPtr window, StringBuilder text, int size);
     [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr window);
     [DllImport("user32.dll")] public static extern bool PostMessageW(IntPtr window, uint message, IntPtr w, IntPtr l);
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr window);
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] static extern bool IsWindow(IntPtr window);
+    public static bool Gone(IntPtr dialog, int ms) {
+        DateTime until = DateTime.Now.AddMilliseconds(ms);
+        while (IsWindow(dialog) && IsWindowVisible(dialog)) {
+            if (DateTime.Now > until) return false;
+            System.Threading.Thread.Sleep(100);
+        }
+        return true;
+    }
+    public static string Front() {
+        IntPtr front = GetForegroundWindow();
+        uint owner;
+        GetWindowThreadProcessId(front, out owner);
+        var type = new StringBuilder(256);
+        var text = new StringBuilder(512);
+        GetClassNameW(front, type, type.Capacity);
+        GetWindowTextW(front, text, text.Capacity);
+        return type + " '" + text + "' of process " + owner;
+    }
     public static IntPtr Find(uint process, string title) {
         IntPtr found = IntPtr.Zero;
         EnumWindows((window, data) => {
@@ -147,16 +169,22 @@ switch ($env:CROSSBIND_E2E_MODE) {
     'press' {
         $button = $buttons | Where-Object { $_.Current.Name -eq $env:CROSSBIND_E2E_BUTTON } | Select-Object -First 1
         if (-not $button) { throw "the dialog has no button $env:CROSSBIND_E2E_BUTTON" }
+        $front = [Question]::Front()
+        [void][Question]::SetForegroundWindow($dialog)
+        $ways = @()
         $invoke = $null
         if ($button.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invoke)) {
             $invoke.Invoke()
-            'invoked'
-            break
+            $ways += 'invoked'
+            if ([Question]::Gone($dialog, 2000)) { $ways -join ', then '; break }
         }
         $window = [Question]::Button($dialog, $env:CROSSBIND_E2E_BUTTON)
-        if ($window -eq [IntPtr]::Zero) { throw "the button $env:CROSSBIND_E2E_BUTTON offers no Invoke and has no window: $(@($button.GetSupportedPatterns() | ForEach-Object { $_.ProgrammaticName }) -join ', ')" }
-        [void][Question]::PostMessageW($window, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
-        'clicked'
+        if ($window -ne [IntPtr]::Zero) {
+            [void][Question]::PostMessageW($window, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
+            $ways += 'clicked'
+            if ([Question]::Gone($dialog, 2000)) { $ways -join ', then '; break }
+        }
+        throw "the dialog stayed after $(if ($ways.Count) { $ways -join ' and ' } else { 'nothing, its button offering no Invoke and having no window' }); in front before: $front; after: $([Question]::Front())"
     }
     'escape' { [void][Question]::PostMessageW($dialog, 0x0111, [IntPtr]2, [IntPtr]::Zero); 'sent' }
     'close' { [void][Question]::PostMessageW($dialog, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero); 'sent' }
