@@ -37,6 +37,8 @@ const NUMBER = 47;
 const PREVIEW_LISTED = /Projects lists it in the crossbind app on every device signed in as made-up-e2e/;
 const ROLE_REFUSAL = (name) => `a page of the role project does not reach ${name}, which pages of the role app call`;
 const ABSENT = (name) => `Error: crossbind: an app has no function ${name}`;
+// The host's words for a status the proxy cannot answer a web view with.
+const UNTAKEN = (status) => `crossbind: a route answers with a status of 2xx, 4xx or 5xx, which a webview takes, not ${status}`;
 const CLIPBOARD_TEXT = 'crossbind e2e: a project wrote this';
 // What a page of the role project reaches of the app's functions, and what each answers options it does not take: the
 // design's 6.1 as the first version has it. Every other function the app registers refuses it, with the host's words.
@@ -926,11 +928,11 @@ async function flow() {
     const secondStorage = await storageOf('project', 'second');
     expect(holdsNone(secondStorage, 'first') && holdsNone(secondStorage, 'second'), `the second project saw ${JSON.stringify(secondStorage)}`);
     // A source that redirects elsewhere answers the page 502, the redirect unfollowed, as one whose status no webview
-    // takes does.
+    // takes does, in the host's words.
     const elsewhere = await project({ do: 'fetched', path: '/elsewhere' });
-    expect(elsewhere.value?.status === 502 && elsewhere.value.text === 'the source answered 302', `a redirect of the source to another host gave the page ${JSON.stringify(elsewhere)}`);
+    expect(elsewhere.value?.status === 502 && elsewhere.value.text === UNTAKEN(302), `a redirect of the source to another host gave the page ${JSON.stringify(elsewhere)}`);
     const odd = await project({ do: 'fetched', path: '/odd' });
-    expect(odd.value?.status === 502 && odd.value.text === 'the source answered 600', `a status of 600 from the source gave the page ${JSON.stringify(odd)}`);
+    expect(odd.value?.status === 502 && odd.value.text === UNTAKEN(600), `a status of 600 from the source gave the page ${JSON.stringify(odd)}`);
     await closePreview();
     await openSession(dev, devOrigin);
     const again = await storageOf('project');

@@ -152,8 +152,8 @@ void verify(const Session &session, const Account &account, const std::string &g
 
 // The proxy of an open preview's origin: each GET and HEAD a fetch of the session's source, with the request's Accept,
 // Accept-Language and Range alone and the gate's token, its answer passed back with its status and the headers PASSED
-// names; a redirect, which no web view follows for an app's origin, a status no web view takes and a failure answer
-// 502 with the reason.
+// names; a failure, and an answer the host gives no web view, as a redirect, which no web view follows for an app's
+// origin, answer 502 with the reason.
 class Proxy : public std::enable_shared_from_this<Proxy> {
 public:
     Proxy(Session session, Account account, std::string source, std::string gateToken)
@@ -186,10 +186,6 @@ private:
                     request.respond(502, TEXT, *failure);
                     return;
                 }
-                if (response.status < 200 || response.status > 599 || (response.status >= 300 && response.status < 400)) {
-                    request.respond(502, TEXT, "the source answered " + std::to_string(response.status));
-                    return;
-                }
                 if (response.status == 403 && self->isSnapshot_ && !isRetry) {
                     self->rekey(token, [self, request, url, response](std::optional<std::string> renewed) {
                         if (renewed) self->send(request, url, *renewed, true);
@@ -204,14 +200,20 @@ private:
         }
     }
 
-    // A HEAD's length is the source's, as its answer names it; every other answer's its body's own.
+    // A HEAD's length is the source's, as its answer names it; every other answer's its body's own. What the host
+    // refuses to answer a web view with, a status or a header's value, answers 502 in the host's words: a throw here, on
+    // the fetch's thread, would end the app.
     static void pass(const Request &request, const crossbind::FetchResponse &response) {
         Request::Headers passed;
         for (const auto &[name, value] : response.headers) {
             const bool isPassed = std::find(PASSED.begin(), PASSED.end(), name) != PASSED.end();
             if (isPassed || (name == "content-length" && request.method() == "HEAD")) passed.emplace_back(name, value);
         }
-        request.respond(response.status, passed, response.body);
+        try {
+            request.respond(response.status, passed, response.body);
+        } catch (const std::exception &error) {
+            request.respond(502, TEXT, error.what());
+        }
     }
 
     // The snapshot's host refused the token: the session is read again, and a key made anew is checked as the first was,
