@@ -31,6 +31,7 @@ const projectApi = {
     haptics: { impact: fn },
     invoke: fn,
     menu: { set: fn },
+    notification: { show: fn },
     shell: {
         openExternal: fn, openPath: fn, revealInFolder: fn, trash: fn,
     },
@@ -75,6 +76,7 @@ console.log(JSON.stringify({
         'windows.set': await failure(module.windows.set({ title: 'x' })),
         'windows.open': await failure(module.windows.open()),
         'menu.set': await failure(module.menu.set([])),
+        'notification.show': await failure(module.notification.show({ title: 'x' })),
         'tray.set': await failure(module.tray.set({})),
         'updater.check': await failure(module.updater.check()),
     },
@@ -108,7 +110,7 @@ describe('the module of the project side', () => {
         expect(status).toBe(0);
         const older = "crossbind: the crossbind app on this device is older than this project's crossbind: update the app to use ";
         expect(JSON.parse(stdout)).toEqual({
-            names: ['app', 'device', 'dialog', 'haptics', 'invoke', 'menu', 'shell', 'tray', 'updater', 'windows'],
+            names: ['app', 'device', 'dialog', 'haptics', 'invoke', 'menu', 'notification', 'shell', 'tray', 'updater', 'windows'],
             isAppsInvoke: true,
             isAppsMessage: true,
             message: 'message',
@@ -146,6 +148,7 @@ describe('the module of the project side', () => {
                 'windows.set': built('windows.set'),
                 'windows.open': built('windows.open'),
                 'menu.set': built('menu.set'),
+                'notification.show': built('notification.show'),
                 'tray.set': built('tray.set'),
                 'updater.check': built('updater.check'),
             },
