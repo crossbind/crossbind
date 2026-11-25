@@ -174,8 +174,10 @@ std::optional<int> openedVersion(const std::string &id) {
 
 void noteOpened(const std::string &id, int version) {
     std::lock_guard<std::mutex> lock(versionsMutex);
+    // Held by name: the object a temporary's asObject() gives goes with the temporary, before the loop reads it.
+    const Value read = readVersions();
     Value::Object versions;
-    for (const auto &[session, opened] : readVersions().asObject()) {
+    for (const auto &[session, opened] : read.asObject()) {
         if (session != id) versions.emplace_back(session, opened);
     }
     versions.emplace_back(id, version);
