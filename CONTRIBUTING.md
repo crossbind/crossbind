@@ -77,7 +77,7 @@ branch    chore/bump-pnpm
 commit    chore: bump pnpm to 11.24.0
 ```
 
-Types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `ci`. The scope is a single token — a package name (`create-crossbind`, `plugin-vite`, `port-gdal`) or an area (`agents`, `landing`, `ci`). Append `!` to the type for a breaking change.
+Types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `ci`. The scope is a single token — a package name (`create-crossbind`, `extension-vite`, `port-gdal`) or an area (`agents`, `landing`, `ci`). Append `!` to the type for a breaking change.
 
 Body and footers optional — use them when the change needs context the diff doesn't show. Wrap at ~72 chars. Reference issues with `Closes #123`.
 

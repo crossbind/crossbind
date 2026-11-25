@@ -192,7 +192,7 @@ See [`docs/api/crossbind-build.md`](./api/crossbind-build.md) for hook signature
 ## Where to look next
 
 - "I want to add a feature to the build pipeline" → `core/crossbind/AGENTS.md`
-- "I want to support a new bundler" → write a new `plugins/*`; mirror `plugin-vite` or `plugin-webpack`
+- "I want to support a new bundler" → write an integration extension (`docs/api/extensions.md`, "Integrations"); mirror `extensions/rollup`
 - "I want to wrap a new C++ library" → `docs/playbooks/new-port.md`
 - "I want to integrate crossbind into my own app" → `docs/playbooks/integration/README.md`
 - "I want a concrete pointer to a specific concept" → `docs/CODEMAP.md`
