@@ -85,7 +85,7 @@ jobs:
               uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
             - name: CMake configure (x86_64)
               working-directory: examples/mobile-reactnative-cli/android
-              run: ./gradlew ":crossbind_plugin-react-native:configureCMakeDebug[x86_64]" -PreactNativeArchitectures=x86_64 --console=plain
+              run: ./gradlew ":crossbind_extension-react-native:configureCMakeDebug[x86_64]" -PreactNativeArchitectures=x86_64 --console=plain
 
     build:
         needs: tested
