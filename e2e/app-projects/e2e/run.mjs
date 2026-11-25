@@ -13,6 +13,7 @@ import config from '../crossbind.config.mjs';
 import {
     ACCOUNTS, CLI_TOKEN, COMPILED, gateToken, newId, newKey, sessionAnswer, standInCloud, standInSource,
 } from './cloud.mjs';
+import { checkConsents } from './consents.mjs';
 import { serveEndpoint } from './endpoint.mjs';
 import {
     CLOUD, CLOUD_PORT, ENDPOINT_PORT, SNAPSHOTS_PORT,
@@ -54,8 +55,10 @@ const NAMED = /"([a-z][a-z0-9-]*\.[a-z][A-Za-z0-9]*)"/g;
 const REGISTERED = /(?:\.|->)function\(\s*([^,]+?)\s*,/g;
 const HOOKS = 'e2e-hooks.';
 // What a preview refuses through the project's crossbind/app, one of each kind: a function that belongs to the built
-// app, one that would end the preview, one of a name refused whole, and a file dialog.
-const MODULE_REFUSED = ['app.paths', 'app.quit', 'shell.openPath', 'windows.set', 'dialog.open'];
+// app, one that would end the preview, one of a name refused whole, a file dialog, and a notification.
+const MODULE_REFUSED = ['app.paths', 'app.quit', 'shell.openPath', 'windows.set', 'dialog.open', 'notification.show'];
+// The runtime permissions the fixture's app.permissions gives an Android app, which a run before left given.
+const ANDROID_PERMISSIONS = ['CAMERA', 'RECORD_AUDIO', 'ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION'];
 const PLATFORMS = { darwin: 'macos', linux: 'linux', win32: 'windows' };
 const WORDS = {
     signedOut: 'Sign in to open your projects. crossbind app preview lists each project it runs on the account it is signed in with.',
@@ -236,7 +239,11 @@ async function launch(args = []) {
         const { default: openOnDevice, adbPath } = await import('crossbind/src/actions/androidDevice.js');
         if (platform === 'android') {
             for (const port of [ENDPOINT_PORT, CLOUD_PORT, SNAPSHOTS_PORT]) execFileSync(adbPath(), ['reverse', `tcp:${port}`, `tcp:${port}`]);
-            builtForDevice ??= buildApk(built);
+            if (!builtForDevice) {
+                builtForDevice = buildApk(built);
+                // So that Android asks its own question again after the extension's Allow: a revoke ends a running app.
+                for (const permission of ANDROID_PERMISSIONS) spawnSync(adbPath(), ['shell', 'pm', 'revoke', applicationIdOf(builtForDevice), `android.permission.${permission}`]);
+            }
             opened = openOnDevice(builtForDevice, { env });
         } else {
             builtForDevice ??= buildForSimulator(built);
@@ -281,8 +288,11 @@ async function handLink(session) {
         return;
     }
     const { adbPath } = await import('crossbind/src/actions/androidDevice.js');
-    const { applicationId } = JSON.parse(readFileSync(join(dirname(builtForDevice), 'output-metadata.json'), 'utf8'));
-    execFileSync(adbPath(), ['shell', `am start -W -a android.intent.action.VIEW -p ${applicationId} -d '${url}'`]);
+    execFileSync(adbPath(), ['shell', `am start -W -a android.intent.action.VIEW -p ${applicationIdOf(builtForDevice)} -d '${url}'`]);
+}
+
+function applicationIdOf(apk) {
+    return JSON.parse(readFileSync(join(dirname(apk), 'output-metadata.json'), 'utf8')).applicationId;
 }
 
 // A link of the app's own scheme, which a desktop's /open/ page opens it with.
@@ -404,6 +414,15 @@ async function stoppingSessions(address) {
 const STEPS_PAGE = '<!doctype html><meta charset="utf-8"><title>e2e project</title><script type="module">'
     + "const api = await import('/__crossbind/app.js'); const { runSteps } = await import('/project-steps.js'); runSteps(api.invoke, api);</script>";
 const stepsModule = () => readFileSync(join(fixture, 'src', 'project-steps.js'), 'utf8');
+
+// A project of this name, served by a server of the run's own, whose page takes the project's steps alone: at its
+// origin's name and URL.
+async function stepsProject(address, projectName) {
+    const files = { '/index.html': STEPS_PAGE, '/project-steps.js': stepsModule() };
+    const { session } = await listedSource(address, { project: { id: newId(), name: projectName } }, asPreview(), files);
+    const origin = originName(ACCOUNTS.main, session.project.id);
+    return { session, origin, url: originUrl(origin) };
+}
 
 // A second project, served by a server of the run's own, whose /elsewhere redirects to another host and /odd answers a
 // status no webview takes.
@@ -941,6 +960,25 @@ async function flow() {
     const ownStorage = await storageOf('app');
     expect(holdsNone(ownStorage, 'first') && holdsNone(ownStorage, 'second'), `the app's own page saw ${JSON.stringify(ownStorage)}`);
 
+    // 5, the consent: what a project's user is asked before its page uses the camera, the microphone or the location.
+    const { adbPath } = await import('crossbind/src/actions/androidDevice.js');
+    const consents = await checkConsents({
+        platform: devicePlatform,
+        endpoint,
+        app,
+        project,
+        openSession,
+        closePreview,
+        inPage,
+        device,
+        second: { session: second.session, origin: originName(ACCOUNTS.main, second.session.project.id) },
+        stepsProject: (projectName) => stepsProject(address, projectName),
+        adb: adbPath,
+        applicationId: () => applicationIdOf(builtForDevice),
+        appPid: () => opened.child.pid,
+        appTitle: config.app.name,
+    });
+
     // 7: the snapshot, at the project's one origin.
     const snapshotSheet = await openSession(snapshot, devOrigin);
     expect(snapshotSheet.source === 'snapshot' && snapshotSheet.version === 1 && snapshotSheet.opened === null, `the snapshot's Open sheet read ${JSON.stringify(snapshotSheet)}`);
@@ -957,7 +995,7 @@ async function flow() {
     const dependency = await checkOptimizedDependency(source, gateToken(dev.key));
     const secrets = checkSecrets();
     console.log(`PROJECTS CHECKS ${JSON.stringify({
-        platform: devicePlatform, keyring, stops, ownClipboard, first, ranges, other, dependency, secrets,
+        platform: devicePlatform, keyring, stops, ownClipboard, first, consents, ranges, other, dependency, secrets,
     })}`);
     console.log(`TIMING a JavaScript edit to the page: ${first.js} ms`);
     console.log(`ok: ${devicePlatform} projects of e2e/app-projects`);

@@ -1,10 +1,11 @@
 // What a project's page does for e2e/app-projects/e2e/run.mjs, as the fixture opens it as a preview: it says it loaded,
 // then takes each step from the run through the fixture's hooks, as the app's page does, and reports what each
 // answered: every function the app may register, called past its crossbind/app, and some through it; the events it
-// hears; its origin's storage; reads of its source; and the preview's end, with a message dialog of its own up or none.
-// Its storage step is the app's page's too.
+// hears; its origin's storage; reads of its source; what it asks to use, and the question that asks its user; a reload;
+// and the preview's end, with a message dialog of its own up or none. Its storage step is the app's page's too.
 const DIALOG = "crossbind e2e: a project's dialog, which its preview's end closes";
 const SHOWN_MS = 1500;
+const LOCATION_MS = 5000;
 
 const failure = (error) => `${error?.name ?? 'Error'}: ${error?.message ?? error}`;
 const outcome = (promise) => promise.then((value) => ({ value: value ?? null }), (error) => ({ error: failure(error) }));
@@ -118,6 +119,46 @@ function throughModule({ names }, api) {
     })).then(Object.fromEntries);
 }
 
+// What a request for these kinds answers once it ends: allowed, denied, or what else ended it, as a device the machine
+// lacks; the location allowed with no position as its code. By the page's own web API, or by the fixture's hook, which
+// asks for the page's origin as an extension asks.
+async function requested({ kinds, via }, invoke) {
+    if (via === 'hook') {
+        const { allowed } = await invoke('e2e-hooks.askPermission', { kinds, origin: location.origin });
+        return allowed ? 'allowed' : 'denied';
+    }
+    if (kinds.includes('location')) {
+        return new Promise((done) => {
+            navigator.geolocation.getCurrentPosition(() => done('allowed'), (error) => done(error.code === 1 ? 'denied' : `allowed, code ${error.code}`), {
+                timeout: LOCATION_MS, maximumAge: 0,
+            });
+        });
+    }
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: kinds.includes('camera'), audio: kinds.includes('microphone') });
+        stream.getTracks().forEach((track) => track.stop());
+        return 'allowed';
+    } catch (error) {
+        return error.name === 'NotAllowedError' ? 'denied' : error.name;
+    }
+}
+
+// Starts each request at once and answers before any of them ends, each one's end then a note of its tag.
+async function request({ requests }, invoke, note) {
+    for (const asked of requests) {
+        requested(asked, invoke).then(
+            (answered) => note({ event: 'requested', tag: asked.tag, outcome: answered }),
+            (error) => note({ event: 'requested', tag: asked.tag, outcome: failure(error) }),
+        );
+    }
+    return 'started';
+}
+
+// The web's own question for notifications, which a page of the app asks no one.
+async function notified() {
+    return globalThis.Notification?.requestPermission ? String(await Notification.requestPermission()) : 'no Notification';
+}
+
 export async function runSteps(invoke, api) {
     const ask = async (path, body) => {
         const { status, text } = await invoke('e2e-hooks.ask', body === undefined ? { path } : { path, body: JSON.stringify(body) });
@@ -132,11 +173,23 @@ export async function runSteps(invoke, api) {
         storage,
         range,
         fetched,
+        request: (step) => request(step, invoke, (body) => ask('/report', body)),
+        question: () => invoke('e2e-hooks.question'),
+        press: ({ button, words }) => invoke('e2e-hooks.press', { button, words }),
+        key: ({ key }) => invoke('e2e-hooks.key', { key }),
+        notified,
     };
+    // On Windows, where a task dialog up holds the page's answers, the run calls through DevTools.
+    globalThis.crossbindE2e = { invoke };
     await ask('/report', { loaded: location.origin });
     for (;;) {
         const step = await ask('/next');
         if (step.do === 'wait') continue;
+        if (step.do === 'reload') {
+            await ask('/report', { id: step.id, value: 'reloading' });
+            location.reload();
+            return;
+        }
         if (step.do === 'close') {
             const dialog = step.withDialog ? await shownDialog(invoke, DIALOG) : null;
             // The report's own answer is not waited for: on Windows a message dialog's modal loop holds every answer to

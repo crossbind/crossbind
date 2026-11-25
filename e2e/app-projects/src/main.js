@@ -87,6 +87,9 @@ const STEPS = {
     handLink: ({ url }) => invoke('e2e-hooks.handLink', { url }),
     breakKey: () => invoke('e2e-hooks.breakKey'),
     allow: ({ path }) => invoke('e2e-hooks.allow', { path }),
+    paths: () => invoke('app.paths'),
+    question: () => invoke('e2e-hooks.question'),
+    askPermission: ({ kinds, origin }) => invoke('e2e-hooks.askPermission', { kinds, origin }),
 };
 
 async function run() {
