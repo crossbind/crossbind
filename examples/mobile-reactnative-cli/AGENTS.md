@@ -17,7 +17,7 @@ examples/mobile-reactnative-cli/
 ├── __tests__/                            ← Jest component smoke
 ├── app.json
 ├── crossbind.config.mjs                  ← imports @crossbind/example-lib-prebuilt-matrix
-├── metro.config.js                        ← wraps getDefaultConfig with CrossbindMetroPlugin
+├── metro.config.js                        ← wraps the default config in crossbind()
 ├── package.json
 └── maestro.yaml                          ← native UI E2E flow
 ```

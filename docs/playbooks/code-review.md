@@ -103,7 +103,7 @@ The right validation depends on what changed:
 |---------|-----|
 | `core/crossbind/src/utils/` | `pnpm test` |
 | `core/crossbind/src/actions/` | `pnpm test` + at least one wasm + one ios + one android package build |
-| One bundler plugin | The matching example's `dev` + `build` (e.g. plugin-vite → `examples/web-vue-vite`) |
+| One integration extension | The matching example's `dev` + `build` (e.g. extension-vite → `examples/web-vue-vite`) |
 | One port family | `pnpm --filter '@crossbind/port-<name>*' run build` for every affected variant |
 | An example | Run that `@crossbind/example-*` package's build and relevant smoke check |
 | An E2E fixture | Run that `@crossbind/e2e-*` package's dev/prod or native gate |

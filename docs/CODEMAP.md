@@ -32,14 +32,7 @@ crossbind/
 │   ├── cloud/                        ← crossbind cloud on api.crossbind.dev: the playground compiler, the accounts `crossbind login` signs in to, a runner per user and image
 │   ├── learn/                        ← the tutorial and the playground that crossbind.dev and the crossbind app share
 │   └── typescript-config/            ← shared tsconfig
-├── extensions/                       ← extensions: the app's, which app-host has as dependencies, clipboard, and the package source conan, which crossbind has
-├── plugins/
-│   ├── vite/
-│   ├── webpack/
-│   ├── rollup/
-│   ├── react-native/
-│   ├── metro/
-│   └── react-native-ios-helper/
+├── extensions/                       ← extensions: the app's, which app-host has as dependencies, clipboard, the package source conan and the integrations behind crossbind() (vite, rollup, webpack, metro), which crossbind has, and react-native with its iOS pod (react-native-ios), which a React Native app adds
 ├── ports/                            ← native libraries built for crossbind's targets
 │   ├── README.md                     ← Bin & License Contract (K1-K4 rules, bin map + provenance schemas)
 │   └── <name>/
