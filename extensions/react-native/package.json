@@ -1,7 +1,7 @@
 {
     "name": "@crossbind/extension-react-native",
     "version": "2.0.0-beta.82",
-    "description": "crossbind extension: React Native and Expo apps, their native module and builds, and \"plugins\": [\"crossbind\"] in an Expo app's config.",
+    "description": "crossbind extension: React Native and Expo apps: their native module, their builds and \"plugins\": [\"crossbind\"] in Expo's config.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/react-native#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
     "license": "MIT",
