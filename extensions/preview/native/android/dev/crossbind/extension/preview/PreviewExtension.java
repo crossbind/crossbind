@@ -34,7 +34,8 @@ import org.json.JSONObject;
 
 // The preview extension's Java: the app's token sealed with a key of the Android Keystore, which never leaves it, in a
 // file of the app's own that no backup takes; HMAC-SHA256 and SHA-256; the page that approves a sign-in in a Custom
-// Tab of the system's browser; and what a page asks to use, as the holder of page-permissions, by the page's role.
+// Tab of the system's browser; and what a page asks to use, as the holder of page-permissions, by the page's role, a
+// project's at the app's own question (Consents.java).
 public final class PreviewExtension implements Extension {
     private static final String KEY_ALIAS = "crossbind-preview-token";
     private static final String CIPHER = "AES/GCM/NoPadding";
@@ -46,14 +47,27 @@ public final class PreviewExtension implements Extension {
             "camera", Manifest.permission.CAMERA,
             "microphone", Manifest.permission.RECORD_AUDIO);
 
-    // The app's own page gets the devices the manifest asks for once the app's user gives them, as the host's
-    // page-permissions does, the location the approximate one at least; any other page nothing, a project's among them.
+    private final Consents consents = new Consents(PreviewExtension::grant);
+
+    // The app's own page gets the devices the manifest asks for, as the host's page-permissions does; a project's page
+    // those its user allows at the app's own question, then as the app's own; a page of no role nothing.
     @Override
     public void onPagePermission(ExtensionHost host, PagePermission request) {
-        Activity activity = host.activity();
-        if (!request.isListed() || !"app".equals(request.role())) {
+        if ("app".equals(request.role())) {
+            if (request.isListed()) grant(host, request);
+            else request.deny();
+        } else if (!request.role().isEmpty()) {
+            consents.ask(host, request);
+        } else {
             request.deny();
-        } else if (request.kinds().equals(List.of("location"))) {
+        }
+    }
+
+    // Once the app's user gives them, at the system's own question for the app: the location the approximate one at
+    // least.
+    private static void grant(ExtensionHost host, PagePermission request) {
+        Activity activity = host.activity();
+        if (request.kinds().equals(List.of("location"))) {
             if (isGranted(activity, COARSE)) request.allow();
             else host.afterAsking(new String[] {COARSE, Manifest.permission.ACCESS_FINE_LOCATION}, () -> answer(activity, request, COARSE));
         } else {
@@ -97,6 +111,15 @@ public final class PreviewExtension implements Extension {
                     extras.putBinder(CUSTOM_TAB, null);
                     intent.putExtras(extras);
                     host.activity().startActivity(intent);
+                    call.resolve(null);
+                }
+                // The preview the native code serves from here on, and its end.
+                case "serving" -> {
+                    consents.serve(options.getString("url"), options.getString("name"), options.getString("project"));
+                    call.resolve(null);
+                }
+                case "ended" -> {
+                    consents.end();
                     call.resolve(null);
                 }
                 default -> call.reject("crossbind: preview's Java has no function " + function);

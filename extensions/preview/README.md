@@ -52,9 +52,24 @@ location.href = (await preview.open(sessions[0].id)).url;
 
 The extension takes the host's `page-permissions` and `page-drops`, and decides by the page's role. The app's own page
 gets what the host's own give it: the devices `app.permissions` lists, the clipboard's text on its user's gesture, and
-the paths of the files dropped on it. A project's page gets none of the kinds that would ask its user, the camera, the
-microphone, the location and the clipboard's read among them, and no path of a drop: its page's own `drop` event keeps
-the dropped files. A page of no role gets nothing.
+the paths of the files dropped on it. A project's page gets no path of a drop: its page's own `drop` event keeps the
+dropped files. A page of no role gets nothing.
+
+A project's page asks its user before it uses the camera, the microphone or the location, each of them one the app's
+`app.permissions` lists, at the app's own question: "Allow “made-up-app” to use the camera? It is a preview of your
+project. You can change this in the preview's menu.", with Don't Allow, its default, and Allow. The name is the
+project's from the account's list. A request of two kinds, as `getUserMedia({ video: true, audio: true })` is where the
+web view asks for both at once, is one question that names both; Windows asks for each apart, so two come there, one
+after the other. The answer is kept for the project's origin and the kind, in `preview/consents.json` in the app's data
+folder, and the kind is asked no more: Don't Allow is kept as Allow is. A store that cannot be read, is no JSON or has
+another shape gives no consent. Any other kind is denied a project with no question, the clipboard's read and the web's
+notifications among them.
+
+The question is the preview's: a reload leaves it up, and the preview's end closes it, keeping nothing. It is a sheet of
+the window on macOS, an alert on iOS, a task dialog of the window on Windows, a dialog of the window on Linux and an
+`AlertDialog` on Android; neither Escape, Back, a touch outside nor the window's close answers it. After Allow the system
+asks its own question, once for the app, as for the app's own page: on Apple's platforms WebKit asks it before the
+project's question for the camera and the microphone.
 
 ## Platforms
 
