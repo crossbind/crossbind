@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
-import path from 'node:path';
+import upath from 'upath';
 import { projectPaths } from '../state/loadConfig.js';
 import { listedExtension } from '../utils/appExtensions.js';
 import { crossbindExtensions } from '../utils/crossbindExtensions.js';
@@ -15,7 +15,7 @@ const CONFIG_FILES = ['json', 'js', 'mjs', 'cjs', 'ts'].map((ext) => `crossbind.
 
 // The project's config, read as the tool's config loads, which waits for nothing.
 function projectConfig(root) {
-    const file = CONFIG_FILES.map((name) => path.join(root, name)).find((candidate) => fs.existsSync(candidate));
+    const file = CONFIG_FILES.map((name) => upath.join(root, name)).find((candidate) => fs.existsSync(candidate));
     if (!file) return {};
     let config;
     try {
