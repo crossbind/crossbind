@@ -30,6 +30,10 @@ function expect(isHeld, problem) {
     if (!isHeld) throw new Error(problem);
 }
 
+// A button's label, or none, as the platform draws it: Android's theme draws a dialog's buttons in capitals.
+const isLabel = (drawn, label) => typeof drawn === 'string' && drawn.toLowerCase() === label.toLowerCase();
+const isDontAllowOrNone = (drawn) => drawn === null || isLabel(drawn, "Don't Allow");
+
 function messageOf(project, kinds) {
     const named = kinds.map((kind, index) => `${index === 0 ? '' : index + 1 === kinds.length ? ' and ' : ', '}${NOUNS[kind]}`).join('');
     return `Allow “${project}” to use ${named}?`;
@@ -39,12 +43,13 @@ export async function checkConsents(run) {
     const {
         platform, endpoint, app, project, openSession, closePreview, inPage, device, second, stepsProject,
     } = run;
-    const isPhone = platform === 'ios' || platform === 'android';
     const byPage = (kinds) => kinds.every((kind) => PAGE_REACHES[platform].includes(kind));
-    // A denial goes by the page where it reaches page-permissions. An allowed page request goes on to the system's own
-    // question on a desktop, which no run answers, as CoreLocation's on macOS: there the hook asks, of the same holder.
+    // A denial goes by the page where it reaches page-permissions. An Allow goes by the page where nothing the system
+    // asks follows it unanswered: on Android, whose own question the run answers, and for the iOS Simulator's mock camera
+    // and microphone; elsewhere by the hook, of the same holder, as CoreLocation's question would follow it, which no run
+    // answers and which outlives the app.
     const denyVia = (kinds) => (byPage(kinds) ? 'page' : 'hook');
-    const allowVia = (kinds) => (isPhone && byPage(kinds) ? 'page' : 'hook');
+    const allowVia = (kinds) => (byPage(kinds) && (platform === 'android' || (platform === 'ios' && !kinds.includes('location'))) ? 'page' : 'hook');
     // iOS's WebKit keeps a page's denial and asks no more, so a question asked again goes by the hook there.
     const againVia = () => (platform === 'android' ? 'page' : 'hook');
     const valueOf = async (asked, what) => {
@@ -95,16 +100,34 @@ export async function checkConsents(run) {
     }
     // The words of the question read last, by which its button is pressed.
     let asking = null;
+    // Its words and its two buttons, read again until both have come, as a platform may build them one after the
+    // other.
     async function questionOf(role, tag, project, kinds) {
-        const { question, ended } = await questionOrEnd(role, tag);
-        expect(question, `a request of ${kinds.join(' and ')} ended ${ended} with no question`);
         const message = messageOf(project, kinds);
-        expect(question.texts.includes(message) && question.texts.includes(DETAIL), `the question read ${JSON.stringify(question.texts)}, not "${message}" with its detail`);
-        expect(question.buttons.length === 2 && question.buttons.includes("Don't Allow") && question.buttons.includes('Allow'), `the question's buttons were ${JSON.stringify(question.buttons)}`);
+        const isWhole = (up) => up.texts.includes(message) && up.texts.includes(DETAIL) && up.buttons.length === 2
+            && up.buttons.some((button) => isLabel(button, "Don't Allow")) && up.buttons.some((button) => isLabel(button, 'Allow'));
+        const deadline = Date.now() + QUESTION_MS;
+        let { question, ended } = await questionOrEnd(role, tag);
+        expect(question, `a request of ${kinds.join(' and ')} ended ${ended} with no question`);
+        while (!isWhole(question) && Date.now() < deadline) {
+            await sleep(POLL_MS);
+            question = await questions.read(role) ?? question;
+        }
+        expect(isWhole(question), `the question read ${JSON.stringify(question)}, not "${message}" with its detail and its two buttons`);
         asking = message;
         return question;
     }
     const press = (button) => questions.press('project', button, asking);
+    // The question up once its default reads as Don't Allow.
+    async function settled() {
+        const deadline = Date.now() + QUESTION_MS;
+        for (;;) {
+            const up = await questions.read('project');
+            if (isLabel(up?.preferred, "Don't Allow")) return up;
+            expect(Date.now() < deadline, `the question's default never read Don't Allow: ${JSON.stringify(up)}`);
+            await sleep(POLL_MS);
+        }
+    }
     async function noQuestion(role, what) {
         await sleep(SETTLED_MS);
         const question = await questions.read(role);
@@ -147,12 +170,12 @@ export async function checkConsents(run) {
     };
     // As it comes up, its default and its first focus are Don't Allow or none: macOS gives a sheet's buttons their keys
     // once it shows. Where the run reads it, the default is Don't Allow once it has settled.
-    expect([null, "Don't Allow"].includes(first.focused) && [null, "Don't Allow"].includes(first.preferred), `the question came up as ${JSON.stringify(first)}`);
-    await sleep(SETTLED_MS);
-    const settled = await questions.read('project');
-    report.settled = { preferred: settled?.preferred ?? null, focused: settled?.focused ?? null };
-    expect(['macos', 'ios', 'linux'].includes(platform) ? settled?.preferred === "Don't Allow" : settled?.preferred === null, `the question's default is ${JSON.stringify(settled)}`);
-    expect([null, "Don't Allow"].includes(settled?.focused), `the question's focus is ${JSON.stringify(settled)}`);
+    expect(isDontAllowOrNone(first.focused) && isDontAllowOrNone(first.preferred), `the question came up as ${JSON.stringify(first)}`);
+    const isDefaultRead = ['macos', 'ios', 'linux'].includes(platform);
+    const steady = isDefaultRead ? await settled() : await questions.read('project');
+    report.settled = { preferred: steady?.preferred ?? null, focused: steady?.focused ?? null };
+    expect(isDefaultRead || steady?.preferred === null, `the question's default is ${JSON.stringify(steady)}`);
+    expect(isDontAllowOrNone(steady?.focused ?? null), `the question's focus is ${JSON.stringify(steady)}`);
     for (const [way, send] of questions.waysOut('project')) {
         await send();
         await sleep(SETTLED_MS);
@@ -187,7 +210,9 @@ export async function checkConsents(run) {
     await expectDenied(firstTag, `the ${firstKind}'s request after Don't Allow`);
     await questionOf('project', secondTag, SECOND, [secondKind]);
     // Where the run's key reaches the question, it presses Don't Allow, the default, which the key that left it up
-    // before is thus shown to reach as well; Android's Enter may find no focus and press nothing.
+    // before is thus shown to reach as well; Android's Enter may find no focus and press nothing. macOS gives a sheet its
+    // default once it shows, so the key goes once the run reads the default there.
+    if (platform === 'macos') await settled();
     report.defaultKey = await questions.pressDefaultKey('project');
     if (report.defaultKey) await sleep(SETTLED_MS);
     const isUpAfterKey = await questions.read('project') !== null;

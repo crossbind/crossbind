@@ -114,7 +114,9 @@ switch ($env:CROSSBIND_E2E_MODE) {
     'read' {
         $texts = @($all | Where-Object { $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Text -and $_.Current.Name } | ForEach-Object { $_.Current.Name })
         $focused = @($buttons | Where-Object { $_.Current.HasKeyboardFocus } | ForEach-Object { $_.Current.Name })
-        ConvertTo-Json -Compress -Depth 3 @{ texts = $texts; buttons = @($buttons | ForEach-Object { $_.Current.Name }); preferred = $null; focused = $(if ($focused.Count) { $focused[0] } else { $null }) }
+        # Every element UI Automation shows of it, for the words of a failure.
+        $seen = @($all | ForEach-Object { "$($_.Current.ControlType.ProgrammaticName) $($_.Current.ClassName): $($_.Current.Name)" })
+        ConvertTo-Json -Compress -Depth 3 @{ texts = $texts; buttons = @($buttons | ForEach-Object { $_.Current.Name }); preferred = $null; focused = $(if ($focused.Count) { $focused[0] } else { $null }); seen = $seen }
     }
     'press' {
         $button = $buttons | Where-Object { $_.Current.Name -eq $env:CROSSBIND_E2E_BUTTON } | Select-Object -First 1
@@ -165,7 +167,8 @@ export function questionsOn({
                 await byPage(role, { do: 'press', button, words });
                 return;
             }
-            const node = androidQuestion(screenOf(adb()), applicationId())?.nodes.find((each) => each.text === button);
+            // Android's theme draws a dialog's buttons in capitals.
+            const node = androidQuestion(screenOf(adb()), applicationId())?.nodes.find((each) => each.text.toLowerCase() === button.toLowerCase());
             if (!node) throw new Error(`no question up has a button ${button}`);
             adbShell('input', 'tap', ...centerOf(node));
         },
