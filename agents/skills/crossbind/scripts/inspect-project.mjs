@@ -237,7 +237,9 @@ export function inspectProject(projectPath = process.cwd()) {
     const dependencies = dependencySet(pkg);
     const detection = detectFramework(root, pkg, dependencies);
     const packageManager = detectPackageManager(root, pkg);
-    const plugins = [...dependencies].filter((name) => name.startsWith('@crossbind/plugin-')).sort();
+    const extensions = [...dependencies].filter((name) => name.startsWith('@crossbind/extension-')).sort();
+    // The bundler plugins before crossbind(), which crossbind() replaces.
+    const legacyPlugins = [...dependencies].filter((name) => name.startsWith('@crossbind/plugin-')).sort();
     const ports = [...dependencies].filter((name) => name.startsWith('@crossbind/port-')).sort();
     const configFile = firstExistingFile(root, CROSSBIND_CONFIG_FILES);
     const nativeSources = findNativeSources(root);
@@ -270,7 +272,8 @@ export function inspectProject(projectPath = process.cwd()) {
         existingCrossbind: {
             installed: dependencies.has('crossbind'),
             config: configFile,
-            plugins,
+            extensions,
+            legacyPlugins,
             ports,
         },
         constraints: {
@@ -292,6 +295,9 @@ function prettyPrint(result) {
         ...(result.conflicts.length ? [`Conflicts:       ${result.conflicts.join(', ')}`] : []),
         `Native sources:  ${result.nativeSources.join(', ') || '(none found)'}`,
         `Crossbind:       ${result.existingCrossbind.installed ? 'installed' : 'not installed'}`,
+        ...(result.existingCrossbind.legacyPlugins.length
+            ? [`Legacy plugins:  ${result.existingCrossbind.legacyPlugins.join(', ')} (crossbind() replaces them)`]
+            : []),
         `Reference:       ${result.recommendedReference}`,
     ].join('\n');
 }
