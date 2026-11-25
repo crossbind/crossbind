@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 import { execFileSync, spawn } from 'node:child_process';
 import { Option } from 'commander';
 
-import { state } from './index.js';
+import state from './state/index.js';
 import { addSystemCommands, createProgram, handleFatal } from './program.js';
 import createLib from './actions/createLib.js';
 import buildWasm from './actions/buildWasm.js';
@@ -115,7 +115,7 @@ function declaredSbomPath(projectDir) {
     }
 }
 
-// An app's page is the project's Vite build, which @crossbind/plugin-vite makes into the app of the platform named.
+// An app's page is the project's Vite build, which crossbind() in its Vite config makes into the app of the platform named.
 const APP_PLATFORMS = ['android', 'ios', 'linux', 'macos', 'windows'];
 
 // Vite's CLI beside the entry of the package vite resolves to, where Vite keeps it and vite-plus-core too, whose vp runs
@@ -136,7 +136,7 @@ function projectViteManifest() {
     try {
         manifestPath = require.resolve('vite/package.json');
     } catch {
-        throw new Error("crossbind: crossbind app builds the app's page with the project's Vite, which the project does not have. Add vite and @crossbind/plugin-vite to it, as the desktop-app template has them.");
+        throw new Error("crossbind: crossbind app builds the app's page with the project's Vite, which the project does not have. Add vite to it, with crossbind() among its config's plugins, as the desktop-app template has them.");
     }
     return { require, manifestPath, ...JSON.parse(fs.readFileSync(manifestPath, 'utf8')) };
 }

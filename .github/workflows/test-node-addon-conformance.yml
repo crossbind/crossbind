@@ -11,8 +11,6 @@ on:
             - core/embind-rust/**
             - core/app-host/**
             - extensions/**
-            - plugins/vite/**
-            - plugins/rollup/**
             - e2e/backend-nodejs-native/**
             - e2e/desktop-app/**
             - e2e/app-page-requests/**
@@ -36,8 +34,6 @@ on:
             - core/embind-rust/**
             - core/app-host/**
             - extensions/**
-            - plugins/vite/**
-            - plugins/rollup/**
             - e2e/backend-nodejs-native/**
             - e2e/desktop-app/**
             - e2e/app-page-requests/**

@@ -1,42 +1,6 @@
-export { default as state } from './state/index.js';
-export { default as getParentPath } from './utils/getParentPath.js';
-export { default as createLib } from './actions/createLib.js';
-export { default as createBridgeFile } from './actions/createInterface.js';
-export { default as buildWasm } from './actions/buildWasm.js';
-export {
-    default as buildApp, buildProjectApp, publishApp, appLayout, appOutputName, appPlatform, appTargetParams, emptyAppOutDir,
-} from './actions/buildApp.js';
-export { checkInstaller, shipApp } from './actions/appInstaller.js';
-export { findAppPageApi, resolveAppPageApi } from './utils/resolveAppHost.js';
-export { default as isAppBuild } from './utils/appBuild.js';
-export {
-    PAGE_API_PATH, guardServer, previewGate, previewOf, previewSocketGate,
-} from './utils/previewSession.js';
-export { PREVIEW_MODULE_ID, previewModuleSource } from './utils/previewModule.js';
-export { default as pageLicensesAsset } from './actions/pageLicenses.js';
-export { default as openInSimulator, buildForSimulator } from './actions/iosSimulator.js';
-export {
-    default as openOnIosDevice, buildForIosDevice, connectedIosDevice, iosDeviceAddress, iosDeviceAppEnv, iosDevServer,
-} from './actions/iosDevice.js';
-export { default as openOnDevice, adbPath } from './actions/androidDevice.js';
-export { buildApk } from './actions/androidGradle.js';
-export { default as isSourceNewer } from './actions/isSourceNewer.js';
-export { default as getData } from './actions/getData.js';
-export { default as getCmakeParameters } from './actions/getCmakeParameters.js';
-export { default as createXCFramework } from './actions/createXCFramework.js';
-export { default as getAllBridges } from './actions/getAllBridges.js';
-export { default as run } from './actions/run.js';
-export { getTargetParams, getBuildTargets, getFilteredBuildTargets, getFilteredTargetSpec } from './actions/target.js';
-export { default as getCrossbindScript, getRustJsScript } from './integration/getCrossbindScript.js';
-export { default as getDependFilePath } from './integration/getDependFilePath.js';
-export { default as buildDependencies, getDependenciesStamp } from './actions/buildDependencies.js';
-export { default as preparePackageSources } from './actions/preparePackageSources.js';
-export { default as findFiles } from './utils/findFiles.js';
-export { getContentHash, getFileHash } from './utils/hash.js';
-export {
-    collectInputFiles, collectRustBridgeFiles, collectRustSources, computeInputStamp,
-} from './utils/inputStamp.js';
-export { default as buildAppRustCrates } from './utils/appRustCrates.js';
-export { default as appSourceFiles, isAppSource } from './utils/appSources.js';
-export { default as bindHeaderImports } from './integration/bindHeaderImports.js';
-export { default as integrationApi } from './integration/api.js';
+import crossbind from './integration/crossbind.js';
+
+// crossbind's one export: crossbind() in a tool's plugin list, or crossbind(config) around the config of a tool that has
+// none. require('crossbind') gives the same function.
+export default crossbind;
+export { crossbind as 'module.exports' };

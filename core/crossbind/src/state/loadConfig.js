@@ -34,6 +34,13 @@ export function assertBinarySelection(config) {
 const exports = new WeakMap();
 export const exportOf = (config) => exports.get(config) ?? null;
 
+// The project's folder, which its config names or else the folder crossbind runs in, and its base, all a build sees.
+export function projectPaths(paths, cwd = process.cwd()) {
+    const named = paths.project || (paths.config ? getParentPath(paths.config) : null);
+    const project = named ? getAbsolutePath(null, named) : cwd;
+    return { project, base: getAbsolutePath(project, paths.base) || project };
+}
+
 // The project's config, with the changes a publisher makes for its build, as a JSON merge patch of the export; isFresh
 // reads its files again, as an upload of more than one platform does once a check may have written into them.
 export default async function loadConfig(configDir = process.cwd(), configName = 'crossbind.config', { changes = null, isFresh = false } = {}) {
@@ -168,15 +175,8 @@ export function getFilledConfig(config, options = { isDepend: false }) {
         throw new Error('crossbind: "targetSpecs[].specs.cmake" must be an object such as { compileOptions: [\'-O3\'] } (got an array). CMake configure flags (-D...) belong in a recipe\'s getBuildParams.');
     }
 
-    if (newConfig.paths.config && !newConfig.paths.project) {
-        newConfig.paths.project = getParentPath(newConfig.paths.config);
-    }
-
-    if (!newConfig.paths.project) {
-        newConfig.paths.project = process.cwd();
-    } else {
-        newConfig.paths.project = getAbsolutePath(null, newConfig.paths.project);
-    }
+    const { project, base } = projectPaths(newConfig.paths);
+    newConfig.paths.project = project;
 
     newConfig.package = loadJson(`${newConfig.paths.project}/package.json`);
 
@@ -189,7 +189,7 @@ export function getFilledConfig(config, options = { isDepend: false }) {
 
     const getPath = getAbsolutePath.bind(null, newConfig.paths.project);
 
-    newConfig.paths.base = getPath(newConfig.paths.base) || newConfig.paths.project;
+    newConfig.paths.base = base;
     newConfig.paths.cache = getPath(newConfig.paths.cache) || getPath('.crossbind');
     newConfig.paths.build = getPath(newConfig.paths.build) || getPath(`${newConfig.paths.cache}/build`);
     newConfig.paths.native = (newConfig.paths.native || ['src/native']).map((p) => getPath(p));

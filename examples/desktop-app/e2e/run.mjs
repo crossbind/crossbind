@@ -24,7 +24,9 @@ async function open() {
     if (platform) {
         const project = `${root}/dist/${name}-${platform}`;
         if (!existsSync(project)) missing(project);
-        const { buildForSimulator, openInSimulator, buildApk, openOnDevice } = await import('crossbind');
+        const { default: openInSimulator, buildForSimulator } = await import('crossbind/src/actions/iosSimulator.js');
+        const { buildApk } = await import('crossbind/src/actions/androidGradle.js');
+        const { default: openOnDevice } = await import('crossbind/src/actions/androidDevice.js');
         return platform === 'ios' ? openInSimulator(buildForSimulator(project), { env }) : openOnDevice(buildApk(project), { env });
     }
     // A macOS app is a bundle; a Linux or Windows app a directory named after its platform and arch.

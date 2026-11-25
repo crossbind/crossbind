@@ -1,0 +1,35 @@
+{
+    "name": "@crossbind/extension-metro",
+    "version": "2.0.0-beta.82",
+    "description": "crossbind extension: crossbind(config) around Metro's config, for React Native and Expo, the web's export included.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/metro#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "MIT",
+    "type": "module",
+    "exports": {
+        "./crossbind.extension.js": "./crossbind.extension.js"
+    },
+    "files": [
+        "crossbind.extension.js",
+        "src"
+    ],
+    "crossbind": {
+        "extension": "./crossbind.extension.js"
+    },
+    "peerDependencies": {
+        "metro": "*"
+    },
+    "peerDependenciesMeta": {
+        "metro": {
+            "optional": true
+        }
+    },
+    "keywords": [
+        "crossbind-extension",
+        "crossbind",
+        "integration",
+        "metro",
+        "react-native",
+        "expo"
+    ]
+}

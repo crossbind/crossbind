@@ -14,7 +14,6 @@ export const TRAIN_VERSION_SOURCE = 'releases/npm/VERSION';
 const WORKSPACE_LAYOUT = [
     ['core', 1],
     ['tooling', 1],
-    ['plugins', 1],
     ['extensions', 1],
     ['ports', 2],
     ['examples', 1],

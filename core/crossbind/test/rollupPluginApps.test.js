@@ -47,9 +47,10 @@ vi.mock('../src/actions/buildDependencies.js', () => ({
 }));
 vi.mock('../src/actions/createInterface.js', () => ({ default: vi.fn() }));
 vi.mock('../src/integration/getCrossbindScript.js', () => ({ default: vi.fn(), getRustJsScript: vi.fn() }));
-vi.mock('crossbind', async () => ({ integrationApi: (await import('../src/integration/api.js')).default }));
 
-const { default: rollupCrossbindPlugin } = await import('../../../plugins/rollup/index.js');
+const { default: rollupPlugin } = await import('../../../extensions/rollup/src/plugin.js');
+const { default: apiHandle } = await import('../src/integration/apiHandle.js');
+const rollupCrossbindPlugin = () => rollupPlugin(apiHandle('rollup'));
 
 beforeEach(() => {
     steps.length = 0;

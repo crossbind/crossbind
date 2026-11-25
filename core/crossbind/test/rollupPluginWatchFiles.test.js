@@ -20,9 +20,10 @@ vi.mock('../src/actions/target.js', () => ({ getTargetParams: () => ({}), getFil
 vi.mock('../src/actions/createInterface.js', () => ({ default: () => '/project/.crossbind/build/bridge/native.i.cpp' }));
 vi.mock('../src/integration/getCrossbindScript.js', () => ({ default: () => 'export {};', getRustJsScript: vi.fn() }));
 vi.mock('../src/integration/getDependFilePath.js', () => ({ default: vi.fn() }));
-vi.mock('crossbind', async () => ({ integrationApi: (await import('../src/integration/api.js')).default }));
 
-const { default: rollupCrossbindPlugin } = await import('../../../plugins/rollup/index.js');
+const { default: rollupPlugin } = await import('../../../extensions/rollup/src/plugin.js');
+const { default: apiHandle } = await import('../src/integration/apiHandle.js');
+const rollupCrossbindPlugin = () => rollupPlugin(apiHandle('rollup'));
 
 async function watchedWithHeader(command) {
     const plugin = rollupCrossbindPlugin();
@@ -42,11 +43,11 @@ describe('the Rollup plugin', () => {
         expect(await watchedWithHeader('serve')).toEqual([]);
     });
 
-    test("takes a web build's crossbind/app from the app host, where the project has one", () => {
+    test("takes a web build's crossbind/app from the app host, where the project has one", async () => {
         pageApi.file = '/project/node_modules/@crossbind/core-app-host/js/app.js';
-        expect(rollupCrossbindPlugin().resolveId('crossbind/app')).toBe(pageApi.file);
+        expect(await rollupCrossbindPlugin().resolveId('crossbind/app')).toBe(pageApi.file);
 
         pageApi.file = null;
-        expect(rollupCrossbindPlugin().resolveId('crossbind/app')).toBeNull();
+        expect(await rollupCrossbindPlugin().resolveId('crossbind/app')).toBeNull();
     });
 });

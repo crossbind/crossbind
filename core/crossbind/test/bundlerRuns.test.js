@@ -7,12 +7,12 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import upath from 'upath';
 
-// The Rollup and webpack plugins on their own tools, through crossbind's integration api with the builds under it stood
-// in for: a page that imports a header bundles the header's module, and the glue lands beside the page. A header the
-// plugin left alone would stop either tool, which cannot parse C.
+// crossbind() on Rollup and on webpack, which each pick crossbind's own integration for, on the integration api with the
+// builds under it stood in for: a page that imports a header bundles the header's module, and the glue lands beside the
+// page. A header the plugin left alone would stop either tool, which cannot parse C.
 const holder = { config: {} };
 const HEADER_MODULE = "export const one = () => 'one from the header';";
-const PLUGINS = upath.normalize(fileURLToPath(new URL('../../../plugins', import.meta.url)));
+const EXTENSIONS = upath.normalize(fileURLToPath(new URL('../../../extensions', import.meta.url)));
 function target(buildType) {
     return {
         platform: 'wasm', arch: 'wasm32', runtime: 'st', buildType, runtimeEnv: 'browser', jsName: `${buildType}.js`, wasmName: `${buildType}.wasm`, dataTxtName: `${buildType}.data.txt`,
@@ -33,20 +33,8 @@ vi.mock('../src/actions/isSourceNewer.js', () => ({ default: () => false }));
 vi.mock('../src/actions/pageLicenses.js', () => ({ default: async () => null }));
 vi.mock('../src/integration/getCrossbindScript.js', () => ({ default: () => HEADER_MODULE, getRustJsScript: vi.fn() }));
 vi.mock('../src/integration/getDependFilePath.js', () => ({ default: () => undefined }));
-vi.mock('crossbind', async () => ({
-    integrationApi: (await import('../src/integration/api.js')).default,
-    appSourceFiles: vi.fn(),
-    createBridgeFile: vi.fn(),
-    getCrossbindScript: vi.fn(),
-    getData: vi.fn(),
-    getFilteredBuildTargets: vi.fn(),
-    getRustJsScript: vi.fn(),
-    getTargetParams: vi.fn(),
-    state: {},
-}));
 
-const { default: rollupCrossbindPlugin } = await import('../../../plugins/rollup/index.js');
-const { default: CrossbindWebpackPlugin } = await import('../../../plugins/webpack/index.js');
+const { default: crossbind } = await import('../src/index.js');
 const { default: buildDependencies } = await import('../src/actions/buildDependencies.js');
 const { default: createBridgeFile } = await import('../src/actions/createInterface.js');
 const { default: buildWasm } = await import('../src/actions/buildWasm.js');
@@ -76,10 +64,10 @@ afterEach(() => {
 
 const read = (file) => fs.readFileSync(`${work}/${file}`, 'utf8');
 
-describe('the plugins on their own tools', () => {
+describe('crossbind() on the tools it speaks to', () => {
     test("plain Rollup bundles the header's module and emits the glue beside the page", async () => {
         const { rollup } = await import('rollup');
-        const bundle = await rollup({ input: `${work}/src/main.js`, plugins: [rollupCrossbindPlugin()] });
+        const bundle = await rollup({ input: `${work}/src/main.js`, plugins: [crossbind()] });
         await bundle.write({ dir: `${work}/dist`, format: 'es' });
         await bundle.close();
 
@@ -95,16 +83,13 @@ describe('the plugins on their own tools', () => {
     });
 
     test("webpack bundles the header's module through the loader and copies the glue beside the page", async () => {
-        const webpack = createRequire(`${PLUGINS}/webpack/package.json`)('webpack');
-        const plugin = new CrossbindWebpackPlugin();
+        const webpack = createRequire(`${EXTENSIONS}/webpack/package.json`)('webpack');
         const compiler = webpack({
             mode: 'production',
             context: work,
             entry: './src/main.js',
             output: { path: `${work}/dist`, filename: 'main.js' },
-            module: { rules: [plugin.getRule()] },
-            resolveLoader: { alias: { '@crossbind/plugin-webpack-loader': `${PLUGINS}/webpack-loader/index.js` } },
-            plugins: [plugin],
+            plugins: [crossbind()],
             optimization: { minimize: false },
             infrastructureLogging: { level: 'error' },
         });

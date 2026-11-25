@@ -63,7 +63,7 @@ function repositoryOf(t, packages) {
 test('every package the release train publishes takes the version npm serves on the dist-tag, or null where it serves none', async (t) => {
     const { root, tag } = repositoryOf(t, {
         'core/crossbind': { name: 'crossbind' },
-        'plugins/vite': { name: '@crossbind/plugin-vite' },
+        'extensions/vite': { name: '@crossbind/plugin-vite' },
         'ports/demo/base': { name: '@crossbind/port-demo' },
         'ports/demo/wasm': { name: '@crossbind/port-demo-wasm' },
         'extensions/dialog': { name: '@crossbind/extension-dialog' },
@@ -89,7 +89,7 @@ test('every package the release train publishes takes the version npm serves on 
     assert.deepEqual([catalog.schemaVersion, catalog.source, catalog.distTag], [2, 'live', 'beta']);
     assert.deepEqual(catalog.packages, [
         { name: '@crossbind/extension-dialog', path: 'extensions/dialog', version: null, history: 'extensions/dialog' },
-        { name: '@crossbind/plugin-vite', path: 'plugins/vite', version: '2.0.0-beta.68', history: 'plugins/vite' },
+        { name: '@crossbind/plugin-vite', path: 'extensions/vite', version: '2.0.0-beta.68', history: 'extensions/vite' },
         { name: '@crossbind/port-demo', path: 'ports/demo/base', version: '2.0.0-beta.68', history: 'ports/demo' },
         { name: '@crossbind/port-demo-wasm', path: 'ports/demo/wasm', version: '2.0.0-beta.67', history: 'ports/demo' },
         { name: 'crossbind', path: 'core/crossbind', version: '2.0.0-beta.68', history: 'core/crossbind' },
@@ -109,24 +109,24 @@ test('a version npm serves that no tag of the clone names stops the build, namin
 });
 
 test('a commit that moves a file out of a folder, or names one in any script, counts for that folder', async (t) => {
-    const { root, commit, tag } = repositoryOf(t, { 'core/crossbind': { name: 'crossbind' }, 'plugins/vite': { name: '@crossbind/plugin-vite' } });
-    commit('feat(crossbind): a helper', { 'plugins/vite/helper.js': 'helper' });
+    const { root, commit, tag } = repositoryOf(t, { 'core/crossbind': { name: 'crossbind' }, 'extensions/vite': { name: '@crossbind/plugin-vite' } });
+    commit('feat(crossbind): a helper', { 'extensions/vite/helper.js': 'helper' });
     tag('2.0.0-beta.1', 'crossbind', '@crossbind/plugin-vite');
     const moved = commit('refactor(crossbind): keep the helper in the core', {
-        'plugins/vite/helper.js': null,
+        'extensions/vite/helper.js': null,
         'core/crossbind/helper.js': 'helper',
     });
-    const named = commit('docs(crossbind): the template', { 'plugins/vite/şablon.md': 'şablon' });
+    const named = commit('docs(crossbind): the template', { 'extensions/vite/şablon.md': 'şablon' });
     commit('chore(release): prepare the beta 2 train', {
         'core/crossbind/package.json': manifestOf('crossbind', '2.0.0-beta.2'),
-        'plugins/vite/package.json': manifestOf('@crossbind/plugin-vite', '2.0.0-beta.2'),
+        'extensions/vite/package.json': manifestOf('@crossbind/plugin-vite', '2.0.0-beta.2'),
     });
     tag('2.0.0-beta.2', 'crossbind', '@crossbind/plugin-vite');
 
     const { histories } = await buildPackagesCatalog({ root, distTag: 'beta', registry: registryOf({}) });
 
     assert.deepEqual(
-        histories['plugins/vite'][0].changes.map(({ commit: hash }) => hash),
+        histories['extensions/vite'][0].changes.map(({ commit: hash }) => hash),
         [named, moved],
     );
     assert.deepEqual(
@@ -138,15 +138,15 @@ test('a commit that moves a file out of a folder, or names one in any script, co
 test("a package's releases are its tags, newest first, each with the commits that changed its folder since the one before", async (t) => {
     const { root, commit, tag } = repositoryOf(t, {
         'core/crossbind': { name: 'crossbind' },
-        'plugins/vite': { name: '@crossbind/plugin-vite' },
+        'extensions/vite': { name: '@crossbind/plugin-vite' },
         'ports/demo/base': { name: '@crossbind/port-demo' },
         'ports/demo/wasm': { name: '@crossbind/port-demo-wasm' },
     });
     tag('2.0.0-beta.1', 'crossbind', '@crossbind/plugin-vite', '@crossbind/port-demo', '@crossbind/port-demo-wasm');
-    const served = commit("feat(crossbind): serve the plugin's pages", { 'plugins/vite/index.js': 'serve' });
+    const served = commit("feat(crossbind): serve the plugin's pages", { 'extensions/vite/index.js': 'serve' });
     commit('chore(release): prepare the beta 2 train', {
         'core/crossbind/package.json': manifestOf('crossbind', '2.0.0-beta.2'),
-        'plugins/vite/package.json': manifestOf('@crossbind/plugin-vite', '2.0.0-beta.2'),
+        'extensions/vite/package.json': manifestOf('@crossbind/plugin-vite', '2.0.0-beta.2'),
     });
     tag('2.0.0-beta.2', 'crossbind', '@crossbind/plugin-vite');
     const linked = commit('fix(port-demo): link it on windows', { 'ports/demo/base/build.mjs': 'link' });
@@ -155,7 +155,7 @@ test("a package's releases are its tags, newest first, each with the commits tha
 
     const { histories } = await buildPackagesCatalog({ root, distTag: 'beta', registry: registryOf({}) });
 
-    assert.deepEqual(histories['plugins/vite'], [
+    assert.deepEqual(histories['extensions/vite'], [
         {
             version: '2.0.0-beta.2',
             date: '2026-10-04',

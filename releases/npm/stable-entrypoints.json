@@ -3,13 +3,8 @@
     "packages": [
         "crossbind",
         "create-crossbind",
-        "@crossbind/plugin-vite",
-        "@crossbind/plugin-rollup",
-        "@crossbind/plugin-webpack",
-        "@crossbind/plugin-webpack-loader",
-        "@crossbind/plugin-react-native",
-        "@crossbind/plugin-react-native-ios-helper",
-        "@crossbind/plugin-metro",
+        "@crossbind/extension-react-native",
+        "@crossbind/extension-react-native-ios",
         "@crossbind/typescript-config",
         "@crossbind/example-lib-prebuilt-matrix"
     ]

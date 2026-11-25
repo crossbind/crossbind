@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
-import viteCrossbindPlugin from '@crossbind/plugin-vite';
+import crossbind from 'crossbind';
 
 export default defineConfig({
-    plugins: [viteCrossbindPlugin()],
+    plugins: [crossbind()],
 });

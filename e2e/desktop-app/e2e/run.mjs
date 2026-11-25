@@ -525,7 +525,9 @@ async function open() {
     if (platform) {
         const project = `${root}/dist/${name}-${platform}`;
         if (!existsSync(project)) missing(project);
-        const { buildForSimulator, openInSimulator, buildApk, openOnDevice } = await import('crossbind');
+        const { default: openInSimulator, buildForSimulator } = await import('crossbind/src/actions/iosSimulator.js');
+        const { buildApk } = await import('crossbind/src/actions/androidGradle.js');
+        const { default: openOnDevice } = await import('crossbind/src/actions/androidDevice.js');
         if (platform !== 'ios') return openOnDevice(buildApk(project), { env });
         const built = buildForSimulator(project);
         return { ...openInSimulator(built, { env }), built };
@@ -737,7 +739,7 @@ warmPowerShell();
 const macClipboard = platform === 'ios' ? spawnSync('pbpaste', { encoding: 'utf8' }).stdout : null;
 // The adb crossbind opens the Android app with, which opens it with a link as well, and through which the device's
 // loopback reaches the run's endpoint, as a dev server's port does.
-const adb = platform === 'android' ? (await import('crossbind')).adbPath() : undefined;
+const adb = platform === 'android' ? (await import('crossbind/src/actions/androidDevice.js')).adbPath() : undefined;
 if (adb) execFileSync(adb, ['reverse', `tcp:${REACH_PORT}`, `tcp:${REACH_PORT}`]);
 const { child: app, close, executable, built, device } = await open();
 // An iOS app's extensions, which the run checks as it ends, once the app has run.

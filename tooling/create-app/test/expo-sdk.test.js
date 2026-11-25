@@ -5,7 +5,7 @@ import { followExpoSdk } from '../src/expo-sdk.js';
 const REGISTRY = 'https://registry.example';
 
 const TEMPLATE = Object.freeze({
-    '@crossbind/plugin-react-native': '^2.0.0-beta.70',
+    '@crossbind/extension-react-native': '^2.0.0-beta.70',
     'hermes-compiler': '260318099.0.4',
     expo: '~58.0.14',
     'expo-router': '~58.0.23',
@@ -45,7 +45,7 @@ const follow = (routes, registry = REGISTRY) => followExpoSdk(TEMPLATE, { regist
 
 test('takes the versions Expo sets, and hermes-compiler from the react-native it names', async () => {
     assert.deepEqual(await follow(healthyRoutes()), {
-        '@crossbind/plugin-react-native': '^2.0.0-beta.70',
+        '@crossbind/extension-react-native': '^2.0.0-beta.70',
         'hermes-compiler': '260318099.0.5',
         expo: '~58.0.23',
         'expo-router': '~58.0.30',

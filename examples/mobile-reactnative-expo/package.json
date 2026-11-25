@@ -12,8 +12,8 @@
         "reset-project": "node ./scripts/reset-project.js",
         "android": "expo run:android",
         "ios": "expo run:ios",
-        "web": "crossbind-metro prepare-web && expo start --web",
-        "export:web": "crossbind-metro prepare-web && expo export -p web --clear && crossbind-metro export-web dist",
+        "web": "expo start --web",
+        "export:web": "expo export -p web --clear",
         "lint": "expo lint",
         "run:ios": "expo run:ios --no-bundler --configuration Release",
         "run:android": "expo run:android --no-bundler --variant release",
@@ -24,8 +24,8 @@
     },
     "dependencies": {
         "@crossbind/core-embind-jsi": "workspace:^",
-        "@crossbind/plugin-react-native": "workspace:^",
-        "@crossbind/plugin-react-native-ios-helper": "workspace:^",
+        "@crossbind/extension-react-native": "workspace:^",
+        "@crossbind/extension-react-native-ios": "workspace:^",
         "@crossbind/example-lib-prebuilt-matrix": "workspace:^",
         "hermes-compiler": "260318099.0.5",
         "expo": "~58.0.14",
@@ -56,7 +56,7 @@
         "typescript": "~6.0.3",
         "metro-config": "^0.87.1",
         "@crossbind/typescript-config": "workspace:^",
-        "@crossbind/plugin-metro": "workspace:^"
+        "crossbind": "workspace:^"
     },
     "keywords": [
         "crossbind-sample",

@@ -15,8 +15,8 @@
         "clear": "rm -rf .crossbind dist"
     },
     "devDependencies": {
-        "@crossbind/plugin-vite": "workspace:^",
         "@playwright/test": "^1.63.0",
+        "crossbind": "workspace:^",
         "vite": "^8.2.1"
     },
     "keywords": [

@@ -21,7 +21,6 @@
     "devDependencies": {
         "@crossbind/core-app-host": "workspace:^",
         "@crossbind/core-embind-rust": "workspace:^",
-        "@crossbind/plugin-vite": "workspace:^",
         "crossbind": "workspace:^",
         "vite": "^8.2.1"
     }

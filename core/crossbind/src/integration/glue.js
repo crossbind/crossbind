@@ -10,12 +10,9 @@ import isSourceNewer from '../actions/isSourceNewer.js';
 import { isAppSource } from '../utils/appSources.js';
 import { getFileHash } from '../utils/hash.js';
 import { getRustJsScript } from './getCrossbindScript.js';
+import { ISOLATION_HEADERS } from './isolationHeaders.js';
 
-// A multithreaded wasm needs SharedArrayBuffer, which only a cross-origin isolated page has.
-export const ISOLATION_HEADERS = Object.freeze({
-    'Cross-Origin-Opener-Policy': 'same-origin',
-    'Cross-Origin-Embedder-Policy': 'require-corp',
-});
+export { ISOLATION_HEADERS };
 
 // The files a page's boot code asks for, each one a build output of its target. An app's page loads the runtime its
 // host serves.

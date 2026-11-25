@@ -9,7 +9,6 @@ on:
             - extensions/**
             - tooling/**
             - ports/**
-            - plugins/**
             - examples/**
             - e2e/**
             - .nvmrc
@@ -24,7 +23,6 @@ on:
             - extensions/**
             - tooling/**
             - ports/**
-            - plugins/**
             - examples/**
             - e2e/**
             - .nvmrc

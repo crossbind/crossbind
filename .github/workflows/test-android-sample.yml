@@ -9,7 +9,6 @@ on:
             - extensions/**
             - tooling/**
             - ports/**
-            - plugins/**
             - examples/**
             - e2e/**
             - .nvmrc
@@ -21,8 +20,8 @@ on:
             - main
         paths:
             - core/crossbind/**
-            - plugins/metro/**
-            - plugins/react-native/**
+            - extensions/metro/**
+            - extensions/react-native/**
             - examples/lib-prebuilt-matrix/**
             - examples/mobile-reactnative-cli/**
             - .nvmrc

@@ -4,10 +4,14 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import state from '../state/index.js';
 
+// crossbind's own folder, whose own extensions may declare a companion as well.
+const CORE_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+
 // The binding runtimes ship as their own packages and the ENGINE never depends on them: the
-// consumer declares one - directly, or transitively through a platform plugin - and the engine
-// only resolves it. pnpm keeps transitive deps unhoisted, so resolution may need to hop through
-// the declaring plugin; inside this monorepo the package sits next to the engine under core/.
+// consumer declares one - directly, or transitively through a platform package or one of
+// crossbind's own extensions - and the engine only resolves it. pnpm keeps transitive deps
+// unhoisted, so resolution may need to hop through the declaring package, found from the project
+// or from crossbind itself; inside this monorepo the package sits next to the engine under core/.
 export default function createCompanionResolver({
     pkg, anchors = [], siblingDir, siblingMarker, missingMessage,
 }) {
@@ -27,14 +31,14 @@ export default function createCompanionResolver({
 
         const project = state.config?.paths?.project;
         let root = project ? resolveFrom(project) : null;
-        if (!root && project) {
+        for (const base of [project, CORE_ROOT].filter(Boolean)) {
             for (const anchor of anchors) {
+                if (root) break;
                 try {
-                    const req = createRequire(path.join(project, 'package.json'));
+                    const req = createRequire(path.join(base, 'package.json'));
                     const anchorDir = path.dirname(fs.realpathSync(req.resolve(`${anchor}/package.json`)));
                     root = resolveFrom(anchorDir);
-                    if (root) break;
-                } catch (e) { /* this plugin is not installed - try the next anchor */ }
+                } catch (e) { /* this package is not installed - try the next anchor */ }
             }
         }
         if (!root) {

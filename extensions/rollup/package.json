@@ -1,0 +1,38 @@
+{
+    "name": "@crossbind/extension-rollup",
+    "version": "2.0.0-beta.82",
+    "description": "crossbind extension: crossbind() in Rollup's and Rolldown's plugin lists.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/rollup#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "MIT",
+    "type": "module",
+    "exports": {
+        "./crossbind.extension.js": "./crossbind.extension.js",
+        "./plugin": "./src/plugin.js"
+    },
+    "files": [
+        "crossbind.extension.js",
+        "src"
+    ],
+    "crossbind": {
+        "extension": "./crossbind.extension.js"
+    },
+    "dependencies": {
+        "@crossbind/core-embind-rust": "workspace:^"
+    },
+    "peerDependencies": {
+        "rollup": ">=2.0.0"
+    },
+    "peerDependenciesMeta": {
+        "rollup": {
+            "optional": true
+        }
+    },
+    "keywords": [
+        "crossbind-extension",
+        "crossbind",
+        "integration",
+        "rollup",
+        "rolldown"
+    ]
+}

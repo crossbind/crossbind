@@ -225,7 +225,7 @@ test('the unpublished toolchain image train uses the reviewed stable versions', 
     // A React Native app builds with the image's NDK, whose libc++_shared.so crossbind's Android libraries need: the
     // plugin names it, and the React Native CLI apps build with it.
     const ndkPin = `['"]${ndkVersion.replaceAll('.', '\\.')}['"]`;
-    assert.match(fs.readFileSync(path.join(ROOT, 'plugins', 'react-native', 'ndk.cjs'), 'utf8'), new RegExp(ndkPin));
+    assert.match(fs.readFileSync(path.join(ROOT, 'extensions', 'react-native', 'ndk.cjs'), 'utf8'), new RegExp(ndkPin));
     for (const app of ['examples/mobile-reactnative-cli', 'e2e/mobile-reactnative-cli']) {
         assert.match(fs.readFileSync(path.join(ROOT, app, 'android', 'build.gradle'), 'utf8'), new RegExp(`ndkVersion = ${ndkPin}`));
     }

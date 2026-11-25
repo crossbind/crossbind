@@ -21,8 +21,8 @@
     },
     "dependencies": {
         "@crossbind/core-embind-jsi": "workspace:^",
-        "@crossbind/plugin-react-native": "workspace:^",
-        "@crossbind/plugin-react-native-ios-helper": "workspace:^",
+        "@crossbind/extension-react-native": "workspace:^",
+        "@crossbind/extension-react-native-ios": "workspace:^",
         "@crossbind/example-lib-prebuilt-matrix": "workspace:^",
         "react": "19.3.1",
         "react-native": "0.88.1",
@@ -51,7 +51,7 @@
         "prettier": "3.10.1",
         "react-test-renderer": "19.3.1",
         "typescript": "^6.0.3",
-        "@crossbind/plugin-metro": "workspace:^"
+        "crossbind": "workspace:^"
     },
     "engines": {
         "node": ">=26"

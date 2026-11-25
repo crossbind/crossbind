@@ -8,11 +8,10 @@ const PKG = '@crossbind/core-embind-rust';
 const resolveEmbindRustRoot = createCompanionResolver({
     pkg: PKG,
     anchors: [
-        '@crossbind/plugin-react-native',
-        '@crossbind/plugin-vite',
-        '@crossbind/plugin-rollup',
-        '@crossbind/plugin-metro',
-        '@crossbind/plugin-webpack',
+        '@crossbind/extension-react-native',
+        '@crossbind/extension-vite',
+        '@crossbind/extension-rollup',
+        '@crossbind/extension-webpack',
     ],
     siblingDir: 'embind-rust',
     siblingMarker: 'crate/Cargo.toml',

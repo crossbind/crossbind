@@ -14,7 +14,10 @@
     },
     "main": "src/index.js",
     "exports": {
-        ".": "./src/index.js",
+        ".": {
+            "types": "./src/index.d.ts",
+            "default": "./src/index.js"
+        },
         "./node/dev": "./src/node/dev.mjs",
         "./app": {
             "types": "./src/app/index.d.ts",
@@ -42,6 +45,10 @@
     },
     "dependencies": {
         "@crossbind/extension-conan": "workspace:*",
+        "@crossbind/extension-metro": "workspace:*",
+        "@crossbind/extension-rollup": "workspace:*",
+        "@crossbind/extension-vite": "workspace:*",
+        "@crossbind/extension-webpack": "workspace:*",
         "@rollup/plugin-commonjs": "^29.0.3",
         "@rollup/plugin-json": "^6.1.0",
         "@rollup/plugin-node-resolve": "^16.0.3",

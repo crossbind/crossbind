@@ -14,8 +14,8 @@ import path from 'node:path';
 
 const REPOSITORY = path.resolve(import.meta.dirname, '..');
 const NAME = 'pack-install';
-const WHERE_PACKAGES_ARE = ['core', 'plugins', 'extensions'];
-const WHAT_AN_APP_INSTALLS = ['crossbind', '@crossbind/core-app-host', '@crossbind/plugin-vite'];
+const WHERE_PACKAGES_ARE = ['core', 'extensions'];
+const WHAT_AN_APP_INSTALLS = ['crossbind', '@crossbind/core-app-host'];
 const STORES = ['app-store', 'github', 'google-play'];
 // Three of the host's extensions, each by a text of its own code too long for a string held in place, which a compiler
 // keeps whole: a short name, as dialog.open, it may build in registers, as Linux x64's build does.
@@ -99,9 +99,9 @@ const FILES = {
 };
 `,
     'vite.config.js': `import { defineConfig } from 'vite';
-import viteCrossbindPlugin from '@crossbind/plugin-vite';
+import crossbind from 'crossbind';
 
-export default defineConfig({ plugins: [viteCrossbindPlugin()] });
+export default defineConfig({ plugins: [crossbind()] });
 `,
     'index.html': `<!doctype html>
 <html lang="en">

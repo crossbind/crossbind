@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { carriedPath, isOutside } from './appFiles.js';
 import {
-    NAME, checkedCommands, checkedInstaller, checkedKeys, checkedPackageSource, checkedPublisher,
+    NAME, checkedCommands, checkedInstaller, checkedIntegration, checkedKeys, checkedPackageSource, checkedPublisher,
 } from './extensionSteps.js';
 import { checkedActivityTypes, checkedFileTypes, checkedLinks, checkedShortcutItems } from './appLaunches.js';
 import { checkedPrivacy, checkedUrlSchemes } from './appOptions.js';
@@ -347,6 +347,7 @@ export function checkedExtension(extension, root, where) {
         ...(extension.packageSource === undefined ? {} : {
             packageSource: checkedPackageSource(extension.packageSource, `${where}'s packageSource`, extension.name),
         }),
+        ...(extension.integration === undefined ? {} : { integration: checkedIntegration(extension.integration, `${where}'s integration`) }),
         ...(extension.fromApp === undefined ? {} : { fromApp: extension.fromApp.bind(extension) }),
         ...checkedOwnKeys(extension, where),
     };
@@ -361,9 +362,9 @@ export function checkedExtension(extension, root, where) {
 // extension written for any of them builds. A minor version that adds to the contract raises the newest, and a major
 // version that breaks it the oldest.
 export const OLDEST_EXTENSION_CONTRACT = 1;
-export const EXTENSION_CONTRACT = 4;
+export const EXTENSION_CONTRACT = 5;
 // What a later version added to an extension, by its path in the extension and the version that did.
-const ADDED_IN = { packageSource: 2, 'app.android.cleartext': 3 };
+const ADDED_IN = { packageSource: 2, 'app.android.cleartext': 3, integration: 5 };
 const valueAt = (extension, key) => key.split('.').reduce((value, part) => (isObject(value) ? value[part] : undefined), extension);
 
 // The contract an extension is written for, or the several it is written for alike, is one this crossbind takes: one
@@ -424,7 +425,7 @@ export function extensionPackage(root, base) {
 
 // What an extension of crossbind's build once hooked into, which no build runs.
 const OLD_HOOKS = ['loadConfig', 'buildWasm', 'createLib'];
-const LISTED_KEYS = ['name', 'contract', 'root', 'app', 'options', 'fromApp', 'publisher', 'installer', 'commands', 'keys', 'packageSource', 'replaces'];
+const LISTED_KEYS = ['name', 'contract', 'root', 'app', 'options', 'fromApp', 'publisher', 'installer', 'commands', 'keys', 'packageSource', 'integration', 'replaces'];
 
 // An extension crossbind.config.js lists, as its package's crossbind.extension.js gives it: its name, the folder its
 // files are in, which a build sees under the project's base alone, and what it adds to an app.
@@ -537,10 +538,11 @@ export const withFromApp = (extensions, apiOf) => extensions.flatMap((extension)
     return options === null ? [] : [{ ...extension, options }];
 });
 
-// The extensions crossbind.config.js lists that add to an app: all but those that give a publisher, an installer or a
-// package source alone, which leave the host's own of their name as it is.
+// The extensions crossbind.config.js lists that add to an app: all but those that give a publisher, an installer, a
+// package source or an integration alone, which leave the host's own of their name as it is.
 export const appExtensionsOf = (listed) => listed
-    .filter((extension) => (!extension.publisher && !extension.installer && !extension.packageSource) || Object.keys(extension.app).length > 0);
+    .filter((extension) => (!extension.publisher && !extension.installer && !extension.packageSource && !extension.integration)
+        || Object.keys(extension.app).length > 0);
 
 // The host's own extensions an app has, then those crossbind.config.js lists, each with the roles it holds, its own name
 // where it says nothing else: a role a listed one replaces leaves the host's that held it, which the app leaves out once

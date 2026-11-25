@@ -1,0 +1,15 @@
+{
+    "name": "@crossbind/extension-react-native-ios",
+    "version": "2.0.0-beta.82",
+    "description": "The iOS pod of crossbind's React Native extension: the module that installs crossbind's bindings in the app's JavaScript runtime.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/react-native-ios#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "MIT",
+    "keywords": [
+        "crossbind",
+        "react-native",
+        "expo",
+        "ios",
+        "mobile"
+    ]
+}
