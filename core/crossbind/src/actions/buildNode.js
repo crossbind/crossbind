@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import os from 'node:os';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { rollup } from 'rollup';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
@@ -26,14 +27,21 @@ const cpuCount = Math.max(1, os.cpus().length - 1);
 // What a build's output, a package's own packages and a repository's history hold, which no build reads.
 const UNREAD_FOLDERS = ['.crossbind', 'node_modules', '.git'];
 
-// The files under these folders a build reads, a link that leads nowhere left out.
+// The files under these folders a build reads, a link that leads nowhere left out. The folders no build reads stay
+// unopened: a package's own packages may link back to the folder that holds them, and a walk through them never ends.
 export function filesUnder(dirs) {
-    return dirs.flatMap((dir) => (fs.existsSync(dir)
-        ? fs.readdirSync(dir, { recursive: true })
-            .filter((file) => !file.split(/[\\/]/).some((part) => UNREAD_FOLDERS.includes(part)))
-            .map((file) => `${dir}/${file}`)
-            .filter((file) => fs.statSync(file, { throwIfNoEntry: false })?.isFile())
-        : []));
+    return dirs.flatMap((dir) => (fs.existsSync(dir) ? readFiles(dir).map((file) => `${dir}/${file}`) : []));
+}
+
+function readFiles(dir, folder = '') {
+    return fs.readdirSync(path.join(dir, folder))
+        .filter((name) => !UNREAD_FOLDERS.includes(name))
+        .flatMap((name) => {
+            const file = path.join(folder, name);
+            const stats = fs.statSync(path.join(dir, file), { throwIfNoEntry: false });
+            if (stats?.isDirectory()) return readFiles(dir, file);
+            return stats?.isFile() ? [file] : [];
+        });
 }
 
 // The addon's link, and an app host's, whose bridges come from an archive of their own.

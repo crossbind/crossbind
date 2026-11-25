@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import upath from 'upath';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const {
@@ -435,5 +436,21 @@ describe('the files a build reads under a folder', () => {
         fs.symlinkSync(path.join(dir, 'missing.cpp'), path.join(dir, 'native', 'gone.cpp'));
         expect(filesUnder([dir, path.join(dir, 'none')])).toEqual([`${dir}/${path.join('native', 'clipboard.cpp')}`]);
         fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    test('are found without opening the folders left out, whose links may lead back to the folder itself', () => {
+        const dir = fs.mkdtempSync(upath.join(os.tmpdir(), 'crossbind-files-under-'));
+        const locked = upath.join(dir, 'node_modules', 'locked');
+        fs.mkdirSync(upath.join(dir, 'native'));
+        fs.writeFileSync(upath.join(dir, 'native', 'clipboard.cpp'), '');
+        fs.mkdirSync(locked, { recursive: true });
+        // A folder nobody may read stands in for a link cycle: a walk that opens it fails at once instead of never ending.
+        fs.chmodSync(locked, 0o000);
+        try {
+            expect(filesUnder([dir]).map((file) => upath.normalize(file))).toEqual([upath.join(dir, 'native', 'clipboard.cpp')]);
+        } finally {
+            fs.chmodSync(locked, 0o700);
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
     });
 });
