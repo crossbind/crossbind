@@ -23,8 +23,8 @@ Add crossbind to a Next.js app so:
 
 ## Files involved
 
-- `package.json`: add `crossbind`, `@crossbind/plugin-webpack`, `@crossbind/plugin-webpack-loader`, optional `@crossbind/port-<name>`.
-- `next.config.{js,mjs,ts}`: Add crossbind plugin via `webpack(config)` callback; add `headers()` for COOP/COEP.
+- `package.json`: add `crossbind`, optional `@crossbind/port-<name>`.
+- `next.config.{js,mjs,ts}`: Add `crossbind()` to the plugins in the `webpack(config)` callback; add `headers()` for COOP/COEP.
 - `crossbind.config.{js,mjs}` *(new at root)*: Project-level crossbind config.
 - `src/native/` *(if user wraps own C++)*: `.h` + `.cpp` source.
 - `public/`: Next serves `crossbind.js` / `crossbind.wasm` from `public/` if you copy them there post-build (alternative: webpack plugin's middleware).
@@ -32,7 +32,7 @@ Add crossbind to a Next.js app so:
 ## Commands
 
 ```bash
-pnpm add -D crossbind@beta @crossbind/plugin-webpack@beta @crossbind/plugin-webpack-loader@beta
+pnpm add -D crossbind@beta
 pnpm add @crossbind/port-<name>@beta     # optional
 
 # Dev
@@ -47,17 +47,14 @@ pnpm build && pnpm start    # next build && next start
 `next.config.mjs`:
 
 ```js
-import CrossbindWebpackPlugin from '@crossbind/plugin-webpack';
-
-const crossbindWebpackPlugin = new CrossbindWebpackPlugin();
+import crossbind from 'crossbind';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     webpack(config, { isServer }) {
         if (!isServer) {
-            // crossbind targets the client bundle; skip on server-side builds.
-            config.module.rules.push(crossbindWebpackPlugin.getRule());
-            config.plugins.push(crossbindWebpackPlugin);
+            // crossbind targets the client bundle; skip on server-side builds. The plugin adds the loader's rule.
+            config.plugins.push(crossbind());
         }
         return config;
     },
@@ -89,7 +86,7 @@ export default {
 
 ## Turbopack
 
-Next 14+ ships Turbopack (`next dev --turbo`, default in Next 15+). **`@crossbind/plugin-webpack` does not run under Turbopack** — Turbopack has its own plugin system that crossbind doesn't yet target.
+Next 14+ ships Turbopack (`next dev --turbo`, default in Next 15+). **`crossbind()` does not run under Turbopack**, which runs no webpack plugin and has a plugin system of its own that crossbind doesn't yet target.
 
 Workarounds while Turbopack support is pending:
 
@@ -133,11 +130,11 @@ If the user wants crossbind on the server side too (Node SSR with WASM), that's 
 - **Using Turbopack.** Plugin doesn't run under Turbopack today. Disable `--turbo` or use the static-asset workaround.
 - **Static export (`output: 'export'`).** `headers()` doesn't apply; user must configure the host (Vercel, Netlify, S3, …).
 - **Mixing App Router + module-level `import` of the loader.** The loader fetches wasm at runtime; module-level top-level await may stall RSC. Init lazily inside a `useEffect` or async route handler.
-- **`next.config.ts` (TypeScript config).** Make sure `tsconfig.json` includes the right `module`/`moduleResolution` for ESM imports of `@crossbind/plugin-webpack`.
-- **Plugin's devServer config ignored.** Next manages its own dev server — `crossbindWebpackPlugin.getDevServerConfig()` doesn't apply. Use Next's `headers()` callback for COOP/COEP and rely on Next's static asset serving for `/crossbind.wasm`.
+- **`next.config.ts` (TypeScript config).** Make sure `tsconfig.json` includes the right `module`/`moduleResolution` for ESM imports of `crossbind`.
+- **crossbind's dev server part does not apply.** Next manages its own dev server, which takes no webpack-dev-server options. Use Next's `headers()` callback for COOP/COEP and rely on Next's static asset serving for `/crossbind.wasm`.
 
 ## Reference
 
 - No canonical Next.js example yet; the closest is `examples/web-react-rspack/` (a similar Webpack-based React setup).
-- Plugin: `plugins/webpack/index.js`.
+- Plugin: `extensions/webpack/src/plugin.js`.
 - Webpack/Rspack equivalent (with full devServer integration): `docs/playbooks/integration/webpack-rspack.md`.

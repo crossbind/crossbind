@@ -326,8 +326,8 @@ The producer crate and both adapters ship in THIS npm package, so the whole bind
 no cross-registry skew. The engine never depends on this package (same direction rule as
 `core-embind-jsi`): the consumer declares it and the engine only resolves it -
 
-- React Native apps get it transitively via `@crossbind/plugin-react-native`;
-- web apps via `@crossbind/plugin-vite` / `@crossbind/plugin-rollup`;
+- React Native apps get it transitively via `@crossbind/extension-react-native`;
+- web apps via crossbind's own integrations, `@crossbind/extension-vite`, `-rollup` and `-webpack`;
 - standalone cargo packages declare `@crossbind/core-embind-rust` in their devDependencies
   (see `demo/package.json`).
 

@@ -10,16 +10,16 @@ now.
 
 ## Steps
 
-1. The page must be a Vite app. Install the host and the plugin next to crossbind:
+1. The page must be a Vite app. Install the host next to crossbind:
 
    ```bash
-   pnpm add -D crossbind@beta @crossbind/plugin-vite@beta @crossbind/core-app-host@beta vite
+   pnpm add -D crossbind@beta @crossbind/core-app-host@beta vite
    ```
 
 2. Leave `target.runtimeEnv` out of `crossbind.config.js`: `crossbind app dev` and `crossbind app build` then make the
    app, and `vite` and `vite build` the website, from the same page. `target: { runtimeEnv: 'app' }` makes a project
    an app alone.
-3. Add `viteCrossbindPlugin()` to `vite.config.js` if it is not there yet.
+3. Add `crossbind()` to the plugins of `vite.config.js` if it is not there yet.
 4. Write the page as for a worker-backed web build: `await initNative()`, then await every call. A function passed to
    the module runs in the page later, without an answer for native code. What the app's host does, the file and
    message dialogs, opening a link in the browser, the app's folders, quitting, the menus, the tray's icon, the

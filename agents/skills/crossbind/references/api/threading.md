@@ -66,8 +66,8 @@ console.log(typeof SharedArrayBuffer)  // must be 'function'
 
 ### Per-host configuration
 
-- **Vite dev server and preview:** `@crossbind/plugin-vite` sends them.
-- **Webpack and Rspack dev servers:** `@crossbind/plugin-webpack` sends them.
+- **Vite dev server and preview:** `crossbind()` in the Vite config sends them.
+- **Webpack and Rspack dev servers:** `crossbind()` in the webpack or Rspack config sends them.
 - **Vercel:** in `vercel.json`, `{ "headers": [{ "source": "/(.*)", "headers": [{ "key": "Cross-Origin-Opener-Policy", "value": "same-origin" }, { "key": "Cross-Origin-Embedder-Policy", "value": "require-corp" }] }] }`.
 - **Netlify:** in `_headers`, `/*\n  Cross-Origin-Opener-Policy: same-origin\n  Cross-Origin-Embedder-Policy: require-corp`.
 - **Cloudflare Pages:** a `_headers` file, as on Netlify.

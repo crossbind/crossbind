@@ -10,9 +10,8 @@ crossbind compiles C++ and Rust libraries to WebAssembly, native iOS/Android bin
 
 - `core/crossbind/` — CLI, build orchestration, runtime adapters and shared build utilities.
 - `core/embind-jsi/`, `core/embind-rust/` — native binding layers.
-- `plugins/` — Vite, Webpack/Rspack, Rollup, Metro and React Native integrations.
 - `ports/<name>/base` — the `@crossbind/port-<name>` family recipe and shared metadata; sibling `wasm/`, `android/`, `ios/`, `darwin/`, `linux/`, `linuxmusl/`, `win32/` and `wasi/` directories are platform variants, with optional `standalone-wasi/` CLI packages.
-- `extensions/` — `@crossbind/extension-*` extensions: an app's, crossbind's own of which `@crossbind/core-app-host` has as dependencies and the rest an app's `crossbind.config.js` lists, and the package source `conan`, which `crossbind` itself has.
+- `extensions/` — `@crossbind/extension-*` extensions: an app's, crossbind's own of which `@crossbind/core-app-host` has as dependencies and the rest an app's `crossbind.config.js` lists, the package source `conan` and the integrations `vite`, `rollup`, `webpack` and `metro`, which `crossbind` itself has and which teach `crossbind()` each tool, and the React Native extension with its iOS pod, which a React Native app installs.
 - `examples/` — published `@crossbind/example-*` reference integrations and create-crossbind template sources.
 - `e2e/` — isolated `@crossbind/e2e-*` conformance and regression fixtures.
 - `tooling/` — the create-app generator, owned Docker/toolchain packaging, the bridge tools with which a Mac makes macOS and iOS bridges without Docker, and shared TypeScript configuration.
@@ -50,7 +49,7 @@ The middle segment of the branch is the commit scope, verbatim; the branch spell
 |---|---|
 | `core/crossbind` pure utility/runtime code | `pnpm --filter crossbind test` plus the relevant targeted test |
 | Core build orchestration | Core tests and at least one representative build for the affected platform |
-| One bundler plugin | Matching example build and its targeted dev/prod check |
+| One integration extension | Matching example build and its targeted dev/prod check |
 | One port family | Build every target whose recipe or metadata changed |
 | WASI/bin/license contract | Package E2E plus `node scripts/check-publish-hygiene.js` |
 | Agent guidance | `pnpm check:agents` |

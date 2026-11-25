@@ -2,11 +2,11 @@
 
 > Persona 2 sub-playbook. The user's project uses Rollup directly (not via Vite). Detection: `rollup` in deps, `rollup.config.{js,mjs,ts}` at root, no `vite`/`webpack`/`@rspack/*`.
 
-> **Most users want the Vite playbook**, not this one. Vite wraps Rollup, and `@crossbind/plugin-rollup` is the inner kernel of `@crossbind/plugin-vite`. Use this playbook only when the project authors a JS library/CLI directly with Rollup (not building an app).
+> **Most users want the Vite playbook**, not this one. Vite runs Rollup's plugin hooks, and crossbind's Vite plugin runs its Rollup one inside. Use this playbook only when the project authors a JS library/CLI directly with Rollup (not building an app).
 
 ## Goal
 
-Add `@crossbind/plugin-rollup` to a Rollup config so:
+Add `crossbind()` to a Rollup config so:
 
 - Rollup's `transform` hook handles `.h` files (generates the JS bridge).
 - `generateBundle` runs `crossbind build` and emits `crossbind.js` + `crossbind.wasm` as Rollup assets.
@@ -22,15 +22,15 @@ Add `@crossbind/plugin-rollup` to a Rollup config so:
 
 | File | Role |
 |------|------|
-| `package.json` | + `@crossbind/plugin-rollup` (devDependency), optional `@crossbind/port-<name>` |
-| `rollup.config.{js,mjs,ts}` | Add `rollupCrossbindPlugin()` to `plugins` |
+| `package.json` | + `crossbind` (devDependency), optional `@crossbind/port-<name>` |
+| `rollup.config.{js,mjs,ts}` | Add `crossbind()` to `plugins` |
 | `crossbind.config.js` *(new at root)* | Project-level crossbind config |
 | `src/native/` *(only if user wraps own C++)* | `.h` + `.cpp` source |
 
 ## Commands
 
 ```bash
-pnpm add -D @crossbind/plugin-rollup@beta
+pnpm add -D crossbind@beta
 pnpm add @crossbind/port-<name>@beta     # optional
 
 # Build
@@ -43,13 +43,13 @@ pnpm rollup -c -w
 ## Reference config
 
 ```js
-import rollupCrossbindPlugin from '@crossbind/plugin-rollup';
+import crossbind from 'crossbind';
 
 export default {
     input: 'src/index.js',
     output: { file: 'dist/index.js', format: 'esm' },
     plugins: [
-        rollupCrossbindPlugin(),
+        crossbind(),
     ],
 };
 ```
@@ -89,6 +89,6 @@ If the user picks `runtime: 'mt'` in `crossbind.config.js`, the resulting librar
 
 ## Reference
 
-- Plugin source: `plugins/rollup/index.js`
-- Used as kernel of: `plugins/vite/index.js`
-- No standalone Rollup example exists in this repo; `plugins/rollup` is exercised through `plugin-vite` and the Vite examples and fixtures.
+- Plugin source: `extensions/rollup/src/plugin.js`, which `crossbind()` stands for once Rollup reads its `options` hook
+- Run inside: `extensions/vite/src/plugin.js`
+- No standalone Rollup example exists in this repo; `core/crossbind/test/bundlerRuns.test.js` runs plain Rollup through `crossbind()`, and the Vite examples and fixtures run the plugin inside Vite's.

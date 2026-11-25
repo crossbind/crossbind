@@ -145,12 +145,12 @@
         ],
         "facts": [
             {
-                "claim": "Builds WebAssembly for `apps/web` with `@crossbind/plugin-vite`",
+                "claim": "Builds WebAssembly for `apps/web` with `crossbind()` in its Vite config",
                 "doc": "docs/playbooks/integration/vite.md",
-                "literal": "pnpm add -D @crossbind/plugin-vite@beta"
+                "literal": "pnpm add -D crossbind@beta"
             },
             {
-                "claim": "Builds the native library for `apps/mobile` with `@crossbind/plugin-react-native`, and says the Expo app needs `expo prebuild`, as Expo Go cannot run it",
+                "claim": "Builds the native library for `apps/mobile` with `@crossbind/extension-react-native`, and says the Expo app needs `expo prebuild`, as Expo Go cannot run it",
                 "doc": "docs/playbooks/integration/react-native-expo.md",
                 "literal": "**Expo Go** is **not** supported"
             },

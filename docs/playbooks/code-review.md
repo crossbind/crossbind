@@ -57,7 +57,7 @@ For PRs touching `ports/`:
 
 ## Fix / feature PRs (everything else)
 
-For PRs touching `core/`, `tooling/`, `plugins/`, `examples/`, `e2e/`, or `scripts/`:
+For PRs touching `core/`, `tooling/`, `extensions/`, `examples/`, `e2e/`, or `scripts/`:
 
 ### Reproducibility
 

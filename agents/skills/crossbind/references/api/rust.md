@@ -19,8 +19,8 @@ The Rust layer is a dev dependency of the app:
 pnpm add -D @crossbind/core-embind-rust@beta
 ```
 
-The bundler plugins (`@crossbind/plugin-vite`, `-rollup`, `-webpack`, `-react-native`) already
-bring it. Builds in the toolchain images need no Rust on your machine; iOS and macOS builds, and
+crossbind brings it for Vite, Rollup and webpack, and `@crossbind/extension-react-native` for React
+Native. Builds in the toolchain images need no Rust on your machine; iOS and macOS builds, and
 every build under `RUNNER=LOCAL`, use your own (`cargo` and the platform targets). An unchanged
 crate does not rebuild.
 

@@ -44,7 +44,7 @@ Directories carry no brand prefix; the npm name does.
 |-----------|----------|
 | `core/crossbind` | `crossbind` |
 | `core/embind-jsi` | `@crossbind/core-embind-jsi` |
-| `plugins/vite` | `@crossbind/plugin-vite` |
+| `extensions/vite` | `@crossbind/extension-vite` |
 | `ports/<lib>/base` | `@crossbind/port-<lib>` |
 | `ports/<lib>/<target>` | `@crossbind/port-<lib>-<target>` |
 

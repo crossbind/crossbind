@@ -21,7 +21,7 @@
             {
                 "claim": "Adds crossbind's app host (`@crossbind/core-app-host`) and its Vite plugin to the project",
                 "doc": "docs/playbooks/integration/desktop-app.md",
-                "literal": "pnpm add -D crossbind@beta @crossbind/plugin-vite@beta @crossbind/core-app-host@beta vite"
+                "literal": "pnpm add -D crossbind@beta @crossbind/core-app-host@beta vite"
             },
             {
                 "claim": "Builds the Windows app with `crossbind app build -p windows` and the Linux app with `crossbind app build -p linux`",
@@ -273,9 +273,9 @@
                 "literal": "@crossbind/port-proj"
             },
             {
-                "claim": "Builds the web version as WebAssembly with the Vite plugin, `viteCrossbindPlugin()`",
+                "claim": "Builds the web version as WebAssembly with `crossbind()` in the Vite config",
                 "doc": "docs/playbooks/integration/vite.md",
-                "literal": "Add `viteCrossbindPlugin()` to the `plugins` array"
+                "literal": "Add `crossbind()` to the `plugins` array"
             },
             {
                 "claim": "Builds the iOS and Android apps with `crossbind app build -p ios` and `-p android`",
@@ -394,9 +394,9 @@
                 "literal": "@crossbind/port-gdal"
             },
             {
-                "claim": "Adds `@crossbind/plugin-vite` and puts `viteCrossbindPlugin()` in `vite.config.js`",
+                "claim": "Puts `crossbind()` in `vite.config.js`'s plugins",
                 "doc": "docs/playbooks/integration/vite.md",
-                "literal": "Add `viteCrossbindPlugin()` to the `plugins` array"
+                "literal": "Add `crossbind()` to the `plugins` array"
             },
             {
                 "claim": "Imports by name, from the port's header, the GDAL functions it calls, as a dependency's functions are bound only when imported",
@@ -464,9 +464,9 @@
         ],
         "facts": [
             {
-                "claim": "Installs `@crossbind/plugin-react-native` (with its iOS helper and the Metro plugin) and lists it among the Expo plugins",
+                "claim": "Installs `@crossbind/extension-react-native` (with its iOS pod's package), lists it in `crossbind.config.js` and puts `crossbind` among the Expo plugins",
                 "doc": "docs/playbooks/integration/react-native-expo.md",
-                "literal": "pnpm add @crossbind/plugin-react-native@beta @crossbind/plugin-react-native-ios-helper@beta"
+                "literal": "pnpm add @crossbind/extension-react-native@beta @crossbind/extension-react-native-ios@beta @crossbind/core-embind-jsi@beta"
             },
             {
                 "claim": "Says Expo Go cannot run it: the app needs `expo prebuild` or a build of its own",
@@ -538,9 +538,9 @@
                 "literal": "import { Uuid } from 'cargo:uuid'"
             },
             {
-                "claim": "Adds the Vite plugin, `@crossbind/plugin-vite`",
+                "claim": "Adds `crossbind()` to the Vite config",
                 "doc": "docs/playbooks/integration/vite.md",
-                "literal": "pnpm add -D @crossbind/plugin-vite@beta"
+                "literal": "pnpm add -D crossbind@beta"
             }
         ],
         "split": "train"
@@ -596,9 +596,9 @@
         ],
         "facts": [
             {
-                "claim": "Adds `@crossbind/plugin-webpack` to `next.config` through its `webpack(config)` callback",
+                "claim": "Adds `crossbind()` to `next.config`'s plugins through its `webpack(config)` callback",
                 "doc": "docs/playbooks/integration/nextjs.md",
-                "literal": "import CrossbindWebpackPlugin from '@crossbind/plugin-webpack';"
+                "literal": "import crossbind from 'crossbind';"
             },
             {
                 "claim": "Registers the plugin for the client bundle alone, behind `!isServer`",
@@ -633,9 +633,9 @@
         ],
         "facts": [
             {
-                "claim": "Adds `@crossbind/plugin-vite` and puts `viteCrossbindPlugin()` in the Vite config",
+                "claim": "Puts `crossbind()` in the Vite config's plugins",
                 "doc": "docs/playbooks/integration/vite.md",
-                "literal": "Add `viteCrossbindPlugin()` to the `plugins` array"
+                "literal": "Add `crossbind()` to the `plugins` array"
             },
             {
                 "claim": "Imports the class from the header itself, `engine.h`, and calls `initNative()` before it uses it, with no hand-written bindings",
@@ -676,14 +676,14 @@
                 "literal": "The same native library must run through WebAssembly on web/Node/edge and through native binaries in React Native."
             },
             {
-                "claim": "Uses `@crossbind/plugin-vite` in the web app",
+                "claim": "Uses `crossbind()` in the web app's Vite config",
                 "doc": "docs/playbooks/integration/vite.md",
-                "literal": "pnpm add -D @crossbind/plugin-vite@beta"
+                "literal": "pnpm add -D crossbind@beta"
             },
             {
-                "claim": "Uses `@crossbind/plugin-react-native` in the mobile app",
+                "claim": "Uses `@crossbind/extension-react-native` in the mobile app",
                 "doc": "docs/playbooks/integration/react-native-expo.md",
-                "literal": "pnpm add @crossbind/plugin-react-native@beta @crossbind/plugin-react-native-ios-helper@beta"
+                "literal": "pnpm add @crossbind/extension-react-native@beta @crossbind/extension-react-native-ios@beta @crossbind/core-embind-jsi@beta"
             },
             {
                 "claim": "Says Expo Go cannot run it: the mobile app needs `expo prebuild` or a build of its own",

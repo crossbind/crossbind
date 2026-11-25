@@ -13,7 +13,7 @@ const found = (answer) => ungrounded(answer, vocabulary).map(({ kind, text }) =>
 test('the vocabulary holds what the documents and the workspace have', () => {
     for (const command of ['build', 'app', 'add', 'login', 'licenses', 'runner']) assert.ok(vocabulary.commands.has(command), command);
     for (const pair of ['app build', 'app dev', 'app upload', 'app release', 'app key', 'config set', 'runner start']) assert.ok(vocabulary.subcommands.has(pair), pair);
-    for (const name of ['@crossbind/port-gdal', '@crossbind/core-app-host', '@crossbind/plugin-vite']) assert.ok(vocabulary.packages.has(name), name);
+    for (const name of ['@crossbind/port-gdal', '@crossbind/core-app-host', '@crossbind/extension-vite']) assert.ok(vocabulary.packages.has(name), name);
     for (const name of ['app', 'dialog', 'events', 'updater']) assert.ok(vocabulary.imports.get('crossbind/app').has(name), name);
     assert.ok(vocabulary.imports.get('crossbind/licenses').has('licenses'));
     assert.ok(vocabulary.templates.has('desktop app') && vocabulary.templates.has('library prebuilt') && vocabulary.templates.has('extension'));
