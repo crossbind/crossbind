@@ -1,7 +1,9 @@
 import { execFile, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
     existsSync, mkdirSync, readFileSync, rmSync, writeFileSync,
 } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 
@@ -76,10 +78,12 @@ function androidSystemQuestion(nodes) {
 // A task dialog of the app's process titled with the app's name, read through UI Automation, or pressed at a button of
 // its name, or sent the command Escape gives a dialog and the close of its window. UI Automation shows a task dialog's
 // button as a pane of the class CCPushButton, which hosts a button window of its own: it is pressed by UI Automation's
-// Invoke where it offers one, else clicked at that window, and the press says which.
+// Invoke where it offers one, else clicked at that window, and the press says which. Its own types are compiled once,
+// into a library of the system's temporary folder named by the script, which each call after loads.
 const WINDOWS_SCRIPT = String.raw`
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
-Add-Type -TypeDefinition @'
+if (-not (Test-Path $env:CROSSBIND_E2E_TYPES)) {
+Add-Type -OutputAssembly $env:CROSSBIND_E2E_TYPES -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -123,6 +127,8 @@ public static class Question {
     }
 }
 '@
+}
+if (-not ('Question' -as [type])) { Add-Type -Path $env:CROSSBIND_E2E_TYPES }
 $dialog = [Question]::Find([uint32]$env:CROSSBIND_E2E_PID, $env:CROSSBIND_E2E_TITLE)
 if ($dialog -eq [IntPtr]::Zero) { 'null'; exit }
 $all = [System.Windows.Automation.AutomationElement]::FromHandle($dialog).FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
@@ -157,16 +163,26 @@ switch ($env:CROSSBIND_E2E_MODE) {
 export function questionsOn({
     platform, endpoint, adb, applicationId, appPid, appTitle,
 }) {
+    const windowsTypes = join(tmpdir(), `crossbind-e2e-question-${createHash('sha256').update(WINDOWS_SCRIPT).digest('hex').slice(0, 16)}.dll`);
     async function windows(mode, button = '') {
         // Windows PowerShell started from PowerShell 7, as a CI step is, would look for its modules in 7's folders.
         const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toLowerCase() !== 'psmodulepath'));
-        const { stdout } = await promisify(execFile)('powershell', ['-NoProfile', '-NonInteractive', '-Command', WINDOWS_SCRIPT], {
-            env: {
-                ...env, CROSSBIND_E2E_PID: String(appPid()), CROSSBIND_E2E_TITLE: appTitle, CROSSBIND_E2E_MODE: mode, CROSSBIND_E2E_BUTTON: button,
-            },
-            timeout: TOOL_MS,
-        });
-        return stdout.trim();
+        try {
+            const { stdout } = await promisify(execFile)('powershell', ['-NoProfile', '-NonInteractive', '-Command', WINDOWS_SCRIPT], {
+                env: {
+                    ...env,
+                    CROSSBIND_E2E_TYPES: windowsTypes,
+                    CROSSBIND_E2E_PID: String(appPid()),
+                    CROSSBIND_E2E_TITLE: appTitle,
+                    CROSSBIND_E2E_MODE: mode,
+                    CROSSBIND_E2E_BUTTON: button,
+                },
+                timeout: TOOL_MS,
+            });
+            return stdout.trim();
+        } catch (error) {
+            throw new Error(`Windows PowerShell's ${mode} ${error.killed ? `ran past ${TOOL_MS / 1000} s` : `failed: ${error.stderr?.trim() || error.message}`}`, { cause: error });
+        }
     }
     async function byPage(role, what) {
         const answered = await endpoint.step(role, what);
