@@ -5,7 +5,8 @@ import { REPOSITORY_ROOT } from './build-ports-catalog.mjs';
 
 // The site's page of each app extension, from its README, as the release notes are made: the line under its title is
 // the page's lede and the rest its blocks, so that the site says what the package says. A link to the site itself
-// becomes one of the site's own. A private package, which npm has not, has no page, as it is in no catalog.
+// becomes one of the site's own. A private package, which npm has not, has no page, as it is in no catalog, and neither
+// has a package with no crossbind.extension.js, which is no extension.
 
 const SITE_LINK = /\]\(https:\/\/crossbind\.dev\//g;
 // A code block's language, as the site's blocks name what a block holds.
@@ -16,6 +17,7 @@ export function readExtensionPages(root = REPOSITORY_ROOT) {
     return fs
         .readdirSync(folder, { withFileTypes: true })
         .filter((entry) => entry.isDirectory() && fs.existsSync(path.join(folder, entry.name, 'package.json')))
+        .filter((entry) => fs.existsSync(path.join(folder, entry.name, 'crossbind.extension.js')))
         .map((entry) => ({ entry, manifest: JSON.parse(fs.readFileSync(path.join(folder, entry.name, 'package.json'), 'utf8')) }))
         .filter(({ manifest }) => manifest.private !== true)
         .map(({ entry, manifest }) => {

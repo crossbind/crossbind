@@ -5,7 +5,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { readExtensionPages, renderExtensionPagesModule } from '../build-extension-pages.mjs';
 
-function treeOf(t, name, readme, manifest = {}) {
+function treeOf(t, name, readme, manifest = {}, { isExtension = true } = {}) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-extension-pages-'));
     t.after(() => fs.rmSync(root, { recursive: true, force: true }));
     const folder = path.join(root, 'extensions', name);
@@ -15,6 +15,7 @@ function treeOf(t, name, readme, manifest = {}) {
         JSON.stringify({ name: `@crossbind/extension-${name}`, homepage: `https://example.com/${name}`, ...manifest }),
     );
     fs.writeFileSync(path.join(folder, 'README.md'), readme);
+    if (isExtension) fs.writeFileSync(path.join(folder, 'crossbind.extension.js'), 'export default {};\n');
     return root;
 }
 
@@ -49,12 +50,18 @@ test('a private extension, which npm has not, has no page', (t) => {
     assert.deepEqual(readExtensionPages(treeOf(t, 'preview', '# @crossbind/extension-preview\n\nThe previews.\n', { private: true })), []);
 });
 
+test('a package with no crossbind.extension.js, which is no extension, has no page', (t) => {
+    const root = treeOf(t, 'react-native-ios', '# @crossbind/extension-react-native-ios\n\nThe pod.\n', {}, { isExtension: false });
+    assert.deepEqual(readExtensionPages(root), []);
+});
+
 test("the repository's published extensions each have a page, which the module holds", () => {
     const pages = readExtensionPages();
     const folder = new URL('../../../extensions/', import.meta.url);
     const published = fs
         .readdirSync(folder)
-        .filter((name) => JSON.parse(fs.readFileSync(new URL(`${name}/package.json`, folder), 'utf8')).private !== true);
+        .filter((name) => JSON.parse(fs.readFileSync(new URL(`${name}/package.json`, folder), 'utf8')).private !== true)
+        .filter((name) => fs.existsSync(new URL(`${name}/crossbind.extension.js`, folder)));
     assert.deepEqual(
         pages.map(({ name }) => name),
         published.toSorted((left, right) => left.localeCompare(right, 'en')),
