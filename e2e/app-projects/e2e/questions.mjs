@@ -1,11 +1,11 @@
-import { execFile, spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
     existsSync, mkdirSync, readFileSync, rmSync, writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { promisify } from 'node:util';
+import { createInterface } from 'node:readline';
 
 // The preview extension's question, as e2e/run.mjs reads and answers it: through the fixture's hooks on macOS, iOS and
 // Linux, by the page the window shows; on Android from uiautomator's dump of the screen, with adb's taps and keys; on
@@ -80,10 +80,11 @@ function androidSystemQuestion(nodes) {
 // its name, or sent the command Escape gives a dialog and the close of its window. UI Automation shows a task dialog's
 // button as a pane of the class CCPushButton, which hosts a button window of its own: the dialog brought to the front,
 // as a click on it would, the button is pressed by UI Automation's Invoke where it offers one, then, while the dialog
-// stays, clicked at that window; the press says which went, or fails with what it tried. Its own types are compiled once,
-// before the run's checks, into a library of the system's temporary folder named by the script, which each call after
-// loads.
+// stays, clicked at that window; the press says which went, or fails with what it tried. One Windows PowerShell answers
+// the run's calls, a line of JSON each, as one started per call took seconds on the arm64 runner: its own types compiled
+// once into a library of the system's temporary folder named by the script, it says it is ready, then answers each line.
 const WINDOWS_SCRIPT = String.raw`
+$ProgressPreference = 'SilentlyContinue'
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 if (-not (Test-Path $env:CROSSBIND_E2E_TYPES)) {
 Add-Type -OutputAssembly $env:CROSSBIND_E2E_TYPES -TypeDefinition @'
@@ -153,41 +154,54 @@ public static class Question {
 '@
 }
 if (-not ('Question' -as [type])) { Add-Type -Path $env:CROSSBIND_E2E_TYPES }
-if ($env:CROSSBIND_E2E_MODE -eq 'prepare') { 'ready'; exit }
-$dialog = [Question]::Find([uint32]$env:CROSSBIND_E2E_PID, $env:CROSSBIND_E2E_TITLE)
-if ($dialog -eq [IntPtr]::Zero) { 'null'; exit }
-$all = [System.Windows.Automation.AutomationElement]::FromHandle($dialog).FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
-$buttons = @($all | Where-Object { $_.Current.Name -and ($_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -or $_.Current.ClassName -eq 'CCPushButton') })
-switch ($env:CROSSBIND_E2E_MODE) {
-    'read' {
-        $texts = @($all | Where-Object { $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Text -and $_.Current.Name } | ForEach-Object { $_.Current.Name })
-        $focused = @($buttons | Where-Object { $_.Current.HasKeyboardFocus } | ForEach-Object { $_.Current.Name })
-        # Every element UI Automation shows of it, for the words of a failure.
-        $seen = @($all | ForEach-Object { "$($_.Current.ControlType.ProgrammaticName) $($_.Current.ClassName): $($_.Current.Name)" })
-        ConvertTo-Json -Compress -Depth 3 @{ texts = $texts; buttons = @($buttons | ForEach-Object { $_.Current.Name }); preferred = $null; focused = $(if ($focused.Count) { $focused[0] } else { $null }); seen = $seen }
-    }
-    'press' {
-        $button = $buttons | Where-Object { $_.Current.Name -eq $env:CROSSBIND_E2E_BUTTON } | Select-Object -First 1
-        if (-not $button) { throw "the dialog has no button $env:CROSSBIND_E2E_BUTTON" }
-        $front = [Question]::Front()
-        [void][Question]::SetForegroundWindow($dialog)
-        $ways = @()
-        $invoke = $null
-        if ($button.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invoke)) {
-            $invoke.Invoke()
-            $ways += 'invoked'
-            if ([Question]::Gone($dialog, 2000)) { $ways -join ', then '; break }
+function Answer($asked) {
+    if ($asked.mode -eq 'prepare') { return 'ready' }
+    $dialog = [Question]::Find([uint32]$asked.process, $asked.title)
+    if ($dialog -eq [IntPtr]::Zero) { return 'null' }
+    $all = [System.Windows.Automation.AutomationElement]::FromHandle($dialog).FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
+    $buttons = @($all | Where-Object { $_.Current.Name -and ($_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -or $_.Current.ClassName -eq 'CCPushButton') })
+    switch ($asked.mode) {
+        'read' {
+            $texts = @($all | Where-Object { $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Text -and $_.Current.Name } | ForEach-Object { $_.Current.Name })
+            $focused = @($buttons | Where-Object { $_.Current.HasKeyboardFocus } | ForEach-Object { $_.Current.Name })
+            # Every element UI Automation shows of it, for the words of a failure.
+            $seen = @($all | ForEach-Object { "$($_.Current.ControlType.ProgrammaticName) $($_.Current.ClassName): $($_.Current.Name)" })
+            ConvertTo-Json -Compress -Depth 3 @{ texts = $texts; buttons = @($buttons | ForEach-Object { $_.Current.Name }); preferred = $null; focused = $(if ($focused.Count) { $focused[0] } else { $null }); seen = $seen }
         }
-        $window = [Question]::Button($dialog, $env:CROSSBIND_E2E_BUTTON)
-        if ($window -ne [IntPtr]::Zero) {
-            [void][Question]::PostMessageW($window, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
-            $ways += 'clicked'
-            if ([Question]::Gone($dialog, 2000)) { $ways -join ', then '; break }
+        'press' {
+            $button = $buttons | Where-Object { $_.Current.Name -eq $asked.button } | Select-Object -First 1
+            if (-not $button) { throw "the dialog has no button $($asked.button)" }
+            $front = [Question]::Front()
+            [void][Question]::SetForegroundWindow($dialog)
+            $ways = @()
+            $invoke = $null
+            if ($button.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invoke)) {
+                $invoke.Invoke()
+                $ways += 'invoked'
+                if ([Question]::Gone($dialog, 2000)) { $ways -join ', then '; break }
+            }
+            $window = [Question]::Button($dialog, $asked.button)
+            if ($window -ne [IntPtr]::Zero) {
+                [void][Question]::PostMessageW($window, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
+                $ways += 'clicked'
+                if ([Question]::Gone($dialog, 2000)) { $ways -join ', then '; break }
+            }
+            throw "the dialog stayed after $(if ($ways.Count) { $ways -join ' and ' } else { 'nothing, its button offering no Invoke and having no window' }); in front before: $front; after: $([Question]::Front())"
         }
-        throw "the dialog stayed after $(if ($ways.Count) { $ways -join ' and ' } else { 'nothing, its button offering no Invoke and having no window' }); in front before: $front; after: $([Question]::Front())"
+        'escape' { [void][Question]::PostMessageW($dialog, 0x0111, [IntPtr]2, [IntPtr]::Zero); 'sent' }
+        'close' { [void][Question]::PostMessageW($dialog, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero); 'sent' }
     }
-    'escape' { [void][Question]::PostMessageW($dialog, 0x0111, [IntPtr]2, [IntPtr]::Zero); 'sent' }
-    'close' { [void][Question]::PostMessageW($dialog, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero); 'sent' }
+}
+[Console]::Out.WriteLine('ready')
+[Console]::Out.Flush()
+while ($null -ne ($line = [Console]::In.ReadLine())) {
+    try {
+        $answer = @{ value = [string]@(Answer (ConvertFrom-Json $line))[-1] }
+    } catch {
+        $answer = @{ error = "$_" }
+    }
+    [Console]::Out.WriteLine((ConvertTo-Json -Compress $answer))
+    [Console]::Out.Flush()
 }
 `;
 
@@ -195,25 +209,55 @@ export function questionsOn({
     platform, endpoint, adb, applicationId, appPid, appTitle,
 }) {
     const windowsTypes = join(tmpdir(), `crossbind-e2e-question-${createHash('sha256').update(WINDOWS_SCRIPT).digest('hex').slice(0, 16)}.dll`);
-    async function windows(mode, button = '') {
+    // The run's Windows PowerShell, started by its first call; one that ran past a call's time or ended is put aside, and
+    // the next call starts another.
+    let powerShell = null;
+    let calls = Promise.resolve();
+    function startPowerShell() {
         // Windows PowerShell started from PowerShell 7, as a CI step is, would look for its modules in 7's folders.
         const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toLowerCase() !== 'psmodulepath'));
-        try {
-            const { stdout } = await promisify(execFile)('powershell', ['-NoProfile', '-NonInteractive', '-Command', WINDOWS_SCRIPT], {
-                env: {
-                    ...env,
-                    CROSSBIND_E2E_TYPES: windowsTypes,
-                    CROSSBIND_E2E_PID: String(appPid()),
-                    CROSSBIND_E2E_TITLE: appTitle,
-                    CROSSBIND_E2E_MODE: mode,
-                    CROSSBIND_E2E_BUTTON: button,
-                },
-                timeout: mode === 'prepare' ? COMPILE_MS : TOOL_MS,
-            });
-            return stdout.trim();
-        } catch (error) {
-            throw new Error(`Windows PowerShell's ${mode} ${error.killed ? `ran past ${(mode === 'prepare' ? COMPILE_MS : TOOL_MS) / 1000} s` : `failed: ${error.stderr?.trim() || error.message}`}`, { cause: error });
+        const child = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', WINDOWS_SCRIPT], { env: { ...env, CROSSBIND_E2E_TYPES: windowsTypes } });
+        let said = '';
+        child.on('error', (error) => { said += String(error); });
+        child.stdin.on('error', () => {});
+        child.stderr.setEncoding('utf8');
+        child.stderr.on('data', (chunk) => { said += chunk; });
+        const lines = createInterface({ input: child.stdout })[Symbol.asyncIterator]();
+        // Its next line, or a failure past ms or at its end.
+        async function next(ms) {
+            let timer;
+            const late = new Promise((_, fail) => { timer = setTimeout(() => fail(new Error(`ran past ${ms / 1000} s`)), ms); });
+            try {
+                const { value, done } = await Promise.race([lines.next(), late]);
+                if (done) throw new Error(`ended: ${said.trim()}`);
+                return value;
+            } finally {
+                clearTimeout(timer);
+            }
         }
+        return { child, next };
+    }
+    function windows(mode, button = '') {
+        const called = calls.then(async () => {
+            try {
+                if (!powerShell) {
+                    powerShell = startPowerShell();
+                    const ready = await powerShell.next(COMPILE_MS);
+                    if (ready !== 'ready') throw new Error(`began with ${ready}`);
+                }
+                powerShell.child.stdin.write(`${JSON.stringify({ mode, button, process: appPid(), title: appTitle })}\n`);
+                return JSON.parse(await powerShell.next(TOOL_MS));
+            } catch (error) {
+                powerShell?.child.kill();
+                powerShell = null;
+                throw new Error(`Windows PowerShell's ${mode} ${error.message}`, { cause: error });
+            }
+        }).then((answered) => {
+            if (answered.error !== undefined) throw new Error(`Windows PowerShell's ${mode} failed: ${answered.error}`);
+            return answered.value;
+        });
+        calls = called.catch(() => {});
+        return called;
     }
     async function byPage(role, what) {
         const answered = await endpoint.step(role, what);
@@ -223,7 +267,7 @@ export function questionsOn({
     const adbShell = (...args) => spawnSync(adb(), ['shell', ...args], { encoding: 'utf8', timeout: TOOL_MS });
 
     return {
-        // Windows' helper compiled, which an arm64 runner takes longer for than a read may.
+        // Windows' PowerShell started and its helper compiled, which an arm64 runner takes longer for than a read may.
         async prepare() {
             if (platform === 'windows') await windows('prepare');
         },
