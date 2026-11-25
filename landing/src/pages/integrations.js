@@ -23,19 +23,19 @@ export const INTEGRATION_GROUPS = [
             {
                 id: 'webpack',
                 name: 'Webpack',
-                summary: 'The plugin and its loader, in an ES module config',
+                summary: "crossbind() in its plugins, which adds the loader's rule and the dev server's headers",
                 href: guide('bundler-plugins', 'webpack'),
             },
             {
                 id: 'rspack',
                 name: 'Rspack',
-                summary: "The Webpack plugin and its loader, through Rspack's webpack-compatible API",
+                summary: "The same crossbind(), through Rspack's Webpack-compatible API",
                 href: guide('bundler-plugins', 'rspack'),
             },
             {
                 id: 'rollup',
                 name: 'Rollup',
-                summary: 'The core the Vite plugin wraps, for a plain Rollup build',
+                summary: 'crossbind() in a plain Rollup or Rolldown build',
                 href: guide('bundler-plugins', 'rollup'),
             },
             {

@@ -112,7 +112,7 @@ crossbind app build -p android`,
         },
         {
             type: 'p',
-            text: "The project needs Vite and `@crossbind/plugin-vite`. `-p` is `macos`, `linux`, `windows`, `ios` or `android`; without it, crossbind takes `CROSSBIND_APP_PLATFORM`, else this machine's desktop platform. Vite's own options, such as `--port` or `--mode`, pass through to Vite.",
+            text: "The project needs Vite, with `crossbind()` in its plugins. `-p` is `macos`, `linux`, `windows`, `ios` or `android`; without it, crossbind takes `CROSSBIND_APP_PLATFORM`, else this machine's desktop platform. Vite's own options, such as `--port` or `--mode`, pass through to Vite.",
         },
         {
             type: 'p',
