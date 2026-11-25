@@ -86,6 +86,20 @@ export const EXTENSION_GROUPS = [
         label: 'Package sources',
         items: [row('conan', 'C and C++ packages from ConanCenter, each built with the toolchain of the target it links into')],
     },
+    // crossbind() in each tool: crossbind brings those of the bundlers and Metro, and a React Native app adds its own.
+    {
+        id: 'integrations',
+        label: 'Integrations',
+        items: [
+            row('vite', "crossbind() in Vite's plugin list, for a web build, an app's and a preview"),
+            row('rollup', "crossbind() in Rollup's and Rolldown's plugin lists"),
+            row('webpack', "crossbind() in webpack's and Rspack's plugin lists, its loader and its dev server's middleware included"),
+            row('metro', "crossbind(config) around Metro's config, for React Native and Expo, the web's export included"),
+            row('react-native', 'React Native and Expo apps: their native module, their builds and "plugins": ["crossbind"] in Expo\'s config', {
+                isAdded: true,
+            }),
+        ],
+    },
 ];
 
 // Each extension's own page: its README's sections, with its package's npm page and source beside its name.

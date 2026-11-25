@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import GUIDE_PAGE, { ANATOMY, REACH } from '../src/guide/pages/extensions.js';
 import CATALOG, { EXTENSION_GROUPS, EXTENSION_PAGES } from '../src/pages/extensions.js';
@@ -13,8 +13,9 @@ const manifestOf = (name) => JSON.parse(read(`extensions/${name}/package.json`))
 const dependenciesOf = (folder) => Object.keys(JSON.parse(read(`${folder}/package.json`)).dependencies);
 // What an app has by having the host, and what every project has by having crossbind.
 const broughtDependencies = [...dependenciesOf('core/app-host'), ...dependenciesOf('core/crossbind')];
-// The packages npm has: a private one is in no catalog.
-const PACKAGES = readdirSync(new URL('extensions/', ROOT)).filter((name) => manifestOf(name).private !== true);
+// The extensions npm has: a private one is in no catalog, and a package with no crossbind.extension.js is no extension.
+const PACKAGES = readdirSync(new URL('extensions/', ROOT))
+    .filter((name) => manifestOf(name).private !== true && existsSync(new URL(`extensions/${name}/crossbind.extension.js`, ROOT)));
 const ROWS = EXTENSION_GROUPS.flatMap((group) => group.items);
 
 test('the catalog and the guide page are pages of the site, each linking to the other', () => {
@@ -64,7 +65,7 @@ test("a row's summary is its package's description, which npm shows", () => {
 
 test("every row's package has the keyword of its group, by which npm finds those of one kind", () => {
     const keywords = {
-        publishing: 'publishing', installers: 'installer', system: 'system', launches: 'launch', 'page-behavior': 'page', 'package-sources': 'package-source',
+        publishing: 'publishing', installers: 'installer', system: 'system', launches: 'launch', 'page-behavior': 'page', 'package-sources': 'package-source', integrations: 'integration',
     };
     for (const group of EXTENSION_GROUPS) {
         for (const { id } of group.items) assert.ok(manifestOf(id).keywords.includes(keywords[group.id]), `${id} has no keyword ${keywords[group.id]}`);
