@@ -52,6 +52,7 @@ jobs:
                   node-version-file: .nvmrc
                   cache: 'pnpm'
             - name: Install dependencies
-              run: pnpm install --frozen-lockfile --filter @crossbind/cloud --filter crossbind
+              # crossbind with its own extensions and theirs, which crossbind loads.
+              run: pnpm install --frozen-lockfile --filter @crossbind/cloud --filter "crossbind..."
             - name: Unit tests
               run: pnpm --filter @crossbind/cloud test

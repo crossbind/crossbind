@@ -10,6 +10,7 @@ import { PACKAGES } from '../compiler/packages.js';
 
 const REPO_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const CLI_DIR = path.join(REPO_DIR, 'core', 'crossbind');
+const EMBIND_RUST = '@crossbind/core-embind-rust';
 const EMBIND_RUST_DIR = path.join(REPO_DIR, 'core', 'embind-rust');
 // The lockfile and the settings it was resolved under: the overrides and the release-age policy.
 const WORKSPACE_FILES = ['package.json', 'pnpm-workspace.yaml', 'pnpm-lock.yaml'];
@@ -65,11 +66,14 @@ function withoutOwnExtensions(workspace, cli, extensions) {
     fs.writeFileSync(manifestFile, JSON.stringify({ ...manifest, dependencies }, null, 4));
 }
 
-// One of them in the deployed crossbind, as npm would lay out what its package publishes, with its version.
-function addOwnExtension(target, { name, folder }) {
+// One of them in the deployed crossbind, as npm would lay out what its package publishes, with its version. What it
+// depends on is another of them, which comes the same way, or @crossbind/core-embind-rust, which packModules puts beside
+// the ports, where crossbind looks for it first.
+function addOwnExtension(target, { name, folder }, own) {
     const source = path.join(REPO_DIR, folder);
     const manifest = JSON.parse(fs.readFileSync(path.join(source, 'package.json'), 'utf8'));
-    if (Object.keys(manifest.dependencies ?? {}).length) throw new Error(`crossbind: ${name} has dependencies of its own, which node-modules.mjs installs none of.`);
+    const others = Object.keys(manifest.dependencies ?? {}).filter((dependency) => dependency !== EMBIND_RUST && !own.includes(dependency));
+    if (others.length) throw new Error(`crossbind: ${name} depends on ${others.join(', ')}, which node-modules.mjs installs none of.`);
     ['package.json', 'LICENSE', 'README.md', ...(manifest.files ?? [])].filter((entry) => fs.existsSync(path.join(source, entry)))
         .forEach((entry) => fs.cpSync(path.join(source, entry), path.join(target, 'node_modules', name, entry), { recursive: true }));
     return [name, manifest.version];
@@ -98,7 +102,8 @@ export function deployCli(target, platforms = []) {
     }
     PNPM_STATE.forEach((file) => fs.rmSync(path.join(target, 'node_modules', file), { force: true }));
     // crossbind finds its own extensions by its manifest's dependencies, so each is named there again, by its version.
-    const added = extensions.map((extension) => addOwnExtension(target, extension));
+    const own = extensions.map(({ name }) => name);
+    const added = extensions.map((extension) => addOwnExtension(target, extension, own));
     const manifestFile = path.join(target, 'package.json');
     const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
     const dependencies = Object.fromEntries(Object.entries({ ...manifest.dependencies, ...Object.fromEntries(added) }).sort(([a], [b]) => (a < b ? -1 : 1)));
