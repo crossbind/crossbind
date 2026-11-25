@@ -6,7 +6,7 @@ export const PREVIEW_MODULE_ID = '\0crossbind-preview:app';
 const OLDER = "crossbind: the crossbind app on this device is older than this project's crossbind: update the app to use ";
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
 // What a preview refuses of crossbind/app: every member of these names, and these members of the others.
-const REFUSED_WHOLE = ['app', 'windows', 'menu', 'tray', 'updater'];
+const REFUSED_WHOLE = ['app', 'windows', 'menu', 'tray', 'updater', 'notification'];
 const REFUSED_MEMBERS = { shell: ['openPath', 'revealInFolder', 'trash'], dialog: ['open', 'save'] };
 const ENDING = ['app.quit', 'app.requestQuit', 'app.relaunch'];
 const PICKING = ['dialog.open', 'dialog.save'];
@@ -14,7 +14,7 @@ const PICKING = ['dialog.open', 'dialog.save'];
 const isObject = (value) => value !== null && typeof value === 'object';
 
 // The words a preview refuses a function of crossbind/app with: one that would end the preview, and one that belongs to
-// the built app, as a window, a menu or a folder of its own, which crossbind app dev runs.
+// the built app, as a window, a menu, a notification or a folder of its own, which crossbind app dev runs.
 export function previewRefusal(name) {
     if (ENDING.includes(name)) return `crossbind: in a preview, ${name} would end the preview; close it from its menu.`;
     const instead = PICKING.includes(name) ? 'pick files with a file input, or try it with crossbind app dev' : 'try it with crossbind app dev';
