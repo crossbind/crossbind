@@ -135,14 +135,6 @@ export async function checkConsents(run) {
             await sleep(POLL_MS);
         }
     }
-    // The project's page reloaded, as DevTools reads it: a document without the mark the one before it carried.
-    async function newDocument() {
-        const deadline = Date.now() + LOAD_MS;
-        while (await inPage('globalThis.crossbindBeforeReload !== true').catch(() => false) !== true) {
-            expect(Date.now() < deadline, `the project's page did not reload in ${LOAD_MS / 1000} s`);
-            await sleep(POLL_MS);
-        }
-    }
     async function noQuestion(role, what) {
         await sleep(SETTLED_MS);
         const question = await questions.read(role);
@@ -315,11 +307,13 @@ export async function checkConsents(run) {
     const [anew] = await start([{ kinds: ['microphone'], via: allowVia(['microphone']) }]);
     await questionOf('project', anew, ENDED, ['microphone']);
     const reloaded = endpoint.waitForNote((note) => note.role === 'project' && note.loaded, LOAD_MS, "the project's page after its reload");
+    // Read after the answer on Windows, so that its failure before then ends no run by itself.
+    reloaded.catch(() => {});
     if (platform === 'windows') {
-        // The question up holds the reloaded page's reports, its load's among them: the new document is read through
-        // DevTools, and its load once the question is answered.
-        await inPage('void (globalThis.crossbindBeforeReload = true, setTimeout(() => location.reload(), 0))');
-        await newDocument();
+        // The question up holds the window's main thread, which serves the reloaded page and passes its reports on: the
+        // reload completes once the question is answered.
+        await inPage('void setTimeout(() => location.reload(), 0)');
+        await sleep(SETTLED_MS);
     } else {
         await valueOf(project({ do: 'reload' }), "the project's reload");
         await reloaded;
