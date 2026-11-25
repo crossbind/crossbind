@@ -119,7 +119,7 @@
     {
       "source": "docs/playbooks/integration/README.md",
       "output": "integration/README.md",
-      "sha256": "a904b07b95bdacf1f1b7c317940489638474c8350b9005b590709d95ea557f36"
+      "sha256": "4074e75132c1cf2c004e96773ee7179c25f6d638e6c9ca5c28b96fa53e3b60fd"
     },
     {
       "source": "docs/playbooks/integration/cloudflare-worker.md",

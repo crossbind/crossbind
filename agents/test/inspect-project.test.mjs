@@ -23,7 +23,6 @@ test('detects Vite, pnpm, native sources and existing crossbind packages', (t) =
             dependencies: {
                 crossbind: '^2.0.0',
                 vite: '^7.0.0',
-                '@crossbind/plugin-vite': '^2.0.0',
                 '@crossbind/port-gdal': '^2.0.0',
             },
         },
@@ -42,7 +41,8 @@ test('detects Vite, pnpm, native sources and existing crossbind packages', (t) =
     assert.equal(result.packageManager.name, 'pnpm');
     assert.deepEqual(result.nativeSources, ['src/native']);
     assert.equal(result.existingCrossbind.installed, true);
-    assert.deepEqual(result.existingCrossbind.plugins, ['@crossbind/plugin-vite']);
+    assert.deepEqual(result.existingCrossbind.extensions, []);
+    assert.deepEqual(result.existingCrossbind.legacyPlugins, []);
     assert.deepEqual(result.existingCrossbind.ports, ['@crossbind/port-gdal']);
     assert.equal(result.constraints.coopCoepRequiredForMt, true);
 });
@@ -60,13 +60,33 @@ test('detects Expo before React Native CLI', (t) => {
     assert.equal(result.constraints.coopCoepRequiredForMt, false);
 });
 
+test("lists the extensions a project has, and the old plugins crossbind() replaces", (t) => {
+    const root = fixture({
+        pkg: {
+            dependencies: {
+                expo: '^58',
+                'react-native': '^0.88',
+                '@crossbind/extension-react-native-ios': '^2.0.0',
+                '@crossbind/extension-react-native': '^2.0.0',
+                '@crossbind/plugin-metro': '^2.0.0',
+            },
+            devDependencies: { crossbind: '^2.0.0' },
+        },
+        files: { 'app.json': '{}\n', 'metro.config.js': 'module.exports = {}\n' },
+    });
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+
+    const { existingCrossbind } = inspectProject(root);
+    assert.deepEqual(existingCrossbind.extensions, ['@crossbind/extension-react-native', '@crossbind/extension-react-native-ios']);
+    assert.deepEqual(existingCrossbind.legacyPlugins, ['@crossbind/plugin-metro']);
+});
+
 test('detects a crossbind app before Vite', (t) => {
     const root = fixture({
         pkg: {
             devDependencies: {
                 crossbind: '^2.0.0',
                 vite: '^7.0.0',
-                '@crossbind/plugin-vite': '^2.0.0',
                 '@crossbind/core-app-host': '^2.0.0',
             },
         },

@@ -31,6 +31,8 @@ The detector inspects `package.json` deps + filesystem signatures (`vite.config.
 
 If `confidence` is `low` or `unknown`, **ask the user** before continuing.
 
+If `existingCrossbind.legacyPlugins` lists `@crossbind/plugin-*` packages, the project predates `crossbind()`: remove them and put `crossbind()` where each plugin was, as the tool's playbook below shows.
+
 ## Step 1 — Decision tree
 
 ```

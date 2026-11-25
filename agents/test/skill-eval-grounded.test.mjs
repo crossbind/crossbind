@@ -50,7 +50,7 @@ test('a template ends where its shell command or a closing parenthesis does, and
 
 test('prose, placeholders and file names are left alone', () => {
     const answer = 'crossbind deploys nothing by itself. Pick a `@crossbind/port-<name>` or `@crossbind/port-gdal-<platform>`, '
-        + 'edit `crossbind.config.js`, run `crossbind <command>` or `crossbind-metro prepare-web`, '
+        + 'edit `crossbind.config.js`, run `crossbind <command>` or `expo export -p web`, '
         + 'and start from `npm create crossbind@beta -- <dir> <template>`.';
     assert.deepEqual(found(answer), []);
 });
