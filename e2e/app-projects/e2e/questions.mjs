@@ -13,6 +13,7 @@ import { promisify } from 'node:util';
 // closes. A question reads as { texts, buttons, preferred, focused }, null where none is up. And its store,
 // preview/consents.json in the app's data folder, which the run reads and breaks: on Android through run-as.
 const TOOL_MS = 30000;
+const COMPILE_MS = 300000;
 const DUMP_TRIES = 5;
 const ENTITIES = {
     amp: '&', lt: '<', gt: '>', quot: '"', apos: "'",
@@ -79,7 +80,8 @@ function androidSystemQuestion(nodes) {
 // its name, or sent the command Escape gives a dialog and the close of its window. UI Automation shows a task dialog's
 // button as a pane of the class CCPushButton, which hosts a button window of its own: it is pressed by UI Automation's
 // Invoke where it offers one, else clicked at that window, and the press says which. Its own types are compiled once,
-// into a library of the system's temporary folder named by the script, which each call after loads.
+// before the run's checks, into a library of the system's temporary folder named by the script, which each call after
+// loads.
 const WINDOWS_SCRIPT = String.raw`
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 if (-not (Test-Path $env:CROSSBIND_E2E_TYPES)) {
@@ -129,6 +131,7 @@ public static class Question {
 '@
 }
 if (-not ('Question' -as [type])) { Add-Type -Path $env:CROSSBIND_E2E_TYPES }
+if ($env:CROSSBIND_E2E_MODE -eq 'prepare') { 'ready'; exit }
 $dialog = [Question]::Find([uint32]$env:CROSSBIND_E2E_PID, $env:CROSSBIND_E2E_TITLE)
 if ($dialog -eq [IntPtr]::Zero) { 'null'; exit }
 $all = [System.Windows.Automation.AutomationElement]::FromHandle($dialog).FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
@@ -177,11 +180,11 @@ export function questionsOn({
                     CROSSBIND_E2E_MODE: mode,
                     CROSSBIND_E2E_BUTTON: button,
                 },
-                timeout: TOOL_MS,
+                timeout: mode === 'prepare' ? COMPILE_MS : TOOL_MS,
             });
             return stdout.trim();
         } catch (error) {
-            throw new Error(`Windows PowerShell's ${mode} ${error.killed ? `ran past ${TOOL_MS / 1000} s` : `failed: ${error.stderr?.trim() || error.message}`}`, { cause: error });
+            throw new Error(`Windows PowerShell's ${mode} ${error.killed ? `ran past ${(mode === 'prepare' ? COMPILE_MS : TOOL_MS) / 1000} s` : `failed: ${error.stderr?.trim() || error.message}`}`, { cause: error });
         }
     }
     async function byPage(role, what) {
@@ -192,6 +195,10 @@ export function questionsOn({
     const adbShell = (...args) => spawnSync(adb(), ['shell', ...args], { encoding: 'utf8', timeout: TOOL_MS });
 
     return {
+        // Windows' helper compiled, which an arm64 runner takes longer for than a read may.
+        async prepare() {
+            if (platform === 'windows') await windows('prepare');
+        },
         // The question up now, read by the page of this role where the hooks read it.
         async read(role) {
             if (platform === 'windows') return JSON.parse(await windows('read'));

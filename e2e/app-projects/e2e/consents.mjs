@@ -12,6 +12,9 @@ const LOAD_MS = 180000;
 const POLL_MS = 300;
 const SETTLED_MS = 1500;
 const SYSTEM_TRIES = 6;
+// Android's emulator may give an allowed page no position, so a location request of its page ends this long after it
+// was made, the question's time counted as Chromium counts it. Elsewhere the run allows no page's location request.
+const POSITION_MS = 30000;
 const DETAIL = "It is a preview of your project. You can change this in the preview's menu.";
 const NOUNS = { camera: 'the camera', microphone: 'the microphone', location: 'your location' };
 const COULD_NOT_KEEP = 'crossbind: preview could not keep an answer in its consents.json, which holds for this run';
@@ -60,6 +63,7 @@ export async function checkConsents(run) {
     const { data } = await valueOf(app({ do: 'paths' }), "the app's paths");
     const store = storeOn({ ...run, data });
     const questions = questionsOn(run);
+    await questions.prepare();
     // What a run before left.
     store.remove();
     const report = {
@@ -69,7 +73,7 @@ export async function checkConsents(run) {
     let tags = 0;
     const noted = (tag) => endpoint.notes.find((note) => note.event === 'requested' && note.tag === tag);
     async function start(requests) {
-        const given = requests.map((asked) => ({ tag: (tags += 1), ...asked }));
+        const given = requests.map((asked) => ({ tag: (tags += 1), ...(platform === 'android' ? { positionMs: POSITION_MS } : {}), ...asked }));
         const started = await valueOf(project({ do: 'request', requests: given }), "the project's requests");
         expect(started === 'started', `the project's page started its requests as ${JSON.stringify(started)}`);
         return given.map((asked) => asked.tag);
@@ -212,7 +216,8 @@ export async function checkConsents(run) {
     const stillFirst = await questions.read('project');
     expect(stillFirst?.texts.includes(messageOf(SECOND, [firstKind])), `a second question came while the first was up: ${JSON.stringify(stillFirst)}`);
     await press("Don't Allow");
-    await expectDenied(firstTag, `the ${firstKind}'s request after Don't Allow`);
+    // The second question comes as the first is answered; on Windows it holds the first's answer to its page until it
+    // closes, so both are answered before either end is read.
     await questionOf('project', secondTag, SECOND, [secondKind]);
     // Where the run's key reaches the question, it presses Don't Allow, the default, which the key that left it up
     // before is thus shown to reach as well; Android's Enter may find no focus and press nothing.
@@ -222,6 +227,7 @@ export async function checkConsents(run) {
     expect(!isUpAfterKey || platform !== 'linux', `${report.defaultKey} as the question came up pressed none of its buttons`);
     if (isUpAfterKey) await press("Don't Allow");
     report.keyPressed = report.defaultKey && !isUpAfterKey ? "Don't Allow" : 'nothing';
+    await expectDenied(firstTag, `the ${firstKind}'s request after Don't Allow`);
     await expectDenied(secondTag, `the ${secondKind}'s request after Don't Allow`);
     const [microphone] = await start([{ kinds: ['microphone'], via: denyVia(['microphone']) }]);
     await questionOf('project', microphone, SECOND, ['microphone']);
