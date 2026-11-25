@@ -12,11 +12,11 @@ that serve WebAssembly on the web run natively in an app, behind the same page c
 
 ## Use
 
-Add it next to `crossbind` and the Vite plugin, and mark the project as an app in `crossbind.config.js`
+Add it next to `crossbind`, with `crossbind()` among the Vite config's plugins, and mark the project as an app in `crossbind.config.js`
 (`target: { runtimeEnv: 'app' }`):
 
 ```bash
-pnpm add -D crossbind@beta @crossbind/plugin-vite@beta @crossbind/core-app-host@beta
+pnpm add -D crossbind@beta @crossbind/core-app-host@beta
 pnpm crossbind app dev                   # the app on the dev server
 pnpm crossbind app build                 # dist/<name>.app on macOS, dist/<name>-linux-<arch>/ on Linux
 pnpm crossbind app build -p linux        # dist/<name>-linux-x64/ and -arm64/, on a Mac as well

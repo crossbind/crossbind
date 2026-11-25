@@ -262,16 +262,20 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | wasi bin command runner (npm shims import this; an app's as `crossbind/wasi-run`) | `src/runtime/wasiRun.mjs` |
 | An app's own wasi command on npm: the `bin` map of `crossbind.config.js` laid out as a port's tools, with its stub | `src/actions/publishBinary.js` (`publishWasiBin`) |
 
-## Plugins (`plugins/`)
+## Integrations (`extensions/`)
 
-| Plugin | Entry | What it does |
+`crossbind()` (`core/crossbind/src/integration/crossbind.js`) hands a tool the plugin of the integration that claims the
+tool's first use, or wraps its config; the core names no tool. Each is an extension's `integration` (contract 5), on the
+api `src/integration/api.js` gives through `src/integration/apiHandle.js`.
+
+| Extension | Entry | What it does |
 |--------|-------|--------------|
-| `plugins/rollup` | `index.js` | Inner kernel: rollup transform for `.h`, watch native paths, build on `generateBundle` |
-| `plugins/vite` | `index.js` | Wraps `plugins/rollup`; dev/preview servers with COOP/COEP, HMR force-rebuild |
-| `plugins/webpack` | `index.js` | Webpack/Rspack equivalent; dev-server middleware + COOP/COEP |
-| `plugins/react-native` | `index.js`, `script/build_{android,ios,js}.js`, `cpp/CMakeLists.txt` | RN integration: Gradle CMake hook, podspec hook |
-| `plugins/react-native-ios-helper` | (small helper) | iOS-side RN glue |
-| `plugins/metro` | `src/metro-plugin.cjs`, `src/metro-transformer.cjs`, `src/cli.cjs` | Metro bundler integration; on Expo's web platform it builds the wasm, serves it from the dev server and links it into an export (`crossbind-metro prepare-web`, `export-web`) |
+| `extensions/rollup` | `src/plugin.js` | Rollup and Rolldown: transform for `.h`, watch native paths, link and emit the glue on `generateBundle`; Vite's plugin runs it inside |
+| `extensions/vite` | `src/plugin.js` | One plugin of Rollup's part, the web build's dev/preview servers with COOP/COEP and HMR, an app's dev session and a preview |
+| `extensions/webpack` | `src/plugin.js`, `src/loader.cjs` | Webpack/Rspack: the loader's rule, request rewrites, dev-server middleware + COOP/COEP |
+| `extensions/metro` | `src/wrap.js`, `src/transformer.cjs` | `crossbind(config)` around Metro's: resolver, transformer (in Metro's workers, through the api's `workerModule`), Expo web's dev middleware and the glue of its export, from Expo's serializer |
+| `extensions/react-native` | `crossbind.extension.js`, `src/expo.cjs`, `script/build_{android,ios,js}.js`, `cpp/CMakeLists.txt` | RN integration: Gradle CMake hook, podspec hook, and what `"plugins": ["crossbind"]` changes in an Expo app's native projects |
+| `extensions/react-native-ios` | `ios/` | The iOS pod of the JSI module, no extension of its own |
 
 ## Packages (`ports/`)
 
@@ -379,9 +383,9 @@ All `check:*` and `clear:*` are exposed as `pnpm run` aliases — see `package.j
 
 ### "Support a new bundler"
 
-1. Read `plugins/vite/index.js` (most-evolved reference).
-2. Mirror in a new `plugins/<bundler>/`.
-3. Provide: dev/preview server middleware (COOP/COEP), watch-rebuild hook, transform for `.h` files (delegate to `plugins/rollup`).
+1. Read `docs/api/extensions.md` "Integrations" and `extensions/vite/src/plugin.js` (most-evolved reference).
+2. Write an extension that gives an `integration` (contract 5): `claims` and `plugin`, or `wraps` and `wrap`.
+3. Provide: dev/preview server middleware (COOP/COEP), watch-rebuild hook, transform for `.h` files, through the api (`api.serve`, `api.transform`, …).
 
 ### "Add a runtime adapter (Deno, Bun, etc.)"
 

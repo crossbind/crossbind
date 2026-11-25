@@ -80,9 +80,9 @@ skips (search `KNOWN ENGINE GAP` in `spec/run.mjs`).
 | edge (cloudflare worker, direct module) | `crossbind-e2e-cloud-cloudflare-worker` | `pnpm build && playwright test --config playwright.dev.config.cjs` |
 | Android + iOS (jsi) | `crossbind-e2e-mobile-reactnative-cli` | `pnpm run:android` / `pnpm run:ios` — the screen prints `CONFORMANCE pass/run` |
 
-Plugin coverage: the legs exercise every bundler plugin in the repo — vite st and mt (the
-vite plugin wraps `@crossbind/plugin-rollup`, so the rollup core rides along), webpack/rspack,
-metro + react-native — plus the no-plugin standalone CLI flow on node (st and mt), in the
+Integration coverage: the legs exercise every integration crossbind has — vite st and mt (the
+vite plugin runs the rollup one inside, so the rollup core rides along), webpack/rspack,
+metro + react-native — plus the standalone CLI flow with no bundler on node (st and mt), in the
 browser (vanilla) and on the edge. Note the browser mt runtimes are worker-backed at the
 binding layer even when React 19 renders their thenable results as if they were sync.
 

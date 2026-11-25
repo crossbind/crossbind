@@ -793,7 +793,7 @@
             {
                 "claim": "Says why dev worked: the bundler plugin sends the headers in dev and preview alone",
                 "doc": "docs/api/threading.md",
-                "literal": "dev server and preview:** `@crossbind/plugin-vite` sends them"
+                "literal": "dev server and preview:** `crossbind()` in the Vite config sends them"
             }
         ],
         "split": "test"
@@ -1046,9 +1046,9 @@
                 "literal": "@crossbind/port-gdal"
             },
             {
-                "claim": "Names `@crossbind/plugin-vite` with `viteCrossbindPlugin()` as the integration",
+                "claim": "Names `crossbind()` in the Vite config as the integration",
                 "doc": "docs/playbooks/integration/vite.md",
-                "literal": "Add `viteCrossbindPlugin()` to the `plugins` array"
+                "literal": "Add `crossbind()` to the `plugins` array"
             },
             {
                 "claim": "Makes the threading choice explicit: single-threaded, or multithreaded with the COOP/COEP headers in production",

@@ -13,8 +13,9 @@ An app extension adds native code to an app (`target.runtimeEnv: 'app'`), which 
 A package of its own carries it, as [`@crossbind/extension-clipboard`](../../extensions/clipboard/README.md) carries the
 system clipboard's text on macOS, iOS, Android, Windows and Linux, which an app lists. An extension may also add a store
 the app is published to ([Publishers](#publishers)), what installs a desktop app ([Installers](#installers)) and
-commands of `crossbind app` ([Commands](#commands)). One kind of extension belongs to no app: a package source, which
-gives any project the packages of another package manager ([Package sources](#package-sources)).
+commands of `crossbind app` ([Commands](#commands)). Two kinds of extension belong to no app: a package source, which
+gives any project the packages of another package manager ([Package sources](#package-sources)), and an integration,
+which teaches `crossbind()` a tool, as a bundler ([Integrations](#integrations)).
 
 crossbind's own are packages of the same kind, in its repository's `extensions/`: the host's, `activities`, `dialog`,
 `files`, `instance`, `links`, `menu`, `page-dialogs`, `page-feel`, `page-files`, `page-downloads`, `page-drops`,
@@ -22,7 +23,9 @@ crossbind's own are packages of the same kind, in its repository's `extensions/`
 `microsoft-store` and `github`; and the installers, `dmg`, `deb`, `tar-gz`, `nsis`, `zip` and `msix`. An app has them without installing or listing
 them, as `@crossbind/core-app-host` has them as its dependencies, and an app's extension takes the place of one, or of
 one of its roles, as [The host's own extensions](#the-hosts-own-extensions) says. The package source `conan` is
-crossbind's own too, and a dependency of `crossbind` itself, so every project has it.
+crossbind's own too, and a dependency of `crossbind` itself, so every project has it, as are the integrations `vite`,
+`rollup`, `webpack` and `metro`. The React Native extension, which a React Native app installs for its native module,
+gives one as well.
 
 An extension names the version of this contract it is written for, as [Versions](#versions) says.
 
@@ -59,7 +62,7 @@ keys and Android manifests, as it writes each platform's project (see [crossbind
 ## Versions
 
 An extension names the versions of the contract it is written for: `contract: 1`, or a list, as `[1, 2]` for one
-written for both. Each crossbind takes a range of them, from the oldest it still builds to the newest, `1` to `4`
+written for both. Each crossbind takes a range of them, from the oldest it still builds to the newest, `1` to `5`
 in this one: a build stops on an extension that names none of them, saying what to update, crossbind where the
 extension names newer ones alone, else the extension's package, or `@crossbind/core-app-host` where the host's own
 extensions are of another crossbind. Native code tells the versions apart with `CROSSBIND_EXTENSION_CONTRACT`, the
@@ -76,6 +79,9 @@ extension written for 1 or 2 reaches as before, and one that gives `app.android.
 Version 4 added a body to `fetch()`, which takes `POST` and `DELETE` as well, a label of an origin an extension
 serves, which `Page::label()` gives and the host's dialogs are titled with, and a dialog's `onCancel()`, and changed
 nothing else: `fetch()` without a body and `serveOrigin()` without a label are as before.
+
+Version 5 added [integrations](#integrations) and changed nothing else: an extension written for 1 to 4 builds as it
+did, and one that gives an `integration` names 5.
 
 A change that every extension written for the contract keeps working with raises only the newest version: a new
 function, hook, member of a struct or of a request, key of the descriptor or member of the api, and a role a new
@@ -1666,10 +1672,97 @@ directory, not the project. The editor's types of a source's imports are ambient
 `.crossbind/<name>/types/`: `@crossbind/typescript-config` includes `conan`'s, and a project with another source adds
 that folder to its own `include`.
 
+## Integrations
+
+crossbind gives every tool one thing: `crossbind()` in its plugin list, or `crossbind(config)` around the config of a
+tool that has none.
+
+```js
+// vite.config.js, and the same line in Rollup's, webpack's and Rspack's plugin lists
+import crossbind from 'crossbind';
+
+export default { plugins: [crossbind()] };
+```
+
+```js
+// metro.config.js, and "plugins": ["crossbind"] in an Expo app's app.json, which makes Expo call crossbind(config)
+const crossbind = require('crossbind');
+
+module.exports = crossbind(getDefaultConfig(__dirname));
+```
+
+At the first use the tool makes of what `crossbind()` gave it, crossbind asks the project's integrations in turn
+whether that use is their tool's, and the one that says yes makes the plugin the tool gets. crossbind names no tool
+itself: what tells Vite from webpack is each integration's. The integrations `crossbind.config.js` lists are asked
+first, then crossbind's own: `vite`, `rollup` (Rollup and Rolldown), `webpack` (webpack and Rspack) and `metro`, which
+`crossbind` has as its dependencies; one listed under the name of one of crossbind's own takes its place. A tool loads
+its config without waiting, so crossbind reads `crossbind.config.js` and the integrations' packages with `require`:
+none of them waits at its top level.
+
+```js
+// crossbind.extension.js of the extension for a tool whose plugins have a setup(build) method, which it calls first
+import farmPlugin from './src/plugin.js';
+
+export default function farm() {
+    return {
+        name: 'farm',
+        contract: 5,
+        root: import.meta.dirname,
+        integration: {
+            calls: ['setup'],
+            claims: ({ key, args }) => key === 'setup' && typeof args?.[0]?.onResolve === 'function',
+            plugin: (api) => farmPlugin(api),
+        },
+    };
+}
+```
+
+An integration gives one of two pairs:
+
+- `claims({ key, args })` and `plugin(api)`, for a tool with a plugin list. `key` is what the tool read first of the
+  object `crossbind()` gave it, and `args` what it called that with, or nothing for a read. `calls` names the methods a
+  tool calls first, which the object has before an integration takes it, as `apply` is Vite's and webpack's; Rollup
+  reads its `options` hook, which needs none. `plugin` gives one object, the tool's plugin, which answers the use that
+  chose it and every one after: the tool gets its hooks as they are, filters included.
+- `wraps(config)` and `wrap(api, config)`, for a tool that takes its config wrapped. `wrap` gives the config the tool
+  takes, or a Promise of it where the tool waits for one, as Metro and Expo do.
+
+A use no integration says yes to stops the tool, naming the project's integrations.
+
+### What the api gives
+
+An integration's code imports nothing of crossbind's: `plugin` and `wrap` get an api. A tool loads its config before
+crossbind's state has loaded, so the api has `ready()`, which loads the state once and resolves to the api; read
+anything else first and it throws, naming the integration. Two members need no state: `isolationHeaders`, the headers
+that isolate a page, which a multithreaded build needs, and `workerModule`, the module a worker process of the tool
+imports to make an api of its own, as its default export does, which Metro's transformer needs.
+
+- `targets`: `{ release, debug }`, the page's build: a browser's wasm, or in an app build the app's host. Each stands
+  in for the other where `crossbind.config.js` leaves one out, and a project with neither stops here. `web` is the web
+  build's, or null, and `nativeTarget(platform)` that of `ios` or `android`.
+- `app`: in an app build, `platform`, `targets`, `check()`, `build()`, `publish(dir)`, `emptyOutDir(dir)` and
+  `dev(tool)`, the session that opens the app and opens it again after a native change; else null. `preview`: in a
+  preview `crossbind app preview` runs, what its dev server takes; else null.
+- `ext`, `dirs`: the header, module and source extensions; crossbind's build and cache folders, the project, and the
+  folder `crossbind.config.js` puts the page's files in, or null for the tool's own.
+- `kindOf(file)`: `rust`, `header`, `module`, `source` or null. `resolve(source, target)`: the file an import of a
+  dependency's header, a `cargo:` crate or a package source's header names, or null. `pageApi()`: the file
+  `crossbind/app` is.
+- `prepare(target)`: builds the dependencies, before any transform. `transform(file, target, { base, liveExports })`:
+  the module of a header, an interface or a Rust file, or null. `bindImports(code, file, target)`: binds again the
+  headers a source imports, for a tool that keeps a header's module as the imports change.
+- `link(target, { prepare, allBridges })`: links the glue, one link at a time per target. `outputs(target)`: its files,
+  each `{ name, path, type, optional }`. `writeOutputs(target, dir)` copies them, and `serve(target, { link, isolate })`
+  is a `(req, res, next)` middleware that serves them under any base.
+- `appSources()`, `nativeDirs()`, `nativeFiles()`, `rustPackages()`: what a watcher watches, and the Rust packages a
+  resolver maps to their crate roots. `changed(file)`: what a change means, null when nothing of crossbind's, else
+  the headers to bind again. `licenses(bundle, { root })`: the asset of the page's licenses, or null.
+
 ## The api
 
 A publisher's, an installer's or a command's code imports nothing of crossbind's: each step gets the `api`, made for its
-extension and its run, and frozen. A package source's steps get [their own](#package-sources).
+extension and its run, and frozen. A package source's steps get [their own](#package-sources), and an integration
+[its own](#integrations).
 
 - `name`, `platform`, `isGuided`, `options`: The extension's name, the platform it publishes or makes what installs,
   whether a terminal answers questions, and a publisher's or a command's options.

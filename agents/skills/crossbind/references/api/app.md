@@ -12,7 +12,7 @@ system access of native code.
 ## Set up
 
 ```bash
-pnpm add -D crossbind@beta @crossbind/plugin-vite@beta @crossbind/core-app-host@beta vite
+pnpm add -D crossbind@beta @crossbind/core-app-host@beta vite
 ```
 
 ```js
@@ -27,9 +27,9 @@ export default {
 ```js
 // vite.config.js
 import { defineConfig } from 'vite';
-import viteCrossbindPlugin from '@crossbind/plugin-vite';
+import crossbind from 'crossbind';
 
-export default defineConfig({ plugins: [viteCrossbindPlugin()] });
+export default defineConfig({ plugins: [crossbind()] });
 ```
 
 `npm create crossbind@beta -- <dir> Desktop App` scaffolds such a project from `examples/desktop-app`.

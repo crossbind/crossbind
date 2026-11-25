@@ -24,7 +24,7 @@
     {
       "source": "docs/api/app.md",
       "output": "api/app.md",
-      "sha256": "d60a672e94b174773983c62e72567828f27944c254b07889b8a7b7891a3a873b"
+      "sha256": "3e37d6eab88e93596ad412e9dcc424cd2e49e01f613164f214b165f7b101d759"
     },
     {
       "source": "docs/api/build-state.md",
@@ -54,7 +54,7 @@
     {
       "source": "docs/api/extensions.md",
       "output": "api/extensions.md",
-      "sha256": "30f1aef047eb6c620513fe4ecd3d3755bfcd6f448d7467dece351d471dd5d42d"
+      "sha256": "bd3fb078d43b5365c537623eda4a75a65dcd2ac5fe1e74c974f99fa98e2a9d45"
     },
     {
       "source": "docs/api/filesystem.md",
@@ -94,7 +94,7 @@
     {
       "source": "docs/api/rust.md",
       "output": "api/rust.md",
-      "sha256": "d9d262b3be04ab4dbe59f71494f51fc520a8f9cd8caff6b907baf9b3e88b24e2"
+      "sha256": "950edc7e28beebac5a97a4065294870a740819e43893540d81104f2618779f49"
     },
     {
       "source": "docs/api/swig-escape.md",
@@ -104,12 +104,12 @@
     {
       "source": "docs/api/threading.md",
       "output": "api/threading.md",
-      "sha256": "5201a30b5201cda5df886d7edd24fc2b33644c8dbac5177b50dad32ec33f5bb8"
+      "sha256": "3094b7527b66f71bdeba3bfdb40ddab3708193cc6627e5a5784802582db5707f"
     },
     {
       "source": "docs/api/troubleshooting.md",
       "output": "api/troubleshooting.md",
-      "sha256": "89ce1eed90fcf4a9147e14f9859c6452095f9065b8ed5716dac92582d2783ed9"
+      "sha256": "2ec01659e20d5e5392bd9cf3656a3b528ba26fdfb8d8a3393e991ff1b5b321e3"
     },
     {
       "source": "docs/api/wasi.md",
@@ -119,7 +119,7 @@
     {
       "source": "docs/playbooks/integration/README.md",
       "output": "integration/README.md",
-      "sha256": "fe91fc076695979a98d3ece6329a2dd0b3d6045e70b09f574a94589959eb2718"
+      "sha256": "a904b07b95bdacf1f1b7c317940489638474c8350b9005b590709d95ea557f36"
     },
     {
       "source": "docs/playbooks/integration/cloudflare-worker.md",
@@ -129,12 +129,12 @@
     {
       "source": "docs/playbooks/integration/desktop-app.md",
       "output": "integration/desktop-app.md",
-      "sha256": "78167ee3ce5bb6ea9c3112b520d2583cb4824646cb2cfe7f65a6f562740bd754"
+      "sha256": "2202488b1296a6f49b8ef6d362e7e1141d03248f75fc720c662a5ec12d3c5fd8"
     },
     {
       "source": "docs/playbooks/integration/nextjs.md",
       "output": "integration/nextjs.md",
-      "sha256": "a946f43d3d3f9c8a9d429c5c840fdf30da5d72097ef2b024afd5309e390a819c"
+      "sha256": "670cbcbe7d2758946cc67bd33c20380d549402d5ea44ea067f572e966c309365"
     },
     {
       "source": "docs/playbooks/integration/nodejs.md",
@@ -144,17 +144,17 @@
     {
       "source": "docs/playbooks/integration/react-native-cli.md",
       "output": "integration/react-native-cli.md",
-      "sha256": "ac8356ca0421d3bc95ceaa04fd232effa27fbdcf941f05b223ce049940f8517a"
+      "sha256": "ce63888a794d1166b748284e2ca6c6001c95b1e7853ee0371814f2eafbbdc3ec"
     },
     {
       "source": "docs/playbooks/integration/react-native-expo.md",
       "output": "integration/react-native-expo.md",
-      "sha256": "706aa33f05a47972f85294ca7e0a28557138732e3bf4805d13674e78fd9a0c01"
+      "sha256": "1398cb836ce5f7b68f0749c8584afb65dce1dd786a426881c70df1f639cc9635"
     },
     {
       "source": "docs/playbooks/integration/rollup.md",
       "output": "integration/rollup.md",
-      "sha256": "14b6e667d8351d0085e3624b9f9a859e55cfb3a19693f92d2f28d74279d84418"
+      "sha256": "1cfd056890a0003c52dba5e27d89fdd1512d551adf758beca796096dfe38fc1c"
     },
     {
       "source": "docs/playbooks/integration/vanilla.md",
@@ -164,12 +164,12 @@
     {
       "source": "docs/playbooks/integration/vite.md",
       "output": "integration/vite.md",
-      "sha256": "8d876a3398b8044da50037c3c14e25feaea8921f323c683b7bb7516d5358b24d"
+      "sha256": "0cd03290a0fa014f939892dcad2abad785a45fdb231e336a6ab3d24f1e63381c"
     },
     {
       "source": "docs/playbooks/integration/webpack-rspack.md",
       "output": "integration/webpack-rspack.md",
-      "sha256": "ad2f7b94024d16d1f85da004773e39adddc7abbb19658780fbf9d9f4feac20c4"
+      "sha256": "a24d96bb3c3042a01bd7711f269a0b5ed7ad4c3d9637f2058f5daf4c37ed4fd2"
     },
     {
       "source": "ports/catalog.json + ports/*/package.json",

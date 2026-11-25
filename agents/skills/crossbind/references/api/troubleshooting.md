@@ -229,7 +229,7 @@ Comlink call posted to worker but no response.
 ### Hot Module Reload doesn't pick up `.cpp` changes (Vite/Webpack)
 
 - **Cause:** `paths.native` change not detected by the bundler's file watcher.
-- **Note:** the bundler plugins (`@crossbind/plugin-vite`, `-webpack`) explicitly add the `paths.native` files to the watcher in dev mode. If HMR fails:
+- **Note:** `crossbind()` in Vite's or webpack's config adds the `paths.native` files to the watcher in dev mode. If HMR fails:
 - **Fix:** restart dev server. If it persists, check that `paths.native` is correctly resolved (look at `state.config.paths.native` in console).
 
 ---

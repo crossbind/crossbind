@@ -24,7 +24,7 @@ examples/mobile-reactnative-cli/
 
 ## Key files an agent will touch
 
-- **`metro.config.js`** — exact wiring for `@crossbind/plugin-metro`. Used as the canonical example in `docs/playbooks/integration/react-native-cli.md`.
+- **`metro.config.js`** — exact wiring for `crossbind(config)`. Used as the canonical example in `docs/playbooks/integration/react-native-cli.md`.
 - **`crossbind.config.mjs`** — shows how to consume a workspace dep (`@crossbind/example-lib-prebuilt-matrix`).
 
 ## Validation
@@ -58,5 +58,5 @@ CI: `.github/workflows/test-ios-sample.yml` and `test-android-sample.yml`.
 ## Reference
 
 - RN-cli playbook: `docs/playbooks/integration/react-native-cli.md`
-- Plugin source: `plugins/react-native/AGENTS.md`
+- Extension source: `extensions/react-native/AGENTS.md`
 - iOS CI workflow: `.github/workflows/test-ios-sample.yml`

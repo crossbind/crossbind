@@ -20,19 +20,19 @@ Add crossbind to a React Native CLI app so:
 
 ## Files involved
 
-- `package.json`: add `@crossbind/plugin-react-native`, `@crossbind/plugin-react-native-ios-helper` (dependencies, autolinked), `@crossbind/plugin-metro` (devDependency), optional `@crossbind/port-<name>`.
-- `metro.config.js`: Wrap `getDefaultConfig` output with `CrossbindMetroPlugin(...)`.
+- `package.json`: add `@crossbind/extension-react-native`, `@crossbind/extension-react-native-ios` (dependencies, autolinked), `@crossbind/core-embind-jsi` (dependency), `crossbind` (devDependency), optional `@crossbind/port-<name>`.
+- `metro.config.js`: Wrap `getDefaultConfig` output with `crossbind(...)`.
 - `crossbind.config.{js,mjs}` *(new at project root)*: Project-level crossbind config: deps to consume, paths.
 - `src/native/` *(if user wraps own C++)*: `.h` + `.cpp` source files.
-- `android/app/build.gradle`: Auto-wired by `@crossbind/plugin-react-native`'s native CMake hook (no manual edits).
+- `android/app/build.gradle`: Auto-wired by `@crossbind/extension-react-native`'s native CMake hook (no manual edits).
 - `ios/Podfile.lock`: Updated by `pod install` after adding the plugin.
 - `ios/<App>.xcodeproj`: Native iOS link picks up the auto-generated podspec.
 
 ## Commands
 
 ```bash
-pnpm add @crossbind/plugin-react-native@beta @crossbind/plugin-react-native-ios-helper@beta
-pnpm add -D @crossbind/plugin-metro@beta     # bundling only; the RN plugin brings the toolchain
+pnpm add @crossbind/extension-react-native@beta @crossbind/extension-react-native-ios@beta @crossbind/core-embind-jsi@beta
+pnpm add -D crossbind@beta     # crossbind(config) in metro.config.js
 pnpm add @crossbind/port-<name>@beta     # optional
 
 # iOS — install pods (regenerates Podfile.lock + xcframeworks)
@@ -44,7 +44,7 @@ pnpm android      # or: pnpm react-native run-android
 pnpm ios          # or: pnpm react-native run-ios
 ```
 
-`pod install` runs build hooks from `react-native-crossbind.podspec` that compile the iOS native libraries. `pnpm android` triggers Gradle's externalNativeBuild, which calls `script/CMakeLists.txt` from `@crossbind/plugin-react-native` and shells out to `crossbind build -p android`.
+`pod install` runs build hooks from `react-native-crossbind.podspec` that compile the iOS native libraries. `pnpm android` triggers Gradle's externalNativeBuild, which calls `script/CMakeLists.txt` from `@crossbind/extension-react-native` and shells out to `crossbind build -p android`.
 
 ## Reference config
 
@@ -53,16 +53,10 @@ Mirror `examples/mobile-reactnative-cli/`.
 `metro.config.js` (canonical):
 
 ```js
-const { getDefaultConfig, mergeConfig } = require('@react-native/metro-config');
-const CrossbindMetroPlugin = require('@crossbind/plugin-metro');
+const { getDefaultConfig } = require('@react-native/metro-config');
+const crossbind = require('crossbind');
 
-const defaultConfig = getDefaultConfig(__dirname);
-
-const config = {
-    ...CrossbindMetroPlugin(defaultConfig),
-};
-
-module.exports = mergeConfig(defaultConfig, config);
+module.exports = crossbind(getDefaultConfig(__dirname));
 ```
 
 `crossbind.config.{js,mjs}` at project root:
@@ -121,8 +115,8 @@ A hosted macOS runner has no Docker and needs none: on a Mac, crossbind makes th
 - `e2e/mobile-reactnative-cli/` — bigger demo with multiple packages
 
 Plugin sources:
-- `plugins/react-native/` (Gradle CMake hook + iOS podspec hook)
-- `plugins/react-native-ios-helper/` (iOS-side glue)
-- `plugins/metro/` (Metro bundler integration)
+- `extensions/react-native/` (Gradle CMake hook + iOS podspec hook)
+- `extensions/react-native-ios/` (iOS-side glue)
+- `extensions/metro/` (Metro bundler integration, which `crossbind(config)` gives)
 
 iOS CI workflow: `.github/workflows/test-ios-sample.yml`.

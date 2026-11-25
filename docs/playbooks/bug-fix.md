@@ -27,7 +27,7 @@ Depends on the bug. Use `docs/CODEMAP.md` to find the right file:
 | Wrong artifact path / cache miss | `actions/createLib.js`, `actions/buildWasm.js`, `actions/isSourceNewer.js` |
 | iOS-only / xcframework issue | `actions/createXCFramework.js`, package podspec |
 | Bundler dev server / HMR misbehaving | `plugins/{vite,webpack,rollup}/index.js` |
-| RN build crash | `plugins/react-native/script/build_{android,ios,js}.js`, `script/CMakeLists.txt` |
+| RN build crash | `extensions/react-native/script/build_{android,ios,js}.js`, `script/CMakeLists.txt` |
 | Linker error in package | the package's `crossbind.config.js` / `package.json` workspace deps |
 | Browser runtime error after `init` | `core/crossbind/src/assets/js-runtime/` |
 
@@ -118,7 +118,7 @@ pnpm run ci:linux:build && pnpm run e2e:dev && pnpm run e2e:prod
 - **Cache-shaped bugs misdiagnosed as code bugs.** If a change "doesn't take effect", check whether `actions/isSourceNewer.js` correctly detects the touched file's mtime. Rebuild with `force: true` or filter-rebuild before assuming the code is wrong.
 - **Confusing CI pass with local pass.** CI runs Linux, no Xcode; iOS-affecting fixes need a darwin host to actually validate.
 - **Changing `state/loadConfig.js` defaults.** This affects every package, port variant, example and E2E fixture. Run the full validation matrix even if the change "looks small".
-- **Forgetting transitive plugin impact.** A change in `plugins/rollup` affects `plugins/vite` (which wraps it). Validate the relevant examples and E2E fixtures for both plugins.
+- **Forgetting transitive plugin impact.** A change in `extensions/rollup` affects `extensions/vite` (which runs it). Validate the relevant examples and E2E fixtures for both plugins.
 - **Editing `.crossbind/` or `dist/` by hand.** They're generated. Find the source.
 - **Grafting the fix onto an example's own config.** If the bug is in a plugin, fix the plugin — don't paper over it with an example config tweak.
 

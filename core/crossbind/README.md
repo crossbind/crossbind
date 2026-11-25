@@ -102,19 +102,19 @@ builds only rebuild what changed.
 
 ### Add it to an existing project
 
-Install the plugin for your bundler. For Vite:
+Put `crossbind()` in your bundler's plugins. For Vite:
 
 ```bash
-npm install -D @crossbind/plugin-vite@beta
+npm install -D crossbind@beta
 ```
 
 ```js
 // vite.config.js
 import { defineConfig } from 'vite';
-import viteCrossbindPlugin from '@crossbind/plugin-vite';
+import crossbind from 'crossbind';
 
 export default defineConfig({
-    plugins: [viteCrossbindPlugin()],
+    plugins: [crossbind()],
 });
 ```
 

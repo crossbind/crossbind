@@ -50,7 +50,7 @@ What does package.json deps + filesystem look like?
 
 Per-framework playbooks contain:
 
-- Which plugin to install (`@crossbind/plugin-vite`, etc.)
+- Where `crossbind()` goes in the tool's config
 - The exact config diff
 - Where to call `initNative(...)`
 - Headers / build hooks specific to that bundler
@@ -110,7 +110,7 @@ Common touchpoints:
 
 | File | What changes |
 |------|--------------|
-| `package.json` | + `@crossbind/port-<name>`, + `@crossbind/plugin-<bundler>` |
+| `package.json` | + `crossbind`, + `@crossbind/port-<name>` |
 | `vite.config.*` / `webpack.config.*` / etc. | Add the crossbind plugin to `plugins: []` |
 | `crossbind.config.js` *(new)* | Project-level crossbind config (deps to consume, build target) |
 | Public env / headers config | COOP/COEP for `mt` builds in production |

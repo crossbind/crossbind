@@ -20,8 +20,8 @@ Add crossbind to a Vite project so:
 
 | File | Role |
 |------|------|
-| `package.json` | + `@crossbind/plugin-vite` (devDependency), optional `@crossbind/port-<name>` |
-| `vite.config.{js,ts}` | Add `viteCrossbindPlugin()` to the `plugins` array |
+| `package.json` | + `crossbind` (devDependency), optional `@crossbind/port-<name>` |
+| `vite.config.{js,ts}` | Add `crossbind()` to the `plugins` array |
 | `crossbind.config.js` *(new at project root)* | Project-level crossbind config: deps to consume, build target |
 | `src/native/` *(only if user wraps own C++)* | `.h` + `.cpp` source files (default location) |
 | Production headers config | Hosting-specific (Vercel `vercel.json`, Netlify `_headers`, nginx, …) — only for multithread builds |
@@ -30,7 +30,7 @@ Add crossbind to a Vite project so:
 
 ```bash
 # Install
-pnpm add -D @crossbind/plugin-vite@beta
+pnpm add -D crossbind@beta
 # Plus any prebuilt package the user wants to consume:
 pnpm add @crossbind/port-<name>@beta
 
@@ -51,12 +51,12 @@ Mirror `examples/web-vue-vite/vite.config.js` (canonical):
 ```js
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';                  // or react / svelte / solid
-import viteCrossbindPlugin from '@crossbind/plugin-vite';
+import crossbind from 'crossbind';
 
 export default defineConfig({
     plugins: [
         vue(),
-        viteCrossbindPlugin(),
+        crossbind(),
     ],
 });
 ```
@@ -126,4 +126,4 @@ If the user picks `runtime: 'st'` (single-thread), none of this applies — no h
 - `e2e/web-vite/` — Vue + GDAL playground
 - `e2e/web-vite-multithread/` — Vue + multithread + 13 packages (canonical for `runtime: 'mt'`)
 
-Plugin source: `plugins/vite/index.js`.
+Plugin source: `extensions/vite/src/plugin.js`, which `crossbind()` stands for once Vite calls its `apply`.

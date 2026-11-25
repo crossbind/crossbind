@@ -37,10 +37,10 @@ Prepare a train by naming its changed packages explicitly:
 ```bash
 pnpm run release:version -- --version 2.0.0-beta.56 \
   --package crossbind \
-  --package @crossbind/plugin-vite
+  --package @crossbind/extension-vite
 pnpm run release:version -- --version 2.0.0-beta.56 \
   --package crossbind \
-  --package @crossbind/plugin-vite \
+  --package @crossbind/extension-vite \
   --apply
 ```
 
@@ -114,7 +114,7 @@ exact package tags, 64 to a `git push --atomic`, such as:
 
 ```text
 crossbind@2.0.0-beta.54
-@crossbind/plugin-vite@2.0.0-beta.54
+@crossbind/extension-vite@2.0.0-beta.54
 ```
 
 An existing matching tag is reused; a tag at another commit fails before any npm write. Other
