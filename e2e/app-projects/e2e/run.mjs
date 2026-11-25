@@ -1,7 +1,7 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import {
-    existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync,
+    existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync,
 } from 'node:fs';
 import { request } from 'node:http';
 import { createRequire } from 'node:module';
@@ -229,9 +229,9 @@ async function launch(args = []) {
     if (platform) {
         const built = `${root}/dist/${name}-${platform}`;
         if (!existsSync(built)) missing(built);
-        const {
-            buildForSimulator, openInSimulator, buildApk, openOnDevice, adbPath,
-        } = await import('crossbind');
+        const { default: openInSimulator, buildForSimulator } = await import('crossbind/src/actions/iosSimulator.js');
+        const { buildApk } = await import('crossbind/src/actions/androidGradle.js');
+        const { default: openOnDevice, adbPath } = await import('crossbind/src/actions/androidDevice.js');
         if (platform === 'android') {
             for (const port of [ENDPOINT_PORT, CLOUD_PORT, SNAPSHOTS_PORT]) execFileSync(adbPath(), ['reverse', `tcp:${port}`, `tcp:${port}`]);
             builtForDevice ??= buildApk(built);
@@ -278,7 +278,7 @@ async function handLink(session) {
         await valueOf('the link handed as iOS hands one', { do: 'handLink', url });
         return;
     }
-    const { adbPath } = await import('crossbind');
+    const { adbPath } = await import('crossbind/src/actions/androidDevice.js');
     const { applicationId } = JSON.parse(readFileSync(join(dirname(builtForDevice), 'output-metadata.json'), 'utf8'));
     execFileSync(adbPath(), ['shell', `am start -W -a android.intent.action.VIEW -p ${applicationId} -d '${url}'`]);
 }
@@ -609,6 +609,15 @@ async function storageOf(role, mark) {
 const holds = (storage, mark) => storage.seen[mark].database && storage.seen[mark].file !== false;
 const holdsNone = (storage, mark) => !storage.seen[mark].database && storage.seen[mark].file !== true;
 
+// The files below a folder, by their paths in it, a package's own packages left unopened: their links may lead back to
+// the folder itself.
+const filesBelow = (folder, under = '') => readdirSync(join(folder, under))
+    .filter((name) => name !== 'node_modules')
+    .flatMap((name) => {
+        const file = join(under, name);
+        return statSync(join(folder, file), { throwIfNoEntry: false })?.isDirectory() ? filesBelow(folder, file) : [file];
+    });
+
 // Every function the app may register, as the names its sources write: each string literal shaped <prefix>.<member> in
 // each C, C++ and Objective-C++ source of the host and of each extension the app has, crossbind's own and those its
 // config lists, so that one a helper or a table registers is among them. A registration whose name is neither a
@@ -621,8 +630,8 @@ function functionNames() {
         .map((name) => dirname(fromHost.resolve(`${name}/crossbind.extension.js`)));
     const names = new Set();
     for (const folder of [join(host, 'cpp'), ...own, ...config.extensions.map((extension) => extension.root)]) {
-        for (const file of readdirSync(folder, { recursive: true })) {
-            if (!SOURCE.test(file) || file.split(/[\\/]/).includes('node_modules')) continue;
+        for (const file of filesBelow(folder)) {
+            if (!SOURCE.test(file)) continue;
             const text = readFileSync(join(folder, file), 'utf8');
             for (const [, name] of text.matchAll(NAMED)) names.add(name);
             for (const [, argument] of text.matchAll(REGISTERED)) {

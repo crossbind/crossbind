@@ -1,0 +1,40 @@
+{
+    "name": "@crossbind/extension-webpack",
+    "version": "2.0.0-beta.82",
+    "description": "crossbind extension: crossbind() in webpack's and Rspack's plugin lists, its loader and its dev server's middleware included.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/webpack#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "MIT",
+    "type": "module",
+    "exports": {
+        "./crossbind.extension.js": "./crossbind.extension.js"
+    },
+    "files": [
+        "crossbind.extension.js",
+        "src"
+    ],
+    "crossbind": {
+        "extension": "./crossbind.extension.js"
+    },
+    "dependencies": {
+        "@crossbind/core-embind-rust": "workspace:^"
+    },
+    "peerDependencies": {
+        "webpack": ">=5.0.0"
+    },
+    "peerDependenciesMeta": {
+        "webpack": {
+            "optional": true
+        }
+    },
+    "devDependencies": {
+        "webpack": "^5.109.2"
+    },
+    "keywords": [
+        "crossbind-extension",
+        "crossbind",
+        "integration",
+        "webpack",
+        "rspack"
+    ]
+}

@@ -108,10 +108,10 @@ describe("an app host's own extensions", () => {
     test("are written for this crossbind's extension contract, else name the app host to update", () => {
         const root = hostOf({ dialog: { json: { contract: undefined, name: 'dialog' } } });
         expect(() => hostExtensions(root)).toThrow(
-            "crossbind: @crossbind/extension-dialog's crossbind.extension.js names no contract, the version of crossbind's extension contract it is written for, as contract: 4 is for this crossbind: update @crossbind/core-app-host to match crossbind.",
+            "crossbind: @crossbind/extension-dialog's crossbind.extension.js names no contract, the version of crossbind's extension contract it is written for, as contract: 5 is for this crossbind: update @crossbind/core-app-host to match crossbind.",
         );
-        const newer = hostOf({ dialog: { json: { contract: 5, name: 'dialog' } } });
-        expect(() => hostExtensions(newer)).toThrow("is written for crossbind's extension contract 5, newer than this crossbind's 4: update crossbind.");
+        const newer = hostOf({ dialog: { json: { contract: 6, name: 'dialog' } } });
+        expect(() => hostExtensions(newer)).toThrow("is written for crossbind's extension contract 6, newer than this crossbind's 5: update crossbind.");
     });
 
     test("of crossbind's own host are the activities', the dialog's, the files', the instance's, the links', the menu's, the page's dialogs, downloads, drops, files, location, navigation and permissions, the power's, the shell's, the shortcuts' and the updater's, which each platform's sources show", () => {
@@ -611,7 +611,7 @@ describe('an extension crossbind.config.js lists', () => {
             'crossbind: extensions[0] has the hooks loadConfig, buildWasm, which crossbind no longer runs: an extension adds native code to an app. Set build flags in targetSpecs or crossbind.build.js.',
         );
         expect(() => listedExtension({ contract: 1, name: 'clipboard', root, app: {}, version: 1 }, 'extensions[0]', base))
-            .toThrow('crossbind: extensions[0] takes name, contract, root, app, options, fromApp, publisher, installer, commands, keys, packageSource, replaces; version is none of them.');
+            .toThrow('crossbind: extensions[0] takes name, contract, root, app, options, fromApp, publisher, installer, commands, keys, packageSource, integration, replaces; version is none of them.');
         expect(() => listedExtension('clipboard', 'extensions[0]', base))
             .toThrow("crossbind: extensions[0] is no extension, as an extension package's crossbind.extension.js gives one.");
     });
@@ -674,24 +674,24 @@ describe('an extension crossbind.config.js lists', () => {
         const { base, root } = project();
         const extension = { name: 'clipboard', root, app: {} };
         expect(() => listedExtension(extension, 'extensions[0]', base)).toThrow(
-            "crossbind: extensions[0] names no contract, the version of crossbind's extension contract it is written for, as contract: 4 is for this crossbind: update it to a version written for this crossbind.",
+            "crossbind: extensions[0] names no contract, the version of crossbind's extension contract it is written for, as contract: 5 is for this crossbind: update it to a version written for this crossbind.",
         );
-        expect(() => listedExtension({ ...extension, contract: 5 }, 'extensions[0]', base))
-            .toThrow("crossbind: extensions[0] is written for crossbind's extension contract 5, newer than this crossbind's 4: update crossbind.");
+        expect(() => listedExtension({ ...extension, contract: 6 }, 'extensions[0]', base))
+            .toThrow("crossbind: extensions[0] is written for crossbind's extension contract 6, newer than this crossbind's 5: update crossbind.");
         // A newer contract may give keys this crossbind does not know, and an app part of a new shape.
-        expect(() => listedExtension({ ...extension, contract: 5, hooks: {}, app: { swift: ['a.swift'] } }, 'extensions[0]', base))
-            .toThrow('newer than this crossbind\'s 4: update crossbind.');
+        expect(() => listedExtension({ ...extension, contract: 6, hooks: {}, app: { swift: ['a.swift'] } }, 'extensions[0]', base))
+            .toThrow('newer than this crossbind\'s 5: update crossbind.');
         // One written for an older version this crossbind still takes builds as it is.
-        expect([1, 2, 3, 4].map((contract) => listedExtension({ ...extension, contract }, 'extensions[0]', base).name))
-            .toEqual(['clipboard', 'clipboard', 'clipboard', 'clipboard']);
+        expect([1, 2, 3, 4, 5].map((contract) => listedExtension({ ...extension, contract }, 'extensions[0]', base).name))
+            .toEqual(['clipboard', 'clipboard', 'clipboard', 'clipboard', 'clipboard']);
         for (const contract of ['1', [], [1, 1], [0], 1.5]) {
             expect(() => listedExtension({ ...extension, contract }, 'extensions[0]', base))
                 .toThrow(`crossbind: extensions[0]'s contract ${JSON.stringify(contract)} is no version of crossbind's extension contract, as 1 or [1, 2] is.`);
         }
         // One written for several builds where this crossbind takes one of them.
         expect(listedExtension({ ...extension, contract: [2, 3] }, 'extensions[0]', base).name).toBe('clipboard');
-        expect(() => listedExtension({ ...extension, contract: [5, 6] }, 'extensions[0]', base))
-            .toThrow("crossbind: extensions[0] is written for crossbind's extension contract 5 and 6, newer than this crossbind's 4: update crossbind.");
+        expect(() => listedExtension({ ...extension, contract: [6, 7] }, 'extensions[0]', base))
+            .toThrow("crossbind: extensions[0] is written for crossbind's extension contract 6 and 7, newer than this crossbind's 5: update crossbind.");
         // What version 3 added, an Android app's plain http, takes an extension written for it.
         const cleartext = { ...extension, app: { android: { cleartext: true } } };
         expect(listedExtension({ ...cleartext, contract: 3 }, 'extensions[0]', base).app.android.cleartext).toBe(true);
@@ -699,6 +699,57 @@ describe('an extension crossbind.config.js lists', () => {
             .toThrow("crossbind: extensions[0] gives app.android.cleartext, which crossbind's extension contract has from its version 3 on, and is written for 1 and 2: name contract: 3.");
         fs.writeFileSync(path.join(base, 'package.json'), JSON.stringify({ name: '@acme/extension-clipboard', crossbind: { extension: './crossbind.extension.js' } }));
         expect(() => listedExtension(extension, 'extensions[0]', base)).toThrow(': update @acme/extension-clipboard to a version written for this crossbind.');
+    });
+
+    test('gives an integration from version 5 on, which adds nothing to an app', () => {
+        const { base, root } = project();
+        const integration = { calls: ['apply'], claims: () => true, plugin: () => ({}) };
+        const listed = listedExtension({ contract: 5, name: 'farm', root, integration }, 'extensions[0]', base);
+        expect(listed.integration.calls).toEqual(['apply']);
+        expect(appExtensionsOf([listed])).toEqual([]);
+        expect(() => listedExtension({ contract: [3, 4], name: 'farm', root, integration }, 'extensions[0]', base))
+            .toThrow("crossbind: extensions[0] gives integration, which crossbind's extension contract has from its version 5 on, and is written for 3 and 4: name contract: 5.");
+    });
+});
+
+describe("an extension's integration", () => {
+    const where = "extensions[0]'s integration";
+    const checked = (integration) => checkedExtension({ name: 'farm', integration }, '/farm', 'extensions[0]').integration;
+
+    test('is claims and plugin, with the methods its tool calls first, or wraps and wrap, each keeping it as its this', () => {
+        const plugin = { calls: ['apply', 'setup'], claims() { return this.calls.length; }, plugin: () => ({}) };
+        const taken = checked(plugin);
+        expect(taken.calls).toEqual(['apply', 'setup']);
+        expect(taken.claims({ key: 'apply' })).toBe(2);
+        expect(Object.keys(checked({ claims: () => true, plugin: () => ({}) }))).toEqual(['calls', 'claims', 'plugin']);
+        expect(checked({ claims: () => true, plugin: () => ({}) }).calls).toEqual([]);
+        const wrapper = { tag: 'metro', wraps: (config) => 'transformer' in config, wrap() { return this.tag; } };
+        expect(() => checked(wrapper)).toThrow(`crossbind: ${where} takes calls, claims, plugin, wraps, wrap; tag is none of them.`);
+        const { tag, ...wrapping } = wrapper;
+        expect(Object.keys(checked(wrapping))).toEqual(['wraps', 'wrap']);
+        expect(checked({ wraps: () => true, wrap() { return this; } }).wrap()).toHaveProperty('wraps');
+    });
+
+    test('stops on a mix of the two pairs, half of one, or a step that is no function', () => {
+        const step = () => {};
+        expect(() => checked({ claims: step, plugin: step, wraps: step, wrap: step })).toThrow(
+            `crossbind: ${where} gives claims and plugin and wraps and wrap: it gives claims and plugin, for a tool with a plugin list, or wraps and wrap, for a tool whose config crossbind() wraps.`,
+        );
+        expect(() => checked({ claims: step })).toThrow(`crossbind: ${where} gives claims: it gives claims and plugin`);
+        expect(() => checked({ wrap: step, plugin: step })).toThrow(`crossbind: ${where} gives plugin and wrap: it gives claims and plugin`);
+        expect(() => checked({})).toThrow(`crossbind: ${where} gives none of its steps: it gives claims and plugin`);
+        expect(() => checked({ claims: true, plugin: step })).toThrow(`crossbind: ${where}'s claims is no function.`);
+        expect(() => checked('vite')).toThrow(`crossbind: ${where} is no object, as { claims, plugin } or { wraps, wrap } is.`);
+    });
+
+    test('names each method its tool calls first once, and none beside wraps', () => {
+        const step = () => {};
+        for (const calls of ['apply', [''], ['apply', 'apply'], [1]]) {
+            expect(() => checked({ calls, claims: step, plugin: step }))
+                .toThrow(`crossbind: ${where}.calls is no list of the methods its tool calls first, each named once, as ['apply'].`);
+        }
+        expect(() => checked({ calls: ['apply'], wraps: step, wrap: step }))
+            .toThrow(`crossbind: ${where} gives calls, the methods a tool with a plugin list calls first, beside wraps.`);
     });
 });
 

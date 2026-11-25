@@ -162,6 +162,35 @@ export function checkedPackageSource(packageSource, where, name) {
     return { storeUnits: [...storeUnits], ...Object.fromEntries(steps) };
 }
 
+// An integration teaches crossbind() one tool: claims and plugin for a tool with a plugin list, with calls naming the
+// methods such a tool calls first, or wraps and wrap for a tool whose config crossbind() wraps. Its steps keep the
+// object as their this.
+const INTEGRATION_KEYS = ['calls', 'claims', 'plugin', 'wraps', 'wrap'];
+const INTEGRATION_STEPS = ['claims', 'plugin', 'wraps', 'wrap'];
+const INTEGRATION_PAIRS = [['claims', 'plugin'], ['wraps', 'wrap']];
+
+export function checkedIntegration(integration, where) {
+    if (!isObject(integration)) throw new Error(`crossbind: ${where} is no object, as { claims, plugin } or { wraps, wrap } is.`);
+    const unknown = Object.keys(integration).find((key) => !INTEGRATION_KEYS.includes(key));
+    if (unknown) throw new Error(`crossbind: ${where} takes ${INTEGRATION_KEYS.join(', ')}; ${unknown} is none of them.`);
+    assertSteps(where, integration, INTEGRATION_STEPS);
+    const given = INTEGRATION_STEPS.filter((step) => integration[step] !== undefined);
+    const pair = INTEGRATION_PAIRS.find((steps) => given.length === 2 && steps.every((step) => given.includes(step)));
+    if (!pair) {
+        throw new Error(`crossbind: ${where} gives ${given.join(' and ') || 'none of its steps'}: it gives claims and plugin, for a tool with a plugin list, or wraps and wrap, for a tool whose config crossbind() wraps.`);
+    }
+    const steps = Object.fromEntries(pair.map((step) => [step, integration[step].bind(integration)]));
+    if (pair[0] === 'wraps') {
+        if (integration.calls !== undefined) throw new Error(`crossbind: ${where} gives calls, the methods a tool with a plugin list calls first, beside wraps.`);
+        return steps;
+    }
+    const calls = integration.calls ?? [];
+    if (!Array.isArray(calls) || !calls.every((call) => typeof call === 'string' && call.length > 0) || new Set(calls).size !== calls.length) {
+        throw new Error(`crossbind: ${where}.calls is no list of the methods its tool calls first, each named once, as ['apply'].`);
+    }
+    return { calls: [...calls], ...steps };
+}
+
 // What an extension adds that runs from the command line, commands or keys, by their names: each its line of help, the
 // options it takes, as a publisher's, the step that does its work, and the other steps its kind takes, which keep the
 // object as their this.

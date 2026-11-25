@@ -8,7 +8,6 @@ on:
             - core/crossbind/**
             - core/store-kit/**
             - extensions/**
-            - plugins/**
             - ports/**
             - .nvmrc
             - .github/workflows/test-core.yml
@@ -20,7 +19,6 @@ on:
             - core/crossbind/**
             - core/store-kit/**
             - extensions/**
-            - plugins/**
             - ports/**
             - .nvmrc
             - .github/workflows/test-core.yml

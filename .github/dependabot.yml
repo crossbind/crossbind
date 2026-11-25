@@ -24,8 +24,8 @@ updates:
           - dependencies
           - javascript
       ignore:
-          # React Native 0.88 compiles with Babel 7. Inside the workspace @crossbind/plugin-metro
-          # keeps its own Babel 7, so a Babel 8 major passes CI while it breaks every React Native
+          # React Native 0.88 compiles with Babel 7. Inside the workspace the React Native samples
+          # keep their own Babel 7, so a Babel 8 major passes CI while it breaks every React Native
           # project create-crossbind scaffolds. Lift this once React Native moves to Babel 8.
           - dependency-name: '@babel/*'
             update-types:

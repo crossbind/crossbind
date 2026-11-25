@@ -68,7 +68,7 @@ function fixtureRepository(packages, { trainVersion } = {}) {
 
 test('the real workspace is classified into publishable Linux, macOS and assembled packages', () => {
     const packages = discoverPublishablePackages(ROOT);
-    assert.equal(packages.length, 349);
+    assert.equal(packages.length, 348);
     assert.equal(packages.find((candidate) => candidate.name === '@crossbind/port-zlib-standalone-napi').buildKind, 'node');
     assert.equal(packages.find((candidate) => candidate.name === '@crossbind/example-lib-prebuilt-matrix').buildKind, 'multi-platform');
     assert.equal(packages.find((candidate) => candidate.name === '@crossbind/port-zlib-standalone-napi-linuxmusl-x64').buildKind, 'node');
@@ -281,7 +281,7 @@ test('a multi-platform library builds only archives for the desktop platforms, o
 test('workspace version command updates only selected packages to one new train version', () => {
     const root = fixtureRepository([
         { path: 'core/base', name: '@crossbind/base', version: '2.0.0-beta.1' },
-        { path: 'plugins/consumer', name: '@crossbind/consumer', version: '2.0.0-beta.2' },
+        { path: 'extensions/consumer', name: '@crossbind/consumer', version: '2.0.0-beta.2' },
     ]);
     const preview = setWorkspaceVersion({ root, version: '2.0.0-beta.3', packageNames: ['@crossbind/base'] });
     assert.equal(preview.applied, false);
@@ -334,7 +334,7 @@ test('a beta train selects only version-bumped packages and keeps dependency ord
     const root = fixtureRepository([
         { path: 'core/base', name: '@crossbind/base', version: '2.0.0-beta.2' },
         {
-            path: 'plugins/consumer',
+            path: 'extensions/consumer',
             name: '@crossbind/consumer',
             version: '2.0.0-beta.2',
             manifest: { dependencies: { '@crossbind/base': 'workspace:^' } },
@@ -358,7 +358,7 @@ test('a beta train selects only version-bumped packages and keeps dependency ord
 test('one train cannot publish packages with different target versions', async () => {
     const root = fixtureRepository([
         { path: 'core/base', name: '@crossbind/base', version: '2.0.0-beta.2' },
-        { path: 'plugins/consumer', name: '@crossbind/consumer', version: '2.0.0-beta.3' },
+        { path: 'extensions/consumer', name: '@crossbind/consumer', version: '2.0.0-beta.3' },
     ]);
     await assert.rejects(
         buildWorkspaceReleasePlan({
@@ -376,7 +376,7 @@ test('one train cannot publish packages with different target versions', async (
 
 test('a full common-version train builds generated-template dependencies before create-crossbind', async () => {
     const root = fixtureRepository([
-        { path: 'plugins/vite', name: '@crossbind/plugin-vite', version: '2.0.0-beta.2' },
+        { path: 'extensions/vite', name: '@crossbind/plugin-vite', version: '2.0.0-beta.2' },
         { path: 'tooling/create-app', name: 'create-crossbind', version: '2.0.0-beta.2' },
     ]);
     fs.mkdirSync(path.join(root, 'tooling', 'create-app', 'src'), { recursive: true });
@@ -410,7 +410,7 @@ test('a full common-version train builds generated-template dependencies before 
 test('a train refuses to add packages after the common version belongs to another commit', async () => {
     const root = fixtureRepository([
         { path: 'core/base', name: '@crossbind/base', version: '2.0.0-beta.2' },
-        { path: 'plugins/consumer', name: '@crossbind/consumer', version: '2.0.0-beta.2' },
+        { path: 'extensions/consumer', name: '@crossbind/consumer', version: '2.0.0-beta.2' },
     ]);
     await assert.rejects(
         buildWorkspaceReleasePlan({
@@ -428,7 +428,7 @@ test('a train refuses to add packages after the common version belongs to anothe
 test('a fully published historical train is a clean no-op', async () => {
     const root = fixtureRepository([
         { path: 'core/base', name: '@crossbind/base', version: '2.0.0-beta.2' },
-        { path: 'plugins/consumer', name: '@crossbind/consumer', version: '2.0.0-beta.2' },
+        { path: 'extensions/consumer', name: '@crossbind/consumer', version: '2.0.0-beta.2' },
     ]);
     const plan = await buildWorkspaceReleasePlan({ root, channel: 'beta', gitCommit: COMMIT, registry: registryWith() });
     assert.equal(plan.packageCount, 0);
@@ -436,7 +436,7 @@ test('a fully published historical train is a clean no-op', async () => {
 });
 
 test('a provenance-bound partial run is selected for idempotent resume', async () => {
-    const root = fixtureRepository([{ path: 'plugins/resume', name: '@crossbind/resume', version: '2.0.0-beta.2' }]);
+    const root = fixtureRepository([{ path: 'extensions/resume', name: '@crossbind/resume', version: '2.0.0-beta.2' }]);
     const plan = await buildWorkspaceReleasePlan({
         root,
         channel: 'beta',
@@ -477,7 +477,7 @@ test('stable publication rejects prerelease workspace dependency closure', async
     const root = fixtureRepository([
         { path: 'core/base', name: '@crossbind/base', version: '2.0.0-beta.2' },
         {
-            path: 'plugins/consumer',
+            path: 'extensions/consumer',
             name: '@crossbind/consumer',
             version: '2.0.0',
             manifest: { dependencies: { '@crossbind/base': 'workspace:^' } },
@@ -503,7 +503,7 @@ test('stable publication rejects prerelease workspace dependency closure', async
 });
 
 test('a train never moves an npm channel backwards', async () => {
-    const root = fixtureRepository([{ path: 'plugins/stale', name: '@crossbind/stale', version: '2.0.0-beta.1' }]);
+    const root = fixtureRepository([{ path: 'extensions/stale', name: '@crossbind/stale', version: '2.0.0-beta.1' }]);
     await assert.rejects(
         buildWorkspaceReleasePlan({
             root,
@@ -518,7 +518,7 @@ test('a train never moves an npm channel backwards', async () => {
 });
 
 test('stable train fails while consumer install docs still require beta', async () => {
-    const root = fixtureRepository([{ path: 'plugins/stable', name: '@crossbind/stable', version: '2.0.0' }]);
+    const root = fixtureRepository([{ path: 'extensions/stable', name: '@crossbind/stable', version: '2.0.0' }]);
     fs.writeFileSync(path.join(root, 'README.md'), 'npm install @crossbind/stable@beta\n');
     const stableDirectory = path.join(root, 'releases', 'npm');
     fs.mkdirSync(stableDirectory, { recursive: true });

@@ -15,12 +15,26 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 
+// No package that declares it resolves, from the project or from crossbind's own folder.
+const noDeclaringPackage = () => vi.spyOn(fs, 'realpathSync').mockImplementation(() => {
+    throw new Error('not installed');
+});
+
 describe('resolveEmbindRustRoot', () => {
+    test("finds the package through crossbind's own extensions, which declare it, when the project names none", async () => {
+        const { default: resolveEmbindRustRoot } = await load();
+
+        const root = resolveEmbindRustRoot();
+
+        expect(fs.existsSync(`${root}/crate/Cargo.toml`)).toBe(true);
+    });
+
     test('falls back to the package shipped next to the engine', async () => {
-        // No consumer project to resolve from, so the monorepo layout answers: core/embind-rust,
+        // No package to resolve it through, so the monorepo layout answers: core/embind-rust,
         // three levels up from src/utils. A wrong relative depth here fails the Rust bridge with
         // "Rust bindings need @crossbind/core-embind-rust" in a repo that has it.
         const { default: resolveEmbindRustRoot } = await load();
+        noDeclaringPackage();
 
         const root = resolveEmbindRustRoot();
 
@@ -42,6 +56,7 @@ describe('resolveEmbindRustRoot', () => {
 
     test('throws a directive error when nothing provides the package', async () => {
         const { default: resolveEmbindRustRoot } = await load();
+        noDeclaringPackage();
         vi.spyOn(fs, 'existsSync').mockReturnValue(false);
 
         expect(() => resolveEmbindRustRoot())

@@ -1,0 +1,42 @@
+{
+    "name": "@crossbind/extension-react-native",
+    "version": "2.0.0-beta.82",
+    "description": "crossbind extension: React Native and Expo apps, their native module and builds, and \"plugins\": [\"crossbind\"] in an Expo app's config.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/react-native#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "MIT",
+    "main": "js/index.js",
+    "type": "module",
+    "crossbind": {
+        "extension": "./crossbind.extension.js"
+    },
+    "codegenConfig": {
+        "name": "RNCrossbindSpec",
+        "type": "modules",
+        "jsSrcsDir": "spec",
+        "android": {
+            "javaPackageName": "com.jsi.lib"
+        }
+    },
+    "peerDependencies": {
+        "react-native": ">=0.81.0",
+        "metro": "*"
+    },
+    "dependencies": {
+        "crossbind": "workspace:^",
+        "@crossbind/core-embind-jsi": "workspace:^",
+        "@babel/runtime": "^7.29.7",
+        "upath": "^3.0.8",
+        "@crossbind/core-embind-rust": "workspace:^"
+    },
+    "keywords": [
+        "crossbind-extension",
+        "crossbind",
+        "integration",
+        "react-native",
+        "expo",
+        "android",
+        "ios",
+        "mobile"
+    ]
+}

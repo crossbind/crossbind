@@ -1,30 +1,12 @@
-import path from 'node:path';
-import { createRequire } from 'node:module';
-import {
-    broughtExtension, isJsonValue, ownPackages, stepFailure, withListed,
-} from './appExtensions.js';
+import { isJsonValue, stepFailure, withListed } from './appExtensions.js';
+import { crossbindExtensions, packagesOfCrossbind } from './crossbindExtensions.js';
 import { getContentHash } from './hash.js';
 import { PACKAGE_NAME, declarationOf, dependenciesOf } from './packageSourceImport.js';
 
-// crossbind's own folder, whose dependencies name the extensions it brings.
-const CORE_ROOT = path.join(import.meta.dirname, '..', '..');
+export { packagesOfCrossbind };
 
-// The extension packages crossbind itself brings, which a project neither installs nor lists.
-export const packagesOfCrossbind = () => ownPackages(CORE_ROOT);
-
-let own = null;
-
-// crossbind's own package sources: those the extension packages among its dependencies give, which every project
-// has by having crossbind. Loaded once, as a source may keep what it asked its tool.
-function ownSources() {
-    if (!own) {
-        const load = createRequire(path.join(CORE_ROOT, 'package.json'));
-        own = packagesOfCrossbind()
-            .map((name) => broughtExtension(load, name, `update ${name} to match crossbind`))
-            .filter((extension) => extension.packageSource);
-    }
-    return own;
-}
+// crossbind's own package sources: those its own extensions give.
+const ownSources = () => crossbindExtensions().filter((extension) => extension.packageSource);
 
 // A project's package sources: crossbind's own, then those crossbind.config.js lists. One listed under the name of
 // one of crossbind's takes its place.

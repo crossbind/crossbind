@@ -43,7 +43,7 @@ function printTable(headers, rows, stream = process.stdout) {
 const SCAN_ROOTS = [
     'core',
     'tooling',
-    'plugins',
+    'extensions',
     'ports',
     'examples',
     'e2e',
@@ -75,8 +75,7 @@ const PINNED = [
             '@crossbind/example-mobile-reactnative-cli',
             '@crossbind/e2e-mobile-reactnative-cli',
             '@crossbind/example-mobile-reactnative-expo',
-            '@crossbind/plugin-metro',
-            '@crossbind/plugin-react-native',
+            '@crossbind/extension-react-native',
         ],
         deps: ['react', 'react-dom', 'react-test-renderer', 'react-native', 'metro-config', 'eslint', 'jest', '@types/jest', 'typescript'],
         scopes: ['@babel/', '@react-native/', '@react-native-community/', 'react-native-', 'expo'],

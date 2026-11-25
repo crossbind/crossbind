@@ -20,7 +20,6 @@ on:
             - CHANGELOG.md
             - core/**/package.json
             - tooling/**/package.json
-            - plugins/**/package.json
             - extensions/**/package.json
             - ports/**/package.json
             - examples/**/package.json
@@ -51,7 +50,6 @@ on:
             - CHANGELOG.md
             - core/**/package.json
             - tooling/**/package.json
-            - plugins/**/package.json
             - extensions/**/package.json
             - ports/**/package.json
             - examples/**/package.json

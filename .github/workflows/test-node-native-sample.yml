@@ -8,8 +8,6 @@ on:
             - core/**
             - extensions/**
             - examples/**
-            - plugins/vite/**
-            - plugins/rollup/**
             - tooling/bridge-tools/**
             - .nvmrc
             - .github/workflows/test-node-native-sample.yml
@@ -24,8 +22,6 @@ on:
             - core/embind-napi/**
             - core/app-host/**
             - extensions/**
-            - plugins/vite/**
-            - plugins/rollup/**
             - examples/lib-prebuilt-matrix/**
             - examples/backend-nodejs-native/**
             - examples/native-executable/**

@@ -271,6 +271,10 @@ const BUILDER_INPUTS = ['scripts/site/build-example-demos.mjs', 'scripts/site/na
 const SAMPLE_INPUTS = [
     'core/crossbind',
     'extensions/conan',
+    'extensions/metro',
+    'extensions/rollup',
+    'extensions/vite',
+    'extensions/webpack',
     'core/embind-rust',
     'tooling/cloud/compiler',
     'tooling/cloud/scripts/node-modules.mjs',

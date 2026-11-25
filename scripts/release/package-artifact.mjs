@@ -127,8 +127,9 @@ export function smokeTestCrossbindTarball({ tarball, expectedVersion, temporaryR
         }
 
         const smokeModule = [
-            "const api = await import('crossbind');",
-            "if (typeof api.getContentHash !== 'function') throw new Error('top-level ESM API did not load');",
+            "const { default: crossbind } = await import('crossbind');",
+            "if (typeof crossbind !== 'function') throw new Error('top-level ESM API did not load');",
+            "if (typeof crossbind().apply !== 'function') throw new Error('crossbind() found none of its own integrations');",
             "const images = await import('crossbind/src/utils/pullDockerImage.js');",
             "const web = images.getDockerImage('web');",
             "const android = images.getDockerImage('android', 'linux/amd64');",

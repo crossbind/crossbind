@@ -31,7 +31,7 @@
         "globals": "^17.12.0",
         "vite": "^8.2.1",
         "@playwright/test": "^1.63.0",
-        "@crossbind/plugin-vite": "workspace:^"
+        "crossbind": "workspace:^"
     },
     "keywords": [
         "crossbind-sample",

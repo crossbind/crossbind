@@ -3,16 +3,13 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from '@rspack/cli';
 import { rspack } from '@rspack/core';
 import { ReactRefreshRspackPlugin } from '@rspack/plugin-react-refresh';
-import CrossbindWebpackPlugin from '@crossbind/plugin-webpack';
+import crossbind from 'crossbind';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const isDev = process.env.NODE_ENV === 'development';
 
 // Target browsers, see: https://github.com/browserslist/browserslist
 const targets = ['chrome >= 87', 'edge >= 88', 'firefox >= 78', 'safari >= 14'];
-
-const crossbindWebpackPlugin = new CrossbindWebpackPlugin();
-const crossbindLoaderOptions = crossbindWebpackPlugin.getLoaderOptions();
 
 export default defineConfig({
     context: __dirname,
@@ -24,7 +21,6 @@ export default defineConfig({
     },
     module: {
         rules: [
-            crossbindWebpackPlugin.getRule(),
             {
                 test: /\.svg$/,
                 type: 'asset',
@@ -60,7 +56,7 @@ export default defineConfig({
         ],
     },
     plugins: [
-        crossbindWebpackPlugin,
+        crossbind(),
         new rspack.HtmlRspackPlugin({
             template: './index.html',
         }),
@@ -76,22 +72,10 @@ export default defineConfig({
     },
     devServer: {
         watchFiles: {
-            paths: ['src/**/*'], // İzlemek istediğiniz dosya/dizin
+            paths: ['src/**/*'],
             options: {
-                ignored: /node_modules/, // İstemediğiniz dosyaları hariç tutabilirsiniz
+                ignored: /node_modules/,
             },
-        },
-        hot: true, // HMR'yi etkinleştirir
-        liveReload: true, // Sayfa yenileme
-        headers: {
-            'Cross-Origin-Embedder-Policy': 'require-corp',
-            'Cross-Origin-Opener-Policy': 'same-origin',
-        },
-        setupMiddlewares: (middlewares, devServer) => {
-            // The plugin helper streams /crossbind.js, /crossbind.wasm and /crossbind.data.txt with
-            // plain-Node responses; res.sendFile/res.send are Express-only and do
-            // not exist on @rspack/dev-server 2 middlewares.
-            return crossbindWebpackPlugin.setDevServerMiddleware(middlewares, devServer);
         },
     },
 });

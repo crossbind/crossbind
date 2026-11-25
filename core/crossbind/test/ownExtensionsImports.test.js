@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import upath from 'upath';
 import { describe, expect, test } from 'vitest';
 
 const REPOSITORY = path.join(import.meta.dirname, '..', '..', '..');
@@ -8,8 +9,8 @@ const OWN_PACKAGE = '@crossbind/extension-';
 const SHARED = '@crossbind/core-store-kit';
 // What a package's page.js alone takes of crossbind's, as a page runs it.
 const PAGE_API = 'crossbind/app/core';
-// What an app lists itself, as its page imports it.
-const OPTIONAL = ['clipboard', 'preview'];
+// What an app lists itself: as its page imports it, or for its native module, as a React Native app does.
+const OPTIONAL = ['clipboard', 'preview', 'react-native', 'react-native-ios'];
 
 const filesIn = (dir) => fs.readdirSync(dir, { withFileTypes: true })
     .filter((entry) => entry.name !== 'node_modules')
@@ -19,6 +20,10 @@ const extensionsOf = (...folder) => Object.keys(JSON.parse(fs.readFileSync(path.
 // What an app has by having the host, and what every project has by having crossbind.
 const own = extensionsOf('core', 'app-host');
 const ofTheCore = extensionsOf('core', 'crossbind');
+// Another of crossbind's own extensions, as the vite one runs the rollup one's plugin, is no part of crossbind's core.
+const isSibling = (specifier) => ofTheCore.some((name) => specifier === `${OWN_PACKAGE}${name}` || specifier.startsWith(`${OWN_PACKAGE}${name}/`));
+// A package of the extensions folder that is an extension; react-native-ios is the React Native extension's iOS pod.
+const isExtension = (name) => fs.existsSync(upath.join(REPOSITORY, 'extensions', name, 'crossbind.extension.js'));
 
 describe("crossbind's own extensions", () => {
     test.each(own)("%s's README names what it reads, the roles it holds, its options and commands, and how to leave it out", async (name) => {
@@ -48,7 +53,7 @@ describe("crossbind's own extensions", () => {
     });
 
     test('carry the npm keyword crossbind-extension, as every extension does, those the host brings as well', () => {
-        const folders = fs.readdirSync(path.join(REPOSITORY, 'extensions'));
+        const folders = fs.readdirSync(upath.join(REPOSITORY, 'extensions')).filter(isExtension);
         const without = folders.filter((name) => !JSON.parse(fs.readFileSync(path.join(REPOSITORY, 'extensions', name, 'package.json'), 'utf8')).keywords?.includes('crossbind-extension'));
         expect(without).toEqual([]);
     });
@@ -63,7 +68,7 @@ describe("crossbind's own extensions", () => {
         const outside = filesIn(dir).filter((file) => file.endsWith('.js')).flatMap((file) => [...fs.readFileSync(file, 'utf8')
             .matchAll(/^\s*(?:import|export)\b[^'"]*?from\s+['"]([^'"]+)['"]|import\(\s*['"]([^'"]+)['"]\s*\)/gm)]
             .map((match) => match[1] ?? match[2])
-            .filter((specifier) => !specifier.startsWith('node:') && specifier !== SHARED && !(path.basename(file) === 'page.js' && specifier === PAGE_API)
+            .filter((specifier) => !specifier.startsWith('node:') && specifier !== SHARED && !isSibling(specifier) && !(path.basename(file) === 'page.js' && specifier === PAGE_API)
                 && !(specifier.startsWith('.') && path.resolve(path.dirname(file), specifier).startsWith(`${dir}${path.sep}`)))
             .map((specifier) => `${path.relative(dir, file)}: ${specifier}`));
         expect(outside).toEqual([]);

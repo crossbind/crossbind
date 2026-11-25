@@ -1,29 +1,10 @@
 // @ts-check
-import fs from 'node:fs';
 import { defineConfig } from '@rspack/cli';
 import { rspack } from '@rspack/core';
 import { ReactRefreshRspackPlugin } from '@rspack/plugin-react-refresh';
-import CrossbindWebpackPlugin from '@crossbind/plugin-webpack';
+import crossbind from 'crossbind';
 
 const isDev = process.env.NODE_ENV === 'development';
-
-const crossbindWebpackPlugin = new CrossbindWebpackPlugin();
-const crossbindLoaderOptions = crossbindWebpackPlugin.getLoaderOptions();
-const { state, getTargetParams, getFilteredBuildTargets } = crossbindLoaderOptions;
-
-const targetParams = getTargetParams({ platform: ['wasm'], arch: ['wasm32'], runtime: ['st'], runtimeEnv: ['browser'] }, true);
-let buildTargetRelease = getFilteredBuildTargets(targetParams, { buildType: 'release' })?.[0];
-let buildTargetDebug = getFilteredBuildTargets(targetParams, { buildType: 'debug' })?.[0];
-
-if (!buildTargetRelease && !buildTargetDebug) {
-    throw new Error('No build targets found');
-}
-
-if (!buildTargetDebug) {
-    buildTargetDebug = buildTargetRelease;
-} else if (!buildTargetRelease) {
-    buildTargetRelease = buildTargetDebug;
-}
 
 export default defineConfig({
     entry: {
@@ -35,7 +16,6 @@ export default defineConfig({
     },
     module: {
         rules: [
-            crossbindWebpackPlugin.getRule(),
             {
                 test: /\.svg$/,
                 type: 'asset',
@@ -68,11 +48,10 @@ export default defineConfig({
         ],
     },
     plugins: [
-        crossbindWebpackPlugin,
+        crossbind(),
         new rspack.HtmlRspackPlugin({
             template: './index.html',
         }),
         isDev && new ReactRefreshRspackPlugin(),
     ],
-    devServer: crossbindWebpackPlugin.getDevServerConfig(),
 });

@@ -9,7 +9,6 @@ on:
             - extensions/**
             - tooling/**
             - ports/**
-            - plugins/**
             - examples/**
             - e2e/**
             - .nvmrc
@@ -21,7 +20,12 @@ on:
             - main
         paths:
             - core/crossbind/**
-            - plugins/**
+            - extensions/metro/**
+            - extensions/react-native/**
+            - extensions/react-native-ios/**
+            - extensions/rollup/**
+            - extensions/vite/**
+            - extensions/webpack/**
             - examples/lib-*/**
             - examples/web-*/**
             - examples/backend-*/**

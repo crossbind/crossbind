@@ -41,7 +41,7 @@
       "expo-image",
       "expo-status-bar",
       "expo-web-browser",
-      "@crossbind/plugin-react-native"
+      "crossbind"
     ],
     "experiments": {
       "typedRoutes": true,

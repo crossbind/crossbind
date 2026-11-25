@@ -2,7 +2,6 @@ packages:
   - 'core/*'
   - 'core/embind-rust/demo'
   - 'tooling/*'
-  - 'plugins/*'
   - 'extensions/*'
   - 'ports/*/*'
   - 'examples/*'
@@ -41,10 +40,10 @@ overrides:
   'launch-editor@2': '^2.14.2'
   'mermaid@11': '^11.16.1'
   # The Expo sample's SDK decides these three, and the CLI samples follow it: move them together with
-  # an SDK upgrade. The plugins take them as peers, and a plugin's own copy beside the app's means the
-  # wrong metro ends up serving and the Expo config plugin runs on another SDK's helpers. Pinning them
-  # here keeps this workspace's graph single-valued without narrowing what the published packages
-  # accept.
+  # an SDK upgrade. The React Native and Metro extensions take them as peers, and a copy of their own
+  # beside the app's means the wrong metro ends up serving and the Expo config plugin runs on another
+  # SDK's helpers. Pinning them here keeps this workspace's graph single-valued without narrowing what
+  # the published packages accept.
   '@expo/config-plugins': '~58.0.10'
   metro: '^0.87.1'
   react-native: '0.88.1'

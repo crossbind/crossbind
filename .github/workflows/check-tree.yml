@@ -16,7 +16,7 @@ concurrency:
     cancel-in-progress: true
 jobs:
     # The gates of `pnpm run check` that read nothing but the tree. No path filter: they read core/,
-    # plugins/ and every port's recipe.
+    # extensions/ and every port's recipe.
     gates:
         runs-on: ubuntu-latest
         steps:
