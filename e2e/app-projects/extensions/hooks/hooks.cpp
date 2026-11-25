@@ -26,7 +26,7 @@ void questionUp(crossbind::Call call);
 void pressInQuestion(crossbind::Call call);
 #endif
 #if defined(__APPLE__) && !TARGET_OS_IPHONE
-void keyInQuestion(crossbind::Call call);
+void cancelInQuestion(crossbind::Call call);
 #endif
 
 void crossbind_extension_e2e_hooks(crossbind::Registry &registry) {
@@ -89,7 +89,7 @@ void crossbind_extension_e2e_hooks(crossbind::Registry &registry) {
     registry.function("e2e-hooks.press", PAGES, pressInQuestion);
 #endif
 #if defined(__APPLE__) && !TARGET_OS_IPHONE
-    registry.function("e2e-hooks.key", PAGES, keyInQuestion);
+    registry.function("e2e-hooks.cancel", PAGES, cancelInQuestion);
 #endif
 #if defined(__ANDROID__)
     registry.function("e2e-hooks.breakKey", [](Call call) {
