@@ -34,8 +34,8 @@ import org.json.JSONObject;
 
 // The preview extension's Java: the app's token sealed with a key of the Android Keystore, which never leaves it, in a
 // file of the app's own that no backup takes; HMAC-SHA256 and SHA-256; the page that approves a sign-in in a Custom
-// Tab of the system's browser; and what a page asks to use, as the holder of page-permissions, by the page's role, a
-// project's at the app's own question (Consents.java).
+// Tab of the system's browser; what a page asks to use, as the holder of page-permissions, by the page's role, a
+// project's at the app's own question (Consents.java); and the pill, the preview's menu and Back (Indicator.java).
 public final class PreviewExtension implements Extension {
     private static final String KEY_ALIAS = "crossbind-preview-token";
     private static final String CIPHER = "AES/GCM/NoPadding";
@@ -48,6 +48,7 @@ public final class PreviewExtension implements Extension {
             "microphone", Manifest.permission.RECORD_AUDIO);
 
     private final Consents consents = new Consents(PreviewExtension::grant);
+    private final Indicator indicator = new Indicator();
 
     // The app's own page gets the devices the manifest asks for, as the host's page-permissions does; a project's page
     // those its user allows at the app's own question, then as the app's own; a page of no role nothing.
@@ -122,6 +123,22 @@ public final class PreviewExtension implements Extension {
                     consents.end();
                     call.resolve(null);
                 }
+                // The indicator of the preview served, its words and its origin; its end; whether the WebView shows a
+                // page of its origin; its page reloaded; and what its user asks of it next.
+                case "mark" -> {
+                    indicator.mark(host, options.getString("project"), options.getString("line"), options.getString("origin"));
+                    call.resolve(null);
+                }
+                case "unmark" -> {
+                    indicator.unmark();
+                    call.resolve(null);
+                }
+                case "showsPreview" -> call.resolve(indicator.showsPreview(host));
+                case "reload" -> {
+                    indicator.reload(host);
+                    call.resolve(null);
+                }
+                case "next" -> indicator.next(call);
                 default -> call.reject("crossbind: preview's Java has no function " + function);
             }
         } catch (Exception error) {

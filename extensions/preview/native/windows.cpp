@@ -1,6 +1,7 @@
 // Windows' own for the preview extension: the Credential Manager keeps the app's token, CNG makes HMAC-SHA256, SHA-256
-// and random bytes, the default browser shows the page that approves a sign-in, and a project's question is a task
-// dialog of its window.
+// and random bytes, the default browser shows the page that approves a sign-in, a project's question is a task dialog of
+// its window, and what shows that a preview is one is the window's title and the preview's items at the top of its
+// system menu, which Alt+Space and a right click on the title bar open.
 #include "preview.h"
 
 #include <windows.h>
@@ -9,7 +10,10 @@
 #include <commctrl.h>
 #include <wincred.h>
 
+#include "WebView2.h"
+
 #include <cstdio>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
@@ -74,6 +78,77 @@ HRESULT CALLBACK onQuestion(HWND dialog, UINT notification, WPARAM, LPARAM, LONG
         asked->dialog = nullptr;
     }
     return S_OK;
+}
+
+// The preview's items at the top of a window's system menu, by the commands WM_SYSCOMMAND carries, whose four low bits
+// are the system's; and the subclass of the window that takes them.
+constexpr UINT RELOAD_ITEM = 0x1F10;
+constexpr UINT NAME_ITEM = 0x1F20;
+constexpr UINT LINE_ITEM = 0x1F30;
+constexpr UINT CLOSE_ITEM = 0x1F40;
+constexpr UINT SEPARATOR_ITEM = 0x1F50;
+constexpr UINT_PTR SUBCLASS = 0x5F5;
+
+// The title a window the indicator is up on had, which it gets back once it comes down; on the main thread.
+std::map<uint64_t, std::wstring> marked;
+
+// A menu item's text as text: an & of its own draws as itself, and a tab, which would start the item's shortcut, as a
+// space.
+std::wstring menuText(const std::string &text) {
+    std::wstring out;
+    for (const wchar_t each : wide(text)) {
+        if (each == L'&') out += L"&&";
+        else out += each == L'\t' ? L' ' : each;
+    }
+    return out;
+}
+
+LRESULT CALLBACK onSystemCommand(HWND window, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR, DWORD_PTR) {
+    if (message == WM_SYSCOMMAND) {
+        const UINT command = static_cast<UINT>(wParam & 0xFFF0);
+        if (command == RELOAD_ITEM) {
+            reloadPreview();
+            return 0;
+        }
+        if (command == CLOSE_ITEM) {
+            closePreview();
+            return 0;
+        }
+    }
+    return DefSubclassProc(window, message, wParam, lParam);
+}
+
+void insertItem(HMENU menu, UINT at, UINT command, const std::wstring &text, bool isEnabled) {
+    std::wstring shown = text;
+    MENUITEMINFOW item{};
+    item.cbSize = sizeof item;
+    item.fMask = MIIM_ID | MIIM_FTYPE | MIIM_STATE | MIIM_STRING;
+    item.fType = MFT_STRING;
+    item.fState = isEnabled ? MFS_ENABLED : MFS_DISABLED;
+    item.wID = command;
+    item.dwTypeData = shown.data();
+    InsertMenuItemW(menu, at, TRUE, &item);
+}
+
+void dropItems(HMENU menu) {
+    for (const UINT command : {RELOAD_ITEM, NAME_ITEM, LINE_ITEM, CLOSE_ITEM, SEPARATOR_ITEM}) DeleteMenu(menu, command, MF_BYCOMMAND);
+}
+
+// Reload; the project's name over its line, which do nothing, as a menu draws one line an item; Close preview.
+void setItems(HWND window, const Shown &shown) {
+    HMENU menu = GetSystemMenu(window, FALSE);
+    if (!menu) return;
+    dropItems(menu);
+    insertItem(menu, 0, RELOAD_ITEM, L"Reload", true);
+    insertItem(menu, 1, NAME_ITEM, menuText(shown.project), false);
+    insertItem(menu, 2, LINE_ITEM, menuText(shown.line), false);
+    insertItem(menu, 3, CLOSE_ITEM, L"Close preview", true);
+    MENUITEMINFOW separator{};
+    separator.cbSize = sizeof separator;
+    separator.fMask = MIIM_ID | MIIM_FTYPE;
+    separator.fType = MFT_SEPARATOR;
+    separator.wID = SEPARATOR_ITEM;
+    InsertMenuItemW(menu, 4, TRUE, &separator);
 }
 
 }  // namespace
@@ -196,6 +271,56 @@ std::function<void()> showConsent(uint64_t window, const std::string &message, c
         asked->isClosed = true;
         if (asked->dialog) PostMessageW(asked->dialog, TDM_CLICK_BUTTON, DONT_ALLOW_BUTTON, 0);
     };
+}
+
+void showIndicator(uint64_t window, const Shown &shown, std::function<void()> done) {
+    crossbind::onMainThread([window, shown, done] {
+        const std::optional<crossbind::Window> open = crossbind::windowOf(window);
+        HWND native = open ? static_cast<HWND>(open->native()) : nullptr;
+        if (native) {
+            if (!marked.count(window)) {
+                const int length = GetWindowTextLengthW(native);
+                std::wstring title(static_cast<std::size_t>(length) + 1, L'\0');
+                title.resize(static_cast<std::size_t>(GetWindowTextW(native, title.data(), length + 1)));
+                marked[window] = title;
+                SetWindowSubclass(native, onSystemCommand, SUBCLASS, 0);
+            }
+            SetWindowTextW(native, wide(shown.project + " \xE2\x80\x93 crossbind preview").c_str());
+            setItems(native, shown);
+        }
+        done();
+    });
+}
+
+void hideIndicator(uint64_t window) {
+    crossbind::onMainThread([window] {
+        const auto found = marked.find(window);
+        if (found == marked.end()) return;
+        if (const std::optional<crossbind::Window> open = crossbind::windowOf(window)) {
+            HWND native = static_cast<HWND>(open->native());
+            SetWindowTextW(native, found->second.c_str());
+            if (HMENU menu = GetSystemMenu(native, FALSE)) dropItems(menu);
+            RemoveWindowSubclass(native, onSystemCommand, SUBCLASS);
+        }
+        marked.erase(found);
+    });
+}
+
+void endIndicator(uint64_t window, std::function<void(bool isShowingProject)> done) {
+    crossbind::onMainThread([window, done] {
+        const std::optional<crossbind::Window> open = crossbind::windowOf(window);
+        done(open && open->page().role() == "project");
+    });
+}
+
+void reloadWindow(uint64_t window) {
+    crossbind::onMainThread([window] {
+        const std::optional<crossbind::Window> open = crossbind::windowOf(window);
+        ICoreWebView2 *core = nullptr;
+        if (!open || FAILED(static_cast<ICoreWebView2Controller *>(open->webView())->get_CoreWebView2(&core)) || !core) return;
+        core->Reload();
+        core->Release();
+    });
 }
 
 }  // namespace preview

@@ -74,11 +74,47 @@ Failure writeDataFile(const std::string &name, const std::string &text);
 void holdEvent(const std::string &name, const Value &value);
 
 // opener.cpp: the preview open, ended, its window shows the app's first page again, and the words the page hears of
-// why, where the extension ended it of itself; a session id ends only that session's.
-void endPreview(const std::string &words = {}, const std::string &session = {});
+// why, where the extension ended it of itself; a session id ends only that session's. Whether one ended.
+bool endPreview(const std::string &words = {}, const std::string &session = {});
 // The preview open ended and the session checked last forgotten, as the account signs out.
 void forgetOpener();
 void addOpenerFunctions(crossbind::Registry &registry);
+// What the preview's menu does, and Back on Android: the preview's page reloaded by the web view's own reload, a
+// snapshot's once its session is read again; and the preview ended, the event preview.ended held with no words.
+void reloadPreview();
+void closePreview();
+// A snapshot's session read again as the app comes to the front: a higher version, its proof holding, reloads its page.
+void readPreviewAgain();
+
+// indicator.cpp: what shows that a preview is one, on each window a project's page shows in: the pill on a phone, on a
+// desktop the window's title and the preview's menu. It is up on a window before the project's page can load there,
+// and down once the preview ended and the window's next page started; the app's own page that comes to show in a
+// window whose preview is open ends that preview.
+struct Shown {
+    std::string project;
+    std::string line;
+    // The preview's origin, by which Android's Java tells the WebView's pages.
+    std::string origin;
+};
+// Up on the window of this id, 0 for the app's oldest, with these words, then runs then with the window it is on.
+void markPreview(uint64_t window, Shown shown, std::function<void(uint64_t window)> then);
+// The preview open ended: each window's indicator comes down, at once where its page is no project's.
+void unmarkPreview();
+// The menu's line, as what the preview serves changed.
+void relineIndicator(std::string line);
+void addIndicatorHooks(crossbind::Registry &registry);
+// The platform's own, apple.mm, windows.cpp, linux.cpp and android.cpp, each on the main thread, Android's on its
+// Java's UI thread: the window's indicator up with these words, or its words changed; down; at the preview's end,
+// whether the window shows a page of the preview's origin, whose indicator then comes down with the window's next
+// page; and the window's page reloaded.
+void showIndicator(uint64_t window, const Shown &shown, std::function<void()> done);
+void hideIndicator(uint64_t window);
+void endIndicator(uint64_t window, std::function<void(bool isShowingProject)> done);
+void reloadWindow(uint64_t window);
+#if defined(__ANDROID__)
+// android.cpp: what the Java's pill and Back ask of the preview, Reload or Close preview, waited for one at a time.
+void listenToMenu();
+#endif
 
 // requests.cpp: what a page asks to use and the files dropped on it, by the page's role, as the holder of the host's
 // page-permissions and page-drops.

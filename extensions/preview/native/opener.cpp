@@ -1,7 +1,8 @@
 // The opener: a session of the account's list, read again by its id, checked in order before a byte of its project
 // loads (its protocol, its source's proof made with its key, then the account and the session the proof covers), and
 // once its page's own Open, served as an origin of the account's and the project's, whose handler is the proxy of the
-// session's source. A snapshot's host that refuses the proxy's token after the key was made anew is asked again, once.
+// session's source, with the indicator up on its window. A snapshot's session is read again where its host refuses
+// the proxy's token, as after its key was made anew, at the preview's Reload and as the app comes to the front.
 #include "preview.h"
 
 #include <algorithm>
@@ -25,6 +26,13 @@ constexpr auto LOCAL_NETWORK_RETRY = std::chrono::seconds(1);
 constexpr auto LOCAL_NETWORK_WAIT = std::chrono::minutes(2);
 const std::string GATE_TEXT = "crossbind-requests";
 const std::string GONE = "This snapshot is no longer on your account's list.";
+const std::string ANOTHER = "crossbind cloud lists this snapshot as another project now: open it again from Projects.";
+const std::string RENEWED = "The snapshot's key was renewed; it opened again.";
+const std::string ENDED_AS_OPENED = "crossbind: the preview ended as it opened.";
+// The middle dot of the preview menu's line, in UTF-8.
+const std::string DOT = " \xC2\xB7 ";
+// How long the menu's line says a snapshot's key was renewed.
+constexpr auto RENEWED_SHOWN = std::chrono::minutes(1);
 const std::string CHECK_FIRST = "crossbind opens the preview it checked last: check it first.";
 const std::string NAMELESS = "crossbind cloud lists this preview with a name crossbind shows on no dialog: give the project a name of letters, digits and ._@/- (general.name in crossbind.config.js), and run crossbind app preview again.";
 const Request::Headers TEXT{{"Content-Type", "text/plain; charset=utf-8"}};
@@ -150,6 +158,18 @@ void verify(const Session &session, const Account &account, const std::string &g
     verifyAt(session, account, gate, sourcesOf(session), 0, "", std::move(done));
 }
 
+// What a reading of a snapshot's session again found: the gate's token of a key made anew, taken once its proof held;
+// whether a higher version was taken with it; or that the preview ended, as the session was gone, the app signed out,
+// the session read as another's, or the preview ended meanwhile, so that what waited does nothing.
+struct Reading {
+    std::optional<std::string> token;
+    bool isHigher = false;
+    bool isEnded = false;
+};
+
+class Proxy;
+bool isOpenProxy(const Proxy *proxy);
+
 // The proxy of an open preview's origin: each GET and HEAD a fetch of the session's source, with the request's Accept,
 // Accept-Language and Range alone and the gate's token, its answer passed back with its status and the headers PASSED
 // names; a failure, and an answer the host gives no web view, as a redirect, which no web view follows for an app's
@@ -157,10 +177,11 @@ void verify(const Session &session, const Account &account, const std::string &g
 class Proxy : public std::enable_shared_from_this<Proxy> {
 public:
     Proxy(Session session, Account account, std::string source, std::string gateToken)
-        : isSnapshot_(session.source == "snapshot"), sessionId_(session.id), account_(std::move(account)), source_(std::move(source)),
-          session_(std::move(session)), token_(std::move(gateToken)) {}
+        : isSnapshot_(session.source == "snapshot"), sessionId_(session.id), projectId_(session.projectId), openedVersion_(session.version),
+          account_(std::move(account)), source_(std::move(source)), session_(std::move(session)), token_(std::move(gateToken)) {}
 
     const std::string &sessionId() const { return sessionId_; }
+    bool isSnapshot() const { return isSnapshot_; }
 
     void answer(Request request) {
         std::string token;
@@ -170,6 +191,71 @@ public:
         }
         const std::string url = source_ + escapedPath(request.path()) + (request.query().empty() ? "" : "?" + request.query());
         send(std::move(request), url, token, false);
+    }
+
+    // The preview menu's line: the account and where the page comes from, a dev server's address or a snapshot's version
+    // as it is served, beside the version opened once a higher one came; for a minute after the key was made anew, 3.4's
+    // words.
+    std::string line() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!isSnapshot_) return account_.name + DOT + "on " + hostOf(source_);
+        if (renewals_ > 0 && std::chrono::steady_clock::now() - renewedAt_ < RENEWED_SHOWN) return RENEWED;
+        std::string shown = account_.name + DOT + "a snapshot, version " + std::to_string(session_.version);
+        if (session_.version > openedVersion_) shown += ", changed since you opened version " + std::to_string(openedVersion_);
+        return shown;
+    }
+
+    // The session read again, one reading at a time, which what comes meanwhile waits for: 404 ends the preview with its
+    // words, 401 signs the app out, and a session that reads as another's ends it; a key made anew or a higher version is
+    // taken once its proof holds, as the opener checked the first; no answer changes nothing, and neither does one that
+    // comes after its preview ended or another opened.
+    void read(std::function<void(const Reading &)> then) {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            waiting_.push_back(std::move(then));
+            if (isReading_) return;
+            isReading_ = true;
+        }
+        withAccount([self = shared_from_this()](std::optional<Account> account, std::string appToken) {
+            if (!account || account->id != self->account_.id) return self->readDone({});
+            askCloud("GET", "/v1/sessions/" + self->sessionId_, appToken, "", [self, account](Failure failure, int status, Value answer) {
+                if (!isOpenProxy(self.get())) return self->readDone({.isEnded = true});
+                if (failure) return self->readDone({});
+                if (status == 401) {
+                    endPreview(signedOutWords(), self->sessionId_);
+                    forgetSignIn([] {});
+                    return self->readDone({.isEnded = true});
+                }
+                if (status == 404) {
+                    endPreview(GONE, self->sessionId_);
+                    return self->readDone({.isEnded = true});
+                }
+                const std::optional<Session> renewed = status == 200 ? sessionOf(answer) : std::nullopt;
+                if (!renewed) return self->readDone({});
+                if (const Failure other = self->otherOf(*renewed)) {
+                    endPreview(*other, self->sessionId_);
+                    return self->readDone({.isEnded = true});
+                }
+                Session held;
+                {
+                    std::lock_guard<std::mutex> lock(self->mutex_);
+                    held = self->session_;
+                }
+                const bool isNewKey = renewed->key != held.key;
+                const bool isHigher = renewed->version > held.version;
+                if (!isNewKey && !isHigher) return self->readDone({});
+                hmacSha256(*fromBase64url(renewed->key), GATE_TEXT, [self, account, renewed, isNewKey, isHigher](Failure hashFailure, std::string gate) {
+                    if (hashFailure) return self->readDone({});
+                    const std::string token = toBase64url(gate);
+                    verify(*renewed, *account, token, [self, renewed, token, isNewKey, isHigher](Verified verified) {
+                        if (verified.words) return self->readDone({});
+                        if (!isOpenProxy(self.get())) return self->readDone({.isEnded = true});
+                        self->take(*renewed, token, isNewKey);
+                        self->readDone({isNewKey ? std::optional<std::string>(token) : std::nullopt, isHigher, false});
+                    });
+                });
+            });
+        });
     }
 
 private:
@@ -187,7 +273,7 @@ private:
                     return;
                 }
                 if (response.status == 403 && self->isSnapshot_ && !isRetry) {
-                    self->rekey(token, [self, request, url, response](std::optional<std::string> renewed) {
+                    self->renew(token, [self, request, url, response](std::optional<std::string> renewed) {
                         if (renewed) self->send(request, url, *renewed, true);
                         else pass(request, response);
                     });
@@ -216,80 +302,91 @@ private:
         }
     }
 
-    // The snapshot's host refused the token: the session is read again, and a key made anew is checked as the first was,
-    // its token then taken for every request; a session gone ends the preview. Requests refused meanwhile wait for the
-    // one reading.
-    void rekey(const std::string &used, std::function<void(std::optional<std::string>)> then) {
+    // The snapshot's host refused the token: the token another request's reading took meanwhile, or the session read
+    // again for a key made anew.
+    void renew(const std::string &used, std::function<void(std::optional<std::string>)> then) {
         std::optional<std::string> current;
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            if (token_ != used) {
-                current = token_;
-            } else {
-                waiting_.push_back(std::move(then));
-                if (isRekeying_) return;
-                isRekeying_ = true;
-            }
+            if (token_ != used) current = token_;
         }
         if (current) return then(current);
-        withAccount([self = shared_from_this()](std::optional<Account> account, std::string appToken) {
-            if (!account || account->id != self->account_.id) return self->rekeyed(std::nullopt);
-            askCloud("GET", "/v1/sessions/" + self->sessionId_, appToken, "", [self, account](Failure failure, int status, Value answer) {
-                if (!failure && status == 404) {
-                    self->rekeyed(std::nullopt);
-                    endPreview(GONE, self->sessionId_);
-                    return;
-                }
-                const std::optional<Session> renewed = failure || status != 200 ? std::nullopt : sessionOf(answer);
-                std::string key;
-                {
-                    std::lock_guard<std::mutex> lock(self->mutex_);
-                    key = self->session_.key;
-                }
-                if (!renewed || renewed->id != self->sessionId_ || renewed->source != "snapshot" || renewed->key == key) return self->rekeyed(std::nullopt);
-                hmacSha256(*fromBase64url(renewed->key), GATE_TEXT, [self, account, renewed](Failure hashFailure, std::string gate) {
-                    if (hashFailure) return self->rekeyed(std::nullopt);
-                    const std::string token = toBase64url(gate);
-                    verify(*renewed, *account, token, [self, renewed, token](Verified verified) {
-                        if (verified.words) return self->rekeyed(std::nullopt);
-                        {
-                            std::lock_guard<std::mutex> lock(self->mutex_);
-                            self->session_ = *renewed;
-                            self->token_ = token;
-                        }
-                        self->rekeyed(token);
-                    });
-                });
-            });
-        });
+        read([then](const Reading &reading) { then(reading.token); });
     }
 
-    void rekeyed(std::optional<std::string> token) {
-        std::vector<std::function<void(std::optional<std::string>)>> waiting;
+    // Why a session of this id, as the account's list gives it now, is no longer the preview's: another project, another
+    // kind of source, a protocol the app does not take, a name no dialog shows.
+    Failure otherOf(const Session &renewed) const {
+        if (renewed.id != sessionId_ || renewed.source != "snapshot" || renewed.projectId != projectId_) return ANOTHER;
+        if (renewed.protocol > MOST_PROTOCOL) return newerWords(renewed.protocol);
+        if (renewed.protocol < LEAST_PROTOCOL) return olderWords(renewed.protocol, "");
+        if (!isListedName(renewed.projectName)) return NAMELESS;
+        return std::nullopt;
+    }
+
+    void take(const Session &renewed, const std::string &token, bool isNewKey) {
+        int renewal = 0;
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            isRekeying_ = false;
+            session_ = renewed;
+            token_ = token;
+            if (isNewKey) {
+                renewedAt_ = std::chrono::steady_clock::now();
+                renewal = ++renewals_;
+            }
+        }
+        relineIndicator(line());
+        if (!isNewKey) return;
+        std::thread([weak = std::weak_ptr<Proxy>(shared_from_this()), renewal] {
+            std::this_thread::sleep_for(RENEWED_SHOWN);
+            const std::shared_ptr<Proxy> self = weak.lock();
+            if (!self || !isOpenProxy(self.get())) return;
+            {
+                std::lock_guard<std::mutex> lock(self->mutex_);
+                if (self->renewals_ != renewal) return;
+            }
+            relineIndicator(self->line());
+        }).detach();
+    }
+
+    void readDone(const Reading &reading) {
+        std::vector<std::function<void(const Reading &)>> waiting;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            isReading_ = false;
             waiting.swap(waiting_);
         }
-        for (const auto &then : waiting) then(token);
+        for (const auto &then : waiting) then(reading);
     }
 
     const bool isSnapshot_;
     const std::string sessionId_;
+    const std::string projectId_;
+    const int openedVersion_;
     const Account account_;
     const std::string source_;
     std::mutex mutex_;
     Session session_;
     std::string token_;
-    bool isRekeying_ = false;
-    std::vector<std::function<void(std::optional<std::string>)>> waiting_;
+    std::chrono::steady_clock::time_point renewedAt_;
+    int renewals_ = 0;
+    bool isReading_ = false;
+    std::vector<std::function<void(const Reading &)>> waiting_;
 };
 
 std::mutex openerMutex;
 std::optional<Checked> checked;
-// The preview open, at most one: its origin and its proxy.
+// The preview open, at most one: its origin, its proxy and the window its indicator went up on as it opened.
 std::optional<crossbind::Origin> openOrigin;
 std::shared_ptr<Proxy> openProxy;
+uint64_t openWindow = 0;
+// Whether a Reload waits for its reading of the session, which another Reload joins.
+bool isReloading = false;
+
+bool isOpenProxy(const Proxy *proxy) {
+    std::lock_guard<std::mutex> lock(openerMutex);
+    return openProxy.get() == proxy;
+}
 
 Value sheetOf(const Checked &found) {
     Value::Object sheet{{"session", found.session.id}, {"source", found.session.source}, {"project", Value::Object{{"name", found.session.projectName}}},
@@ -383,8 +480,24 @@ void serve(const Call &call, const Checked &found) {
             openProxy = proxy;
         }
         if (found.session.source == "snapshot") noteOpened(found.session.id, found.session.version);
-        // The page goes to the origin once its requests' holder knows the preview they are of.
-        serveConsents({origin.url(), found.originName, found.session.projectName}, [call, url = origin.url()] { call.resolve(Value::Object{{"url", url}}); });
+        // The page goes to the origin once its requests' holder knows the preview they are of, and the indicator is up
+        // on the page's window.
+        Shown shown{found.session.projectName, proxy->line(), origin.url()};
+        serveConsents({origin.url(), found.originName, found.session.projectName}, [call, url = origin.url(), shown, proxy] {
+            markPreview(call.page().windowId(), shown, [call, url, proxy](uint64_t window) {
+                {
+                    std::lock_guard<std::mutex> lock(openerMutex);
+                    if (openProxy == proxy) {
+                        openWindow = window;
+                        call.resolve(Value::Object{{"url", url}});
+                        return;
+                    }
+                }
+                // Ended before its indicator went up: it comes down again.
+                unmarkPreview();
+                call.reject(ENDED_AS_OPENED);
+            });
+        });
     } catch (const std::exception &error) {
         call.reject(error.what());
     }
@@ -411,18 +524,67 @@ void open(Call call) {
 
 }  // namespace
 
-void endPreview(const std::string &words, const std::string &session) {
+bool endPreview(const std::string &words, const std::string &session) {
     std::optional<crossbind::Origin> ending;
     {
         std::lock_guard<std::mutex> lock(openerMutex);
-        if (!openOrigin || (!session.empty() && (!openProxy || openProxy->sessionId() != session))) return;
+        if (!openOrigin || (!session.empty() && (!openProxy || openProxy->sessionId() != session))) return false;
         ending.swap(openOrigin);
         openProxy.reset();
+        openWindow = 0;
     }
-    // Its question closes unanswered, and what it asked for is denied, before the origin ends.
+    // Its question closes unanswered, and what it asked for is denied, before the origin ends; its indicator comes down
+    // with each window's next page.
     endConsents();
     ending->end();
+    unmarkPreview();
     if (!words.empty()) holdEvent("ended", Value::Object{{"message", words}});
+    return true;
+}
+
+void closePreview() {
+    if (endPreview()) holdEvent("ended", Value::Object{});
+}
+
+void reloadPreview() {
+    std::shared_ptr<Proxy> proxy;
+    uint64_t window = 0;
+    {
+        std::lock_guard<std::mutex> lock(openerMutex);
+        proxy = openProxy;
+        window = openWindow;
+    }
+    if (!proxy) return;
+    if (!proxy->isSnapshot()) {
+        reloadWindow(window);
+        return;
+    }
+    {
+        std::lock_guard<std::mutex> lock(openerMutex);
+        if (isReloading) return;
+        isReloading = true;
+    }
+    proxy->read([proxy, window](const Reading &reading) {
+        {
+            std::lock_guard<std::mutex> lock(openerMutex);
+            isReloading = false;
+        }
+        if (!reading.isEnded && isOpenProxy(proxy.get())) reloadWindow(window);
+    });
+}
+
+void readPreviewAgain() {
+    std::shared_ptr<Proxy> proxy;
+    uint64_t window = 0;
+    {
+        std::lock_guard<std::mutex> lock(openerMutex);
+        proxy = openProxy;
+        window = openWindow;
+    }
+    if (!proxy || !proxy->isSnapshot()) return;
+    proxy->read([proxy, window](const Reading &reading) {
+        if (!reading.isEnded && reading.isHigher && isOpenProxy(proxy.get())) reloadWindow(window);
+    });
 }
 
 void forgetOpener() {
