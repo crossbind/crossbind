@@ -6,6 +6,9 @@ import { createServer } from 'node:http';
 // kept, so that the run can read all that a page got.
 const STEP_MS = 60000;
 const HOLD_MS = 30000;
+// Longer than a device keeps an idle connection for its next request, Android's five minutes: one the server closed
+// first is reused there, and a report POSTed on it is lost ("unexpected end of stream").
+const KEPT_ALIVE_MS = 600000;
 
 function bodyText(asked) {
     return new Promise((done) => {
@@ -77,6 +80,7 @@ export async function serveEndpoint(port) {
         }
         answer.writeHead(404).end();
     });
+    server.keepAliveTimeout = KEPT_ALIVE_MS;
     await new Promise((done, fail) => {
         server.once('error', fail);
         server.listen(port, '127.0.0.1', done);
