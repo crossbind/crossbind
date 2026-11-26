@@ -5,7 +5,9 @@
 import '/crossbind.js';
 import { events, invoke } from 'crossbind/app';
 import { preview } from '@crossbind/extension-preview';
-import { shownDialog, storage } from '../../app-preview/src/project-steps.js';
+import {
+    exitFullScreen, fullScreen, shownDialog, storage,
+} from '../../app-preview/src/project-steps.js';
 
 const DIALOG = "crossbind e2e: the app's own dialog, after a preview";
 
@@ -90,6 +92,19 @@ const STEPS = {
     paths: () => invoke('app.paths'),
     question: () => invoke('e2e-hooks.question'),
     askPermission: ({ kinds, origin }) => invoke('e2e-hooks.askPermission', { kinds, origin }),
+    indicator: () => invoke('e2e-hooks.indicator'),
+    fullScreen: (step) => fullScreen(step, (body) => ask('/report', body)),
+    exitFullScreen,
+    gesture: ({ script }) => invoke('e2e-hooks.gesture', { script }),
+    openPreview: ({ session }) => invoke('e2e-hooks.openPreview', { session }),
+    pickerUp: () => invoke('e2e-hooks.pickerUp'),
+    dismissPicker: () => invoke('e2e-hooks.dismissPicker'),
+    cycleActive: () => invoke('e2e-hooks.cycleActive'),
+    fillScreen: () => invoke('e2e-hooks.fillScreen'),
+    served: ({ origin }) => invoke('e2e-hooks.served', { name: origin }),
+    close: () => preview.close(),
+    // A request of an origin, as a page of the app's could make one: its status, or why it failed.
+    fetched: ({ url }) => fetch(url, { cache: 'no-store' }).then((answer) => `${answer.status}`, (error) => `${error.name}`),
 };
 
 async function run() {
@@ -101,6 +116,11 @@ async function run() {
         const step = await ask('/next');
         if (step.do === 'wait') continue;
         if (step.do === 'done') return;
+        // The page takes no next step, as Back its user presses, on Android, may move it.
+        if (step.do === 'stop') {
+            await ask('/report', { id: step.id, value: 'stopped' });
+            return;
+        }
         const result = await outcome(STEPS[step.do](step));
         await ask('/report', { id: step.id, ...result });
         if (step.do === 'open' && result.value?.url) {

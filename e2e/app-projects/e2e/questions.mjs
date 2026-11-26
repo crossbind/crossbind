@@ -104,6 +104,35 @@ public static class Question {
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr window);
     [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] static extern bool IsWindow(IntPtr window);
+    [DllImport("user32.dll")] public static extern bool IsWindowEnabled(IntPtr window);
+    [DllImport("user32.dll")] static extern IntPtr GetSystemMenu(IntPtr window, bool revert);
+    [DllImport("user32.dll")] static extern int GetMenuItemCount(IntPtr menu);
+    [DllImport("user32.dll")] static extern uint GetMenuItemID(IntPtr menu, int at);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetMenuStringW(IntPtr menu, uint item, StringBuilder text, int most, uint flags);
+    // The app's own window: its process's visible window that is no dialog.
+    public static IntPtr Main(uint process) {
+        IntPtr found = IntPtr.Zero;
+        EnumWindows((window, data) => {
+            uint owner;
+            GetWindowThreadProcessId(window, out owner);
+            var type = new StringBuilder(256);
+            GetClassNameW(window, type, type.Capacity);
+            if (owner != process || !IsWindowVisible(window) || type.ToString() == "#32770") return true;
+            found = window;
+            return false;
+        }, IntPtr.Zero);
+        return found;
+    }
+    // The command of the item of these words in a window's system menu, or 0.
+    public static uint Command(IntPtr window, string words) {
+        IntPtr menu = GetSystemMenu(window, false);
+        for (int at = 0; menu != IntPtr.Zero && at < GetMenuItemCount(menu); at += 1) {
+            var text = new StringBuilder(512);
+            GetMenuStringW(menu, (uint)at, text, text.Capacity, 0x400);
+            if (text.ToString().Replace("&&", "&") == words) return GetMenuItemID(menu, at);
+        }
+        return 0;
+    }
     public static bool Gone(IntPtr dialog, int ms) {
         DateTime until = DateTime.Now.AddMilliseconds(ms);
         while (IsWindow(dialog) && IsWindowVisible(dialog)) {
@@ -156,6 +185,15 @@ public static class Question {
 if (-not ('Question' -as [type])) { Add-Type -Path $env:CROSSBIND_E2E_TYPES }
 function Answer($asked) {
     if ($asked.mode -eq 'prepare') { return 'ready' }
+    # The app's window: whether it takes its user's input, and an item of its system menu's command, as a click sends it.
+    if ($asked.mode -eq 'input') { return [string][Question]::IsWindowEnabled([Question]::Main([uint32]$asked.process)) }
+    if ($asked.mode -eq 'command') {
+        $main = [Question]::Main([uint32]$asked.process)
+        $command = [Question]::Command($main, $asked.button)
+        if ($command -eq 0) { throw "the window's system menu has no item $($asked.button)" }
+        [void][Question]::PostMessageW($main, 0x0112, [IntPtr][int]$command, [IntPtr]::Zero)
+        return 'sent'
+    }
     $dialog = [Question]::Find([uint32]$asked.process, $asked.title)
     if ($dialog -eq [IntPtr]::Zero) { return 'null' }
     $all = [System.Windows.Automation.AutomationElement]::FromHandle($dialog).FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
@@ -271,6 +309,10 @@ export function questionsOn({
         async prepare() {
             if (platform === 'windows') await windows('prepare');
         },
+        // On Windows, read and pressed from outside, as a dialog up holds the page's answers: whether the app's window
+        // takes its user's input, and an item of its system menu pressed by the command its click sends.
+        windowTakesInput: async () => (await windows('input')) === 'True',
+        pressMenu: (words) => windows('command', words),
         // The question up now, read by the page of this role where the hooks read it.
         async read(role) {
             if (platform === 'windows') return JSON.parse(await windows('read'));
@@ -328,10 +370,10 @@ export function questionsOn({
 
 export function storeOn({
     platform, adb, applicationId, data,
-}) {
-    const file = join(data, 'preview', 'consents.json');
+}, name = 'consents.json') {
+    const file = join(data, 'preview', name);
     const shell = (command) => spawnSync(adb(), ['shell', `run-as ${applicationId()} sh -c '${command}'`], { encoding: 'utf8', timeout: TOOL_MS });
-    const relative = 'files/preview/consents.json';
+    const relative = `files/preview/${name}`;
     if (platform === 'android') {
         return {
             read() {
