@@ -49,6 +49,58 @@ UIButton *pillOf(UIWindow *window) {
     return nil;
 }
 
+// The preview's Permissions, a table in a navigation controller that a window presents, and that window.
+UITableViewController *permissionsUp(std::string *in = nullptr) {
+    for (UIWindow *window : {pillWindow(), (__bridge UIWindow *)crossbind::appWindow()}) {
+        for (UIViewController *shown = window.rootViewController.presentedViewController; shown; shown = shown.presentedViewController) {
+            UIViewController *top = [shown isKindOfClass:UINavigationController.class] ? ((UINavigationController *)shown).topViewController : nil;
+            if (![top isKindOfClass:UITableViewController.class]) continue;
+            if (in) *in = window == pillWindow() ? "pill" : "app";
+            return (UITableViewController *)top;
+        }
+    }
+    return nil;
+}
+
+// Its rows' words, in order, each with its switch where it has one.
+std::vector<std::pair<std::string, UISwitch *>> rowsOf(UITableViewController *table) {
+    std::vector<std::pair<std::string, UISwitch *>> rows;
+    [table.tableView layoutIfNeeded];
+    for (NSInteger row = 0; row < [table.tableView numberOfRowsInSection:0]; row += 1) {
+        UITableViewCell *cell = [table.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:row inSection:0]];
+        id words = cell.contentConfiguration;
+        rows.emplace_back([words isKindOfClass:UIListContentConfiguration.class] ? textOf(((UIListContentConfiguration *)words).text) : "",
+            [cell.accessoryView isKindOfClass:UISwitch.class] ? (UISwitch *)cell.accessoryView : nil);
+    }
+    return rows;
+}
+
+Value permissionsState() {
+    std::string in;
+    UITableViewController *table = permissionsUp(&in);
+    if (!table) return Value();
+    Value::Array rows;
+    for (const auto &[words, control] : rowsOf(table)) rows.emplace_back(Value::Object{{"words", words}, {"on", control ? Value(static_cast<bool>(control.on)) : Value()}});
+    return Value::Object{{"title", textOf(table.title)}, {"in", in}, {"rows", rows}, {"done", table.navigationItem.rightBarButtonItem != nil}};
+}
+
+// A switch of Permissions turned as a tap turns it, which sends its change; or its Done.
+std::optional<std::string> pressInPermissions(UITableViewController *table, const std::string &item) {
+    if (item == "Done") {
+        UIBarButtonItem *done = table.navigationItem.rightBarButtonItem;
+        if (!done) return "crossbind e2e: Permissions has no Done";
+        [UIApplication.sharedApplication sendAction:done.action to:done.target from:done forEvent:nil];
+        return std::nullopt;
+    }
+    for (const auto &[words, control] : rowsOf(table)) {
+        if (words != item || !control) continue;
+        [control setOn:!control.on animated:NO];
+        [control sendActionsForControlEvents:UIControlEventValueChanged];
+        return std::nullopt;
+    }
+    return "crossbind e2e: Permissions has no switch " + item;
+}
+
 }  // namespace
 
 // What the alert up shows, or null: its title and message, its actions and the one Return presses.
@@ -156,6 +208,8 @@ Value indicatorState() {
         for (UIAlertAction *action in menu.actions) actions.emplace_back(textOf(action.title));
         state.emplace_back("menu", Value::Object{{"title", textOf(menu.title)}, {"message", textOf(menu.message)}, {"items", actions}});
     }
+    const Value permissions = permissionsState();
+    if (!permissions.isNull()) state.emplace_back("permissions", permissions);
     return Value(std::move(state));
 }
 
@@ -167,6 +221,7 @@ void pressIndicator(Call call) {
     const std::string item = call.options()["item"].asString();
     const double ms = call.options()["ms"].asNumber(0);
     auto press = [item](std::function<void(std::optional<std::string>)> done) {
+        if (UITableViewController *permissions = permissionsUp()) return done(pressInPermissions(permissions, item));
         UIWindow *window = pillWindow();
         UIButton *pill = window ? pillOf(window) : nil;
         if (!pill) return done("crossbind e2e: no pill is up");
@@ -199,6 +254,33 @@ void pressIndicator(Call call) {
         press([call](std::optional<std::string> failure) {
             if (failure) call.reject(*failure);
             else call.resolve();
+        });
+    });
+}
+
+// A switch of Permissions held, with the sheet whose action it sends, while the preview ends by the app's own code,
+// then turned: a change that comes as its preview ends.
+void pressAfterEnd(Call call) {
+    const std::string words = call.options()["item"].asString();
+    crossbind::onMainThread([call, words] {
+        UITableViewController *table = permissionsUp();
+        UISwitch *held = nil;
+        if (table) {
+            for (const auto &[each, control] : rowsOf(table)) {
+                if (each == words) held = control;
+            }
+        }
+        if (!held) {
+            call.reject("crossbind e2e: Permissions has no switch " + words + " to hold");
+            return;
+        }
+        crossbind::invoke("preview.close", Value::Object{}, [call, held, table](std::optional<std::string> failure, Value) {
+            crossbind::onMainThread([call, held, table, failure] {
+                [held setOn:!held.on animated:NO];
+                [held sendActionsForControlEvents:UIControlEventValueChanged];
+                if (failure) call.reject(*failure);
+                else call.resolve(Value::Object{{"on", static_cast<bool>(held.on)}, {"sheet", textOf(NSStringFromClass(table.class))}});
+            });
         });
     });
 }

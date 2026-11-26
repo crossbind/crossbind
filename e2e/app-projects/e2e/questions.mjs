@@ -1,7 +1,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
-    existsSync, mkdirSync, readFileSync, rmSync, writeFileSync,
+    mkdirSync, readFileSync, rmSync, writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -25,7 +25,7 @@ const decoded = (text) => text.replace(/&(#x[0-9a-f]+|#\d+|\w+);/gi, (all, name)
 });
 
 // Each node of the screen uiautomator dumps, as its attributes.
-function screenOf(adb) {
+export function screenOf(adb) {
     for (let tries = 0; tries < DUMP_TRIES; tries += 1) {
         const { stdout = '' } = spawnSync(adb, ['exec-out', 'uiautomator', 'dump', '/dev/tty'], { encoding: 'utf8', timeout: TOOL_MS });
         const end = stdout.lastIndexOf('</hierarchy>');
@@ -38,7 +38,7 @@ function screenOf(adb) {
     throw new Error('uiautomator dumped no screen');
 }
 
-const centerOf = (node) => {
+export const centerOf = (node) => {
     const [left, top, right, bottom] = node.bounds.match(/\d+/g).map(Number);
     return [String(Math.round((left + right) / 2)), String(Math.round((top + bottom) / 2))];
 };
@@ -109,6 +109,7 @@ public static class Question {
     [DllImport("user32.dll")] static extern int GetMenuItemCount(IntPtr menu);
     [DllImport("user32.dll")] static extern uint GetMenuItemID(IntPtr menu, int at);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetMenuStringW(IntPtr menu, uint item, StringBuilder text, int most, uint flags);
+    [DllImport("user32.dll")] static extern IntPtr GetSubMenu(IntPtr menu, int at);
     // The app's own window: its process's visible window that is no dialog.
     public static IntPtr AppWindow(uint process) {
         IntPtr found = IntPtr.Zero;
@@ -123,10 +124,18 @@ public static class Question {
         }, IntPtr.Zero);
         return found;
     }
-    // The command of the item of these words in a window's system menu, or 0.
+    // The command of the item of these words in a window's system menu or a submenu of it, or 0.
     public static uint Command(IntPtr window, string words) {
-        IntPtr menu = GetSystemMenu(window, false);
+        return CommandIn(GetSystemMenu(window, false), words);
+    }
+    static uint CommandIn(IntPtr menu, string words) {
         for (int at = 0; menu != IntPtr.Zero && at < GetMenuItemCount(menu); at += 1) {
+            IntPtr inner = GetSubMenu(menu, at);
+            if (inner != IntPtr.Zero) {
+                uint found = CommandIn(inner, words);
+                if (found != 0) return found;
+                continue;
+            }
             var text = new StringBuilder(512);
             GetMenuStringW(menu, (uint)at, text, text.Capacity, 0x400);
             if (text.ToString().Replace("&&", "&") == words) return GetMenuItemID(menu, at);
@@ -392,7 +401,10 @@ export function storeOn({
             },
             write: (text) => shell(`mkdir -p files/preview && rm -rf ${relative} && echo ${Buffer.from(text).toString('base64')} | base64 -d > ${relative}`),
             unreadable: () => shell(`rm -rf ${relative} && mkdir -p ${relative}`),
-            remove: () => shell(`rm -rf ${relative}`),
+            // Its next write fails, a folder standing where the write goes first, and it is read as it was.
+            unwritable: () => shell(`mkdir -p ${relative}.new`),
+            writable: () => shell(`rm -rf ${relative}.new`),
+            remove: () => shell(`rm -rf ${relative} ${relative}.new`),
         };
     }
     return {
@@ -412,6 +424,10 @@ export function storeOn({
             rmSync(file, { recursive: true, force: true });
             mkdirSync(file, { recursive: true });
         },
-        remove: () => existsSync(file) && rmSync(file, { recursive: true, force: true }),
+        unwritable: () => mkdirSync(`${file}.new`, { recursive: true }),
+        writable: () => rmSync(`${file}.new`, { recursive: true, force: true }),
+        remove() {
+            for (const each of [file, `${file}.new`]) rmSync(each, { recursive: true, force: true });
+        },
     };
 }

@@ -101,14 +101,39 @@ GtkWidget *previewButton(GtkWidget **name = nullptr) {
     return web ? menuButtonOf(gtk_widget_get_parent(GTK_WIDGET(web)), name) : nullptr;
 }
 
-std::vector<GtkWidget *> itemsOf(GtkWidget *button) {
+std::vector<GtkWidget *> itemsOf(GtkWidget *menu) {
     std::vector<GtkWidget *> items;
-    GtkMenu *menu = button ? gtk_menu_button_get_popup(GTK_MENU_BUTTON(button)) : nullptr;
     if (!menu) return items;
     GList *children = gtk_container_get_children(GTK_CONTAINER(menu));
     for (GList *each = children; each; each = each->next) items.push_back(GTK_WIDGET(each->data));
     g_list_free(children);
     return items;
+}
+
+GtkWidget *popupOf(GtkWidget *button) { return button ? GTK_WIDGET(gtk_menu_button_get_popup(GTK_MENU_BUTTON(button))) : nullptr; }
+
+// A menu's items with their words, whether each takes a click and bears a check mark, and a submenu's own items.
+Value::Array valuesOf(GtkWidget *menu) {
+    Value::Array values;
+    for (GtkWidget *item : itemsOf(menu)) {
+        const gchar *words = gtk_menu_item_get_label(GTK_MENU_ITEM(item));
+        const bool isChecked = GTK_IS_CHECK_MENU_ITEM(item) && gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(item));
+        Value::Object each{{"words", Value(words ? words : "")}, {"enabled", static_cast<bool>(gtk_widget_get_sensitive(item))}, {"checked", isChecked}};
+        if (GtkWidget *submenu = gtk_menu_item_get_submenu(GTK_MENU_ITEM(item))) each.emplace_back("items", valuesOf(submenu));
+        values.emplace_back(std::move(each));
+    }
+    return values;
+}
+
+// The enabled item of these words, in the menu or in a submenu of it, that does something.
+GtkWidget *itemOf(GtkWidget *menu, const std::string &words) {
+    for (GtkWidget *item : itemsOf(menu)) {
+        GtkWidget *submenu = gtk_menu_item_get_submenu(GTK_MENU_ITEM(item));
+        const gchar *label = gtk_menu_item_get_label(GTK_MENU_ITEM(item));
+        if (!submenu && label && words == label && gtk_widget_get_sensitive(item)) return item;
+        if (GtkWidget *inner = submenu ? itemOf(submenu, words) : nullptr) return inner;
+    }
+    return nullptr;
 }
 
 }  // namespace
@@ -117,11 +142,7 @@ Value indicatorState() {
     GtkWidget *name = nullptr;
     GtkWidget *button = previewButton(&name);
     const gchar *title = crossbind::appWindow() ? gtk_window_get_title(GTK_WINDOW(crossbind::appWindow())) : nullptr;
-    Value::Array items;
-    for (GtkWidget *item : itemsOf(button)) {
-        const gchar *words = gtk_menu_item_get_label(GTK_MENU_ITEM(item));
-        items.emplace_back(Value::Object{{"words", Value(words ? words : "")}, {"enabled", static_cast<bool>(gtk_widget_get_sensitive(item))}});
-    }
+    const Value::Array items = valuesOf(popupOf(button));
     // A dialog of the window's own holds its input while it is up, by a grab in the window's group, which the host gives
     // each window of its own.
     GtkWindow *window = crossbind::appWindow() ? GTK_WINDOW(crossbind::appWindow()) : nullptr;
@@ -136,13 +157,10 @@ void indicatorUp(Call call) {
 }
 
 bool pressItem(const std::string &words) {
-    for (GtkWidget *item : itemsOf(previewButton())) {
-        const gchar *label = gtk_menu_item_get_label(GTK_MENU_ITEM(item));
-        if (!label || words != label || !gtk_widget_get_sensitive(item)) continue;
-        gtk_menu_item_activate(GTK_MENU_ITEM(item));
-        return true;
-    }
-    return false;
+    GtkWidget *item = itemOf(popupOf(previewButton()), words);
+    if (!item) return false;
+    gtk_menu_item_activate(GTK_MENU_ITEM(item));
+    return true;
 }
 
 // An item of the bar's menu activated now, or once ms passed, the call answered first, as when the press will reload

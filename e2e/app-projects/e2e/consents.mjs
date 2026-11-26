@@ -22,7 +22,7 @@ const COULD_NOT_KEEP = 'crossbind: preview could not keep an answer in its conse
 // Where a page's own request reaches page-permissions, as measured: the location everywhere. On macOS WebKit asks the
 // system's own question before page-permissions for the camera and the microphone, which no run answers; a runner of
 // Windows or Linux has neither, which their web views find before they ask.
-const PAGE_REACHES = {
+export const PAGE_REACHES = {
     macos: ['location'], ios: ['camera', 'microphone', 'location'], android: ['camera', 'microphone', 'location'], windows: ['location'], linux: ['location'],
 };
 
@@ -38,7 +38,7 @@ function expect(isHeld, problem) {
 const isLabel = (drawn, label) => typeof drawn === 'string' && drawn.toLowerCase() === label.toLowerCase();
 const isDontAllowOrNone = (drawn) => drawn === null || isLabel(drawn, "Don't Allow");
 
-function messageOf(project, kinds) {
+export function messageOf(project, kinds) {
     const named = kinds.map((kind, index) => `${index === 0 ? '' : index + 1 === kinds.length ? ' and ' : ', '}${NOUNS[kind]}`).join('');
     return `Allow “${project}” to use ${named}?`;
 }
@@ -191,6 +191,16 @@ export async function checkConsents(run) {
         await sleep(SETTLED_MS);
         expect(await questions.read('project') !== null, `the question went at ${way}: ${JSON.stringify(questions.screen())}`);
         report.left.push(way);
+    }
+    // On macOS a sheet that ends by neither of its buttons, as another's code may end one, answers as a question that
+    // could not be shown: its request denied, nothing kept, and the question free again, asked anew at the next request.
+    if (platform === 'macos') {
+        await valueOf(project({ do: 'endSheet' }), 'the sheet ended by neither button');
+        await expectDenied(endedAsk, 'a request whose question ended by neither button');
+        expect(kept(ended.origin, 'microphone') === undefined, `a question ended by neither button kept ${JSON.stringify(store.read())}`);
+        const [anew] = await start([{ kinds: ['microphone'], via: denyVia(['microphone']) }]);
+        await questionOf('project', anew, ENDED, ['microphone']);
+        report.endedByNeither = 'denied, asked anew';
     }
     await endPreview();
     await noQuestion('app', "the preview's end");
