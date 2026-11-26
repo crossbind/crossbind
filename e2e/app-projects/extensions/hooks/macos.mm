@@ -220,17 +220,29 @@ void noteLater(const std::string &endpoint, Call call) {
     });
 }
 
+// Each open panel up, a sheet of any window's, one waiting behind another sheet among them, or one modal to the app.
+NSArray<NSOpenPanel *> *panelsUp() {
+    NSMutableArray<NSOpenPanel *> *panels = [NSMutableArray array];
+    for (NSWindow *window in NSApp.windows) {
+        for (NSWindow *sheet in window.sheets) {
+            if ([sheet isKindOfClass:NSOpenPanel.class]) [panels addObject:(NSOpenPanel *)sheet];
+        }
+    }
+    if ([NSApp.modalWindow isKindOfClass:NSOpenPanel.class] && ![panels containsObject:(NSOpenPanel *)NSApp.modalWindow]) [panels addObject:(NSOpenPanel *)NSApp.modalWindow];
+    return panels;
+}
+
 void pickerUp(Call call) {
     crossbind::onMainThread([call] {
-        NSWindow *sheet = sheetUp();
-        call.resolve([sheet isKindOfClass:NSOpenPanel.class] ? Value("NSOpenPanel") : Value());
+        NSArray<NSOpenPanel *> *panels = panelsUp();
+        const bool isModal = [NSApp.modalWindow isKindOfClass:NSOpenPanel.class];
+        call.resolve(panels.count == 0 ? Value() : Value(std::to_string(panels.count) + " NSOpenPanel" + (isModal ? ", modal to the app" : "")));
     });
 }
 
 void dismissPicker(Call call) {
     crossbind::onMainThread([call] {
-        NSWindow *sheet = sheetUp();
-        if ([sheet isKindOfClass:NSOpenPanel.class]) [(NSOpenPanel *)sheet cancel:nil];
+        for (NSOpenPanel *panel in panelsUp()) [panel cancel:nil];
         call.resolve();
     });
 }

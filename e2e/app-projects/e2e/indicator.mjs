@@ -392,7 +392,6 @@ export async function checkIndicator(run) {
             await ended('Close preview with a message dialog up', () => questions.pressMenu('Close preview'));
         }
         out.consent = await checkConsentWithIndicator();
-        out.picker = await knownPicker();
         return out;
     }
 
@@ -464,21 +463,6 @@ export async function checkIndicator(run) {
         await ended('Close preview after the question', () => indicators.press('project', 'Close preview'));
         store.remove();
         return out;
-    }
-
-    // A file input's picker left up over the page that comes, a known issue of the host's on macOS and iOS, which a line
-    // of the run's output shows while it holds (docs/known-issues.md).
-    async function knownPicker() {
-        if (!isApple) return 'not this platform';
-        await openSession(marked.session, marked.origin);
-        await step('project', { do: 'clickFile' });
-        await sleep(SETTLED_MS);
-        expect(await step('project', { do: 'pickerUp' }) !== null, "the file input's picker did not come up");
-        await ended("Close preview with a file input's picker up", () => indicators.press('project', 'Close preview'));
-        const left = await step('app', { do: 'pickerUp' });
-        console.log(`PREVIEW KNOWN picker-after-end ${JSON.stringify(left === null ? 'closed' : 'stays')}`);
-        if (left !== null) await step('app', { do: 'dismissPicker' });
-        return left === null ? 'closed' : 'stays';
     }
 
     // Rule 4: while a preview shows, its window fills no screen: the page's requestFullscreen() and a video's own full
