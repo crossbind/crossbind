@@ -206,6 +206,27 @@ void crossbind_extension_e2e_hooks(crossbind::Registry &registry) {
             });
         }).detach();
     });
+    // A step's presses, of the preview's menu or of a question's button, and a session the app's own code opens, each
+    // once its ms passed, armed only once the run has the step's report, which the hook makes for the page: a press that
+    // ends the page cannot come before it, however slow the calls.
+    registry.function("e2e-hooks.presses", PAGES, [endpoint](Call call) {
+        const Value step = call.options();
+        const std::string report = Value(Value::Object{{"id", step["id"]}, {"value", "armed"}}).json();
+        crossbind::fetch("POST", endpoint + "/report?role=" + call.page().role(), {{"Content-Type", "application/json"}}, report,
+            [call, step](std::optional<std::string> failure, crossbind::FetchResponse) {
+                if (failure) {
+                    call.reject(*failure);
+                    return;
+                }
+                for (const Value &press : step["presses"].asArray()) {
+                    crossbind::invoke(press["item"].isNull() ? "e2e-hooks.press" : "e2e-hooks.pressIndicator", press, [](std::optional<std::string>, Value) {});
+                }
+                if (!step["open"].isNull()) {
+                    crossbind::invoke("e2e-hooks.openPreview", Value::Object{{"session", step["open"]}, {"ms", step["openMs"]}}, [](std::optional<std::string>, Value) {});
+                }
+                call.resolve();
+            });
+    });
     registry.function("e2e-hooks.openTwo", PAGES, openTwo);
     registry.function("e2e-hooks.closePreview", PAGES, [](Call call) {
         crossbind::invoke("preview.close", Value::Object{}, [call](std::optional<std::string> failure, Value) {

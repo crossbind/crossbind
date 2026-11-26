@@ -283,15 +283,17 @@ export async function runSteps(invoke, api) {
             return;
         }
         // Several presses of the preview's menu armed natively at once, and a session opened by the app's own code after
-        // them, as the presses may end the page before a step could arm the next.
+        // them, as the presses may end the page before a step could arm the next; the hook reports the step first.
         if (step.do === 'presses') {
-            for (const press of step.presses) await invoke('e2e-hooks.pressIndicator', { item: press.item, ms: press.ms });
-            if (step.open) await invoke('e2e-hooks.openPreview', { session: step.open, ms: step.openMs });
-            await ask('/report', { id: step.id, value: 'armed' });
+            await invoke('e2e-hooks.presses', {
+                id: step.id, presses: step.presses, open: step.open ?? null, openMs: step.openMs ?? 0,
+            });
             return;
         }
         if (step.do === 'pressIndicator' && step.ms) {
-            await ask('/report', { id: step.id, ...(await outcome(steps.pressIndicator(step))) });
+            await invoke('e2e-hooks.presses', {
+                id: step.id, presses: [{ item: step.item, ms: step.ms }], open: null, openMs: 0,
+            });
             return;
         }
         // A move of the page's own history, or to a path of its origin, once reported, and once the page has loaded: a
@@ -309,13 +311,12 @@ export async function runSteps(invoke, api) {
             return;
         }
         // The page's own dialog up as the preview's menu is pressed: the press, and the dialog's answer where the run
-        // gives one, armed natively first, as the dialog holds the page; the dialog's answer noted once it comes.
+        // gives one, armed natively first, as the dialog holds the page, once the hook has reported the step; the
+        // dialog's answer noted once it comes.
         if (step.do === 'held') {
-            for (const press of step.presses) {
-                if (press.item) await invoke('e2e-hooks.pressIndicator', { item: press.item, ms: press.ms });
-                else await invoke('e2e-hooks.press', { button: press.button, words: press.words, ms: press.ms });
-            }
-            await ask('/report', { id: step.id, value: 'armed' });
+            await invoke('e2e-hooks.presses', {
+                id: step.id, presses: step.presses, open: null, openMs: 0,
+            });
             // A page that stays once its dialog is answered, as no press reloads or ends it, takes the run's steps again.
             const answered = async (body) => {
                 await ask('/report', { event: 'answered', dialog: step.dialog, ...body }).catch(() => {});
