@@ -110,7 +110,7 @@ public static class Question {
     [DllImport("user32.dll")] static extern uint GetMenuItemID(IntPtr menu, int at);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetMenuStringW(IntPtr menu, uint item, StringBuilder text, int most, uint flags);
     // The app's own window: its process's visible window that is no dialog.
-    public static IntPtr Main(uint process) {
+    public static IntPtr AppWindow(uint process) {
         IntPtr found = IntPtr.Zero;
         EnumWindows((window, data) => {
             uint owner;
@@ -183,12 +183,18 @@ public static class Question {
 '@
 }
 if (-not ('Question' -as [type])) { Add-Type -Path $env:CROSSBIND_E2E_TYPES }
+# A helper that did not compile says why, where the run reads its first line.
+if (-not ('Question' -as [type])) {
+    [Console]::Out.WriteLine("no helper: $($Error -join ' | ')")
+    [Console]::Out.Flush()
+    exit 1
+}
 function Answer($asked) {
     if ($asked.mode -eq 'prepare') { return 'ready' }
     # The app's window: whether it takes its user's input, and an item of its system menu's command, as a click sends it.
-    if ($asked.mode -eq 'input') { return [string][Question]::IsWindowEnabled([Question]::Main([uint32]$asked.process)) }
+    if ($asked.mode -eq 'input') { return [string][Question]::IsWindowEnabled([Question]::AppWindow([uint32]$asked.process)) }
     if ($asked.mode -eq 'command') {
-        $main = [Question]::Main([uint32]$asked.process)
+        $main = [Question]::AppWindow([uint32]$asked.process)
         $command = [Question]::Command($main, $asked.button)
         if ($command -eq 0) { throw "the window's system menu has no item $($asked.button)" }
         [void][Question]::PostMessageW($main, 0x0112, [IntPtr][int]$command, [IntPtr]::Zero)
