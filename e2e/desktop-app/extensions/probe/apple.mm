@@ -8,10 +8,10 @@
 #import <objc/message.h>
 #if TARGET_OS_IPHONE
 #import <UIKit/UIKit.h>
-#import <WebKit/WebKit.h>
 #else
 #import <AppKit/AppKit.h>
 #endif
+#import <WebKit/WebKit.h>
 
 #include "crossbind/app.h"
 #include "probe.h"
@@ -279,6 +279,51 @@ void probePlatform(crossbind::Registry &registry) {
     registry.function("probe.close", [](Call call) {
         crossbind::onMainThread([call] {
             [(__bridge NSWindow *)crossbind::appWindow() performClose:nil];
+            call.resolve();
+        });
+    });
+    // A file input of the page in this window clicked as its user's click, the window in front first.
+    registry.function("probe.clickFile", [](Call call) {
+        const auto windowId = static_cast<uint64_t>(call.options()["window"].asNumber());
+        crossbind::onMainThread([call, windowId] {
+            const std::optional<crossbind::Window> window = crossbind::windowOf(windowId);
+            if (!window) {
+                call.reject("crossbind e2e: no window " + std::to_string(windowId) + " is open");
+                return;
+            }
+            [NSApp activateIgnoringOtherApps:YES];
+            [(__bridge NSWindow *)window->native() makeKeyAndOrderFront:nil];
+            WKWebView *page = (__bridge WKWebView *)window->webView();
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 800 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+                NSString *click = @"document.body.appendChild(Object.assign(document.createElement('input'), { type: 'file' })).click(); undefined";
+                [page evaluateJavaScript:click completionHandler:^(id, NSError *error) {
+                    if (error) call.reject(error.localizedDescription.UTF8String ?: "the click failed");
+                    else call.resolve();
+                }];
+            });
+        });
+    });
+    // Each window's page with the open panels among its sheets, one waiting behind another sheet among them; and of the
+    // app's, the open panels on the screen and whether one is modal to it.
+    registry.function("probe.pickers", [](Call call) {
+        crossbind::onMainThread([call] {
+            Value::Array shown;
+            for (const crossbind::Window &window : crossbind::openWindows()) {
+                double sheets = 0;
+                for (NSWindow *sheet in ((__bridge NSWindow *)window.native()).sheets) sheets += [sheet isKindOfClass:NSOpenPanel.class] ? 1 : 0;
+                NSString *url = ((__bridge WKWebView *)window.webView()).URL.absoluteString;
+                shown.emplace_back(Value::Object{{"id", static_cast<double>(window.id())}, {"url", url.UTF8String ?: ""}, {"panels", sheets}});
+            }
+            double visible = 0;
+            for (NSWindow *each in NSApp.windows) visible += [each isKindOfClass:NSOpenPanel.class] && each.visible ? 1 : 0;
+            call.resolve(Value::Object{{"windows", shown}, {"visible", visible}, {"modal", [NSApp.modalWindow isKindOfClass:NSOpenPanel.class]}});
+        });
+    });
+    registry.function("probe.dismissPickers", [](Call call) {
+        crossbind::onMainThread([call] {
+            for (NSWindow *each in NSApp.windows) {
+                if ([each isKindOfClass:NSOpenPanel.class]) [(NSOpenPanel *)each cancel:nil];
+            }
             call.resolve();
         });
     });
