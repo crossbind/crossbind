@@ -40,6 +40,21 @@ crossbind's OPFS backend needs; so nothing is turned on (measured 18 Nov 2026).
 - Remove when a WebKitGTK the app runs on gives a Worker the sync access handle with the features on, and the host
   turns them on; then drop the Linux sentence of `docs/api/extensions.md`'s Limits.
 
+## A file input's picker outlives its page on macOS and iOS
+
+A file input's picker that is up as its page goes, at a reload or as the page's origin ends, stays over the page that
+comes: on macOS the host's `page-files` opens `NSOpenPanel` as a sheet of the window, and the SDK's `FileInput` gives
+it no cancel to close it with as the page goes; iOS's picker is WebKit's own. A file chosen in it reaches no page, as
+WebKit hands it to the input that asked, whose page is gone, and allows no path. The preview extension's Reload and the
+end of a preview meet it; measured on macOS 27 and the iOS 27 Simulator on 26 Nov 2026.
+
+- Seen: 2026-11-26
+- Check: the macOS job of the last conformance run on main prints the picker left up after a preview's end:
+  `gh api "repos/:owner/:repo/actions/jobs/$(gh run view "$(gh run list --workflow test-node-addon-conformance.yml --branch main --limit 1 --json databaseId --jq '.[0].databaseId')" --json jobs --jq '.jobs[] | select(.name == "app") | .databaseId')/logs" | grep -m1 'PREVIEW KNOWN picker-after-end "stays"'`
+  prints a line.
+- Remove when `FileInput` has a cancel that `page-files` calls as its page goes or its origin ends, and the line says
+  `"closed"`; then make `knownPicker()` in `e2e/app-projects/e2e/indicator.mjs` expect it closed.
+
 ## fsync in a Node.js wasm build does not reach the disk
 
 Emscripten's WasmFS Node backend has no `NodeFile::flush`, so an `fsync` or `fdatasync` on a host file used to
