@@ -186,6 +186,15 @@ public:
     const std::string &sessionId() const { return sessionId_; }
     bool isSnapshot() const { return isSnapshot_; }
 
+    // The snapshot's page reloaded once its session is read again; a Reload while one waits for its reading joins it.
+    void reload(uint64_t window) {
+        if (isReloading_.exchange(true)) return;
+        read([self = shared_from_this(), window](const Reading &reading) {
+            self->isReloading_ = false;
+            if (!reading.isEnded && isOpenProxy(self.get())) reloadWindow(window);
+        });
+    }
+
     void answer(Request request) {
         std::string token;
         {
@@ -376,6 +385,7 @@ private:
     int renewals_ = 0;
     bool isReading_ = false;
     std::vector<std::function<void(const Reading &)>> waiting_;
+    std::atomic<bool> isReloading_{false};
 };
 
 std::mutex openerMutex;
@@ -386,8 +396,6 @@ std::optional<crossbind::Origin> openOrigin;
 std::shared_ptr<Proxy> openProxy;
 uint64_t openWindow = 0;
 uint64_t previews = 0;
-// Whether a Reload waits for its reading of the session, which another Reload joins.
-bool isReloading = false;
 
 bool isOpenProxy(const Proxy *proxy) {
     std::lock_guard<std::mutex> lock(openerMutex);
@@ -568,22 +576,8 @@ void reloadPreview() {
         window = openWindow;
     }
     if (!proxy) return;
-    if (!proxy->isSnapshot()) {
-        reloadWindow(window);
-        return;
-    }
-    {
-        std::lock_guard<std::mutex> lock(openerMutex);
-        if (isReloading) return;
-        isReloading = true;
-    }
-    proxy->read([proxy, window](const Reading &reading) {
-        {
-            std::lock_guard<std::mutex> lock(openerMutex);
-            isReloading = false;
-        }
-        if (!reading.isEnded && isOpenProxy(proxy.get())) reloadWindow(window);
-    });
+    if (proxy->isSnapshot()) proxy->reload(window);
+    else reloadWindow(window);
 }
 
 void readPreviewAgain() {
