@@ -2,7 +2,9 @@
 // in its window, and down once the preview ended and the window's next page that is no project's started, so that no
 // project's page shows without it. Each mark is its preview's, as serve() numbers them: an end or a line of another
 // preview changes nothing of it. A window that comes to show a project's page some other way carries it as well, and
-// the app's own page that comes to show in a window whose preview is open ends that preview, however it came.
+// the app's own page that comes to show in a window whose preview is open ends that preview, however it came. Each
+// platform's call only posts its work to the main thread, so it is made under the lock that decided it: the main
+// thread runs the calls of two threads in the order they were decided in.
 #include "preview.h"
 
 #include <map>
@@ -38,8 +40,7 @@ uint64_t windowFor(uint64_t window) {
 
 void pageStarted(const crossbind::Page &page) {
     const uint64_t window = page.windowId();
-    enum class Then { nothing, hide, end, mark } then = Then::nothing;
-    Shown words;
+    bool isEnding = false;
     {
         std::lock_guard<std::mutex> lock(indicatorMutex);
         const auto found = marked.find(window);
@@ -47,75 +48,57 @@ void pageStarted(const crossbind::Page &page) {
             // A project's page that started before its preview's end and is told after it still shows.
             if (page.role() != PROJECT_ROLE) {
                 marked.erase(found);
-                then = Then::hide;
+                hideIndicator(window);
             }
         } else if (found != marked.end() && page.role() == APP_ROLE) {
-            then = Then::end;
+            isEnding = true;
         } else if (found == marked.end() && shown && page.role() == PROJECT_ROLE) {
             marked[window] = {shownPreview, false};
-            words = *shown;
-            then = Then::mark;
+            showIndicator(window, *shown, [] {});
         }
     }
-    if (then == Then::hide) hideIndicator(window);
-    if (then == Then::end) closePreview();
-    if (then == Then::mark) showIndicator(window, words, [] {});
+    // The end takes the lock itself.
+    if (isEnding) closePreview();
 }
 
 }  // namespace
 
 void markPreview(uint64_t preview, uint64_t window, Shown words, std::function<void(uint64_t window)> then) {
     const uint64_t on = windowFor(window);
-    {
-        std::lock_guard<std::mutex> lock(indicatorMutex);
-        shownPreview = preview;
-        shown = words;
-        marked[on] = {preview, false};
-    }
+    std::lock_guard<std::mutex> lock(indicatorMutex);
+    shownPreview = preview;
+    shown = words;
+    marked[on] = {preview, false};
     showIndicator(on, words, [on, then] { then(on); });
 }
 
 void unmarkPreview(uint64_t preview) {
-    std::vector<uint64_t> windows;
-    {
-        std::lock_guard<std::mutex> lock(indicatorMutex);
-        if (shownPreview == preview) {
-            shownPreview = 0;
-            shown.reset();
-        }
-        for (auto &[window, mark] : marked) {
-            if (mark.preview != preview || mark.isEnding) continue;
-            mark.isEnding = true;
-            windows.push_back(window);
-        }
+    std::lock_guard<std::mutex> lock(indicatorMutex);
+    if (shownPreview == preview) {
+        shownPreview = 0;
+        shown.reset();
     }
-    for (const uint64_t window : windows) {
+    for (auto &[window, mark] : marked) {
+        if (mark.preview != preview || mark.isEnding) continue;
+        mark.isEnding = true;
         endIndicator(window, [window, preview](bool isShowingProject) {
-            {
-                std::lock_guard<std::mutex> lock(indicatorMutex);
-                const auto found = marked.find(window);
-                // Up again for the next preview meanwhile, or down already with the window's next page.
-                if (found == marked.end() || found->second.preview != preview || !found->second.isEnding || isShowingProject) return;
-                marked.erase(found);
-            }
+            std::lock_guard<std::mutex> lock(indicatorMutex);
+            const auto found = marked.find(window);
+            // Up again for the next preview meanwhile, or down already with the window's next page.
+            if (found == marked.end() || found->second.preview != preview || !found->second.isEnding || isShowingProject) return;
+            marked.erase(found);
             hideIndicator(window);
         });
     }
 }
 
 void relineIndicator(uint64_t preview, std::string line) {
-    std::vector<uint64_t> windows;
-    Shown words;
-    {
-        std::lock_guard<std::mutex> lock(indicatorMutex);
-        if (!shown || shownPreview != preview) return;
-        shown->line = std::move(line);
-        words = *shown;
-        for (const auto &[window, mark] : marked) {
-            if (mark.preview == preview && !mark.isEnding) windows.push_back(window);
-        }
+    std::lock_guard<std::mutex> lock(indicatorMutex);
+    if (!shown || shownPreview != preview) return;
+    shown->line = std::move(line);
+    for (const auto &[window, mark] : marked) {
+        if (mark.preview == preview && !mark.isEnding) showIndicator(window, *shown, [] {});
     }
-    for (const uint64_t window : windows) showIndicator(window, words, [] {});
 }
 
 void addIndicatorHooks(crossbind::Registry &registry) {
@@ -124,10 +107,8 @@ void addIndicatorHooks(crossbind::Registry &registry) {
     registry.onStart(listenToMenu);
 #else
     registry.onWindowClosed([](const crossbind::Window &window) {
-        {
-            std::lock_guard<std::mutex> lock(indicatorMutex);
-            marked.erase(window.id());
-        }
+        std::lock_guard<std::mutex> lock(indicatorMutex);
+        marked.erase(window.id());
         hideIndicator(window.id());
     });
 #endif
