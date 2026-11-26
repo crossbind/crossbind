@@ -243,6 +243,7 @@ export async function runSteps(invoke, api) {
         question: () => invoke('e2e-hooks.question'),
         press: ({ button, words, ms }) => invoke('e2e-hooks.press', { button, words, ms }),
         cancel: () => invoke('e2e-hooks.cancel'),
+        endSheet: () => invoke('e2e-hooks.endSheet'),
         notified,
         indicator: () => invoke('e2e-hooks.indicator'),
         fullScreen: (step) => fullScreen(step, (body) => ask('/report', body)),

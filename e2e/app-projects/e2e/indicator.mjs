@@ -194,18 +194,21 @@ export function indicatorsOn({
 
 // The project's name over the menu's line, and the items, as each platform draws them: two lines of one item on macOS
 // and Linux, two items on Windows, a sheet's title and message on iOS, a dialog's title and line on Android.
-function menuWords(platform, menu) {
+export function menuWords(platform, menu) {
     if (platform === 'ios') return { name: menu?.title, line: menu?.message, items: menu?.items.filter((item) => item !== 'Cancel') };
     if (platform === 'android') return { name: menu?.texts[0], line: menu?.texts[1], items: menu?.items };
     const items = (menu ?? []).filter((item) => !item.separator);
     if (platform === 'windows') {
-        const [reload, name, line, close] = items;
-        return { name: name?.words, line: line?.words, items: [reload?.words, close?.words] };
+        const [reload, name, line, permissions, close] = items;
+        return { name: name?.words, line: line?.words, items: [reload?.words, permissions?.words, close?.words] };
     }
-    const [reload, both, close] = items;
+    const [reload, both, permissions, close] = items;
     const [name, line] = (both?.words ?? '').split('\n');
-    return { name, line, items: [reload?.words, close?.words] };
+    return { name, line, items: [reload?.words, permissions?.words, close?.words] };
 }
+
+// The menu's items, in 7.3's order: Permissions is a submenu on a desktop, and opens a surface of its own on a phone.
+export const itemsOn = (platform) => ['Reload', ['macos', 'windows', 'linux'].includes(platform) ? 'Permissions' : 'Permissions…', 'Close preview'];
 
 export async function checkIndicator(run) {
     const {
@@ -265,8 +268,8 @@ export async function checkIndicator(run) {
     expect(firstPage?.indicator?.up === true, `the indicator was not up as the project's first page started: ${JSON.stringify(pagesSince(from))}`);
     const devLine = `${accountName} ${DOT} on ${marked.session.addresses[0]}`;
     const words = menuWords(platform, await indicators.menu('project'));
-    expect(words.name === MARKED_NAME && words.line === devLine && JSON.stringify(words.items) === JSON.stringify(['Reload', 'Close preview']),
-        `the preview's menu read ${JSON.stringify(words)}, not "${MARKED_NAME}" over "${devLine}" between Reload and Close preview`);
+    expect(words.name === MARKED_NAME && words.line === devLine && JSON.stringify(words.items) === JSON.stringify(itemsOn(platform)),
+        `the preview's menu read ${JSON.stringify(words)}, not "${MARKED_NAME}" over "${devLine}" before ${itemsOn(platform).join(', ')}`);
     report.menu = words;
     if (isDesktop) {
         await step('project', { do: 'title', text: 'crossbind e2e: a title of the page' });
@@ -737,9 +740,27 @@ export async function checkIndicator(run) {
         const isServed = await served(second.origin);
         const state = await indicators.read('app');
         expect(isServed === state.up && await questions.read('app') === null, `a second project opened as the first one's end came left ${JSON.stringify({ isServed, state })}`);
+        // The first one's end gave the web view its full screen back before the second's mark took it, in that order.
+        expect(!isServed || platform !== 'macos' || state.webTakesFullScreen === false, `the second project's web view took full screen: ${JSON.stringify(state)}`);
         out.secondAsFirstEnds = isServed ? 'the second open, its indicator up' : 'none, its indicator down';
         if (isServed) await step('app', { do: 'close' });
         await down('the indicator after the second project');
+        // Close preview pressed as the app's own code opens another session, both armed at once, the first opened by the
+        // app's own code too: the window shows the app's page throughout, and no page starts after the two to tidy what
+        // they leave, which is the order their platform's calls ran in. A second served has its indicator up, and on
+        // macOS its web view takes no full screen.
+        await step('app', { do: 'openPreview', session: marked.session.id });
+        await until(() => served(marked.origin), (isOpen) => isOpen === true, "the session the app's own code opened");
+        await step('app', { do: 'openPreview', session: second.session.id, ms: PRESS_MS });
+        await indicators.press('app', 'Close preview', PRESS_MS, true);
+        await sleep(SETTLED_MS);
+        const isSecond = await served(second.origin);
+        const after = await indicators.read('app');
+        expect(isSecond === after.up && (!isSecond || platform !== 'macos' || after.webTakesFullScreen === false),
+            `Close preview as the app's own code opened a second session left ${JSON.stringify({ isSecond, after })}`);
+        out.closeAsAppOpens = isSecond ? 'the second open, its indicator up' : 'none, its indicator down';
+        if (isSecond) await step('app', { do: 'close' });
+        await down('the indicator after Close preview as the app opened a second');
         out.twoOpens = await twoOpens();
         return out;
     }

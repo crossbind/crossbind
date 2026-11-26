@@ -25,14 +25,15 @@ std::string narrow(const wchar_t *text, int length) {
     return out;
 }
 
-// The system menu's items in order: each one's words, as a menu draws them, whether it takes a click and its command.
+// The system menu's items in order: each one's words, as a menu draws them, whether it takes a click, bears a check
+// mark, its command, and a submenu's own items.
 Value::Array itemsOf(HMENU menu) {
     Value::Array items;
     for (int at = 0; menu && at < GetMenuItemCount(menu); at += 1) {
         wchar_t text[MOST_CHARACTERS] = {};
         MENUITEMINFOW item{};
         item.cbSize = sizeof item;
-        item.fMask = MIIM_FTYPE | MIIM_STATE | MIIM_ID | MIIM_STRING;
+        item.fMask = MIIM_FTYPE | MIIM_STATE | MIIM_ID | MIIM_STRING | MIIM_SUBMENU;
         item.dwTypeData = text;
         item.cch = MOST_CHARACTERS;
         if (!GetMenuItemInfoW(menu, static_cast<UINT>(at), TRUE, &item)) continue;
@@ -42,9 +43,21 @@ Value::Array itemsOf(HMENU menu) {
         }
         std::string words = narrow(text, static_cast<int>(item.cch));
         for (std::size_t mark = words.find("&&"); mark != std::string::npos; mark = words.find("&&", mark + 1)) words.erase(mark, 1);
-        items.emplace_back(Value::Object{{"words", words}, {"enabled", (item.fState & MFS_DISABLED) == 0}, {"command", static_cast<double>(item.wID)}});
+        Value::Object each{{"words", words}, {"enabled", (item.fState & MFS_DISABLED) == 0}, {"checked", (item.fState & MFS_CHECKED) != 0},
+            {"command", static_cast<double>(item.wID)}};
+        if (item.hSubMenu) each.emplace_back("items", itemsOf(item.hSubMenu));
+        items.emplace_back(std::move(each));
     }
     return items;
+}
+
+// The enabled item of these words, in the menu or in a submenu of it, that sends a command.
+const Value *itemOf(const Value::Array &items, const std::string &words) {
+    for (const Value &item : items) {
+        if (item["words"].asString("") == words && item["enabled"].asBool(false) && item["items"].isNull()) return &item;
+        if (const Value *inner = item["items"].isArray() ? itemOf(item["items"].asArray(), words) : nullptr) return inner;
+    }
+    return nullptr;
 }
 
 }  // namespace
@@ -72,12 +85,11 @@ void pressIndicator(Call call) {
     const double ms = call.options()["ms"].asNumber(0);
     const auto press = [words]() -> bool {
         HWND window = static_cast<HWND>(crossbind::appWindow());
-        for (const Value &item : itemsOf(window ? GetSystemMenu(window, FALSE) : nullptr)) {
-            if (item["words"].asString("") != words || !item["enabled"].asBool(false)) continue;
-            PostMessageW(window, WM_SYSCOMMAND, static_cast<WPARAM>(item["command"].asNumber()), 0);
-            return true;
-        }
-        return false;
+        const Value::Array items = itemsOf(window ? GetSystemMenu(window, FALSE) : nullptr);
+        const Value *item = itemOf(items, words);
+        if (!item) return false;
+        PostMessageW(window, WM_SYSCOMMAND, static_cast<WPARAM>((*item)["command"].asNumber()), 0);
+        return true;
     };
     if (ms > 0) {
         call.resolve();

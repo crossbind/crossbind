@@ -121,8 +121,13 @@ void pressInQuestion(crossbind::Call call);
 #endif
 #if defined(__APPLE__) && !TARGET_OS_IPHONE
 void cancelInQuestion(crossbind::Call call);
+void endSheet(crossbind::Call call);
 void fillScreen(crossbind::Call call);
 void cycleActive(crossbind::Call call);
+#endif
+#if defined(__APPLE__)
+// A control of the preview's Permissions held while the preview ends, then pressed.
+void pressAfterEnd(crossbind::Call call);
 #endif
 #if !defined(__ANDROID__)
 // The preview's indicator as its user sees it now, on the main thread, and an item of its menu pressed: the platform's
@@ -185,6 +190,7 @@ void crossbind_extension_e2e_hooks(crossbind::Registry &registry) {
     registry.function("e2e-hooks.pressIndicator", PAGES, pressIndicator);
 #endif
 #if defined(__APPLE__)
+    registry.function("e2e-hooks.pressAfterEnd", PAGES, pressAfterEnd);
     registry.function("e2e-hooks.gesture", PAGES, gesture);
     registry.function("e2e-hooks.noteLater", PAGES, [endpoint](Call call) { noteLater(endpoint, call); });
     registry.function("e2e-hooks.pickerUp", PAGES, pickerUp);
@@ -231,7 +237,8 @@ void crossbind_extension_e2e_hooks(crossbind::Registry &registry) {
                         }).detach();
                         continue;
                     }
-                    crossbind::invoke(press["item"].isNull() ? "e2e-hooks.press" : "e2e-hooks.pressIndicator", press, [](std::optional<std::string>, Value) {});
+                    const char *pressing = !press["afterEnd"].isNull() ? "e2e-hooks.pressAfterEnd" : press["item"].isNull() ? "e2e-hooks.press" : "e2e-hooks.pressIndicator";
+                    crossbind::invoke(pressing, press, [](std::optional<std::string>, Value) {});
                 }
                 if (!step["open"].isNull()) {
                     crossbind::invoke("e2e-hooks.openPreview", Value::Object{{"session", step["open"]}, {"ms", step["openMs"]}}, [](std::optional<std::string>, Value) {});
@@ -288,6 +295,7 @@ void crossbind_extension_e2e_hooks(crossbind::Registry &registry) {
 #endif
 #if defined(__APPLE__) && !TARGET_OS_IPHONE
     registry.function("e2e-hooks.cancel", PAGES, cancelInQuestion);
+    registry.function("e2e-hooks.endSheet", PAGES, endSheet);
 #endif
 #if defined(__ANDROID__)
     registry.function("e2e-hooks.breakKey", [](Call call) {

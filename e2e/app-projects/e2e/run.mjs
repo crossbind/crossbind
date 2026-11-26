@@ -15,6 +15,7 @@ import {
 } from './cloud.mjs';
 import { checkConsents } from './consents.mjs';
 import { checkIndicator } from './indicator.mjs';
+import { checkPermissions } from './permissions.mjs';
 import { checkPickers } from './pickers.mjs';
 import { serveEndpoint } from './endpoint.mjs';
 import {
@@ -1065,6 +1066,19 @@ async function flow() {
         accountName: ACCOUNTS.main.name,
         signedOutWords: WORDS.signedOut,
     });
+    // What the preview's menu changes of what is kept: Permissions.
+    const permissions = await checkPermissions({
+        platform: devicePlatform,
+        endpoint,
+        openSession,
+        closePreview,
+        stepsProject: (projectName) => stepsProject(address, projectName),
+        device,
+        adb: adbPath,
+        applicationId: () => applicationIdOf(builtForDevice),
+        appPid: () => opened.child.pid,
+        appTitle: config.app.name,
+    });
     // A file input's picker closes as its page goes, where the host shows it.
     const pickers = await checkPickers({
         platform: devicePlatform,
@@ -1091,7 +1105,7 @@ async function flow() {
     const dependency = await checkOptimizedDependency(source, gateToken(dev.key));
     const secrets = checkSecrets();
     console.log(`PROJECTS CHECKS ${JSON.stringify({
-        platform: devicePlatform, keyring, stops, ownClipboard, first, consents, indicator, pickers, ranges, other, dependency, secrets,
+        platform: devicePlatform, keyring, stops, ownClipboard, first, consents, indicator, permissions, pickers, ranges, other, dependency, secrets,
     })}`);
     console.log(`TIMING a JavaScript edit to the page: ${first.js} ms`);
     console.log(`ok: ${devicePlatform} projects of e2e/app-projects`);

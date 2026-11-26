@@ -85,6 +85,19 @@ void pressInQuestion(Call call) {
     });
 }
 
+// The sheet up ended by neither of its buttons, as another's code may end it.
+void endSheet(Call call) {
+    crossbind::onMainThread([call] {
+        NSWindow *sheet = sheetUp();
+        if (!sheet) {
+            call.reject("crossbind e2e: no sheet is up to end");
+            return;
+        }
+        [(__bridge NSWindow *)crossbind::appWindow() endSheet:sheet returnCode:NSModalResponseCancel];
+        call.resolve();
+    });
+}
+
 // Escape's command, which AppKit sends along the responders of the sheet when none of its buttons takes Escape.
 void cancelInQuestion(Call call) {
     crossbind::onMainThread([call] {
@@ -118,16 +131,32 @@ bool webFullScreenOf(WKWebView *web) {
 
 }  // namespace
 
+// A menu's items with their words, whether each takes a click and bears a check mark, and a submenu's own items.
+Value::Array itemsOf(NSMenu *menu) {
+    Value::Array items;
+    for (NSMenuItem *item in menu.itemArray) {
+        NSString *words = item.attributedTitle.length > 0 ? item.attributedTitle.string : item.title;
+        Value::Object each{{"words", textOf(words)}, {"enabled", static_cast<bool>(item.enabled)}, {"checked", item.state == NSControlStateValueOn}};
+        if (item.submenu) each.emplace_back("items", itemsOf(item.submenu));
+        items.emplace_back(std::move(each));
+    }
+    return items;
+}
+
+// The enabled item of these words in the Preview menu or in a submenu of it.
+NSMenuItem *itemOf(NSMenu *menu, const std::string &words) {
+    for (NSMenuItem *item in menu.itemArray) {
+        if (textOf(item.title) == words && item.enabled && !item.submenu) return item;
+        if (NSMenuItem *inner = item.submenu ? itemOf(item.submenu, words) : nil) return inner;
+    }
+    return nil;
+}
+
 Value indicatorState() {
     NSWindow *window = (__bridge NSWindow *)crossbind::appWindow();
     WKWebView *web = (__bridge WKWebView *)crossbind::appWebView();
     NSMenuItem *menu = previewMenu();
-    Value::Array items;
-    for (NSMenuItem *item in menu.submenu.itemArray) {
-        NSString *words = item.attributedTitle.length > 0 ? item.attributedTitle.string : item.title;
-        items.emplace_back(Value::Object{{"words", textOf(words)}, {"enabled", static_cast<bool>(item.enabled)}});
-    }
-    return Value::Object{{"up", menu != nil}, {"title", textOf(window.title)}, {"items", menu ? Value(items) : Value()},
+    return Value::Object{{"up", menu != nil}, {"title", textOf(window.title)}, {"items", menu ? Value(itemsOf(menu.submenu)) : Value()},
         {"fullScreen", (window.styleMask & NSWindowStyleMaskFullScreen) != 0},
         {"windowTakesFullScreen", (window.collectionBehavior & NSWindowCollectionBehaviorFullScreenNone) == 0}, {"webTakesFullScreen", webFullScreenOf(web)}};
 }
@@ -136,18 +165,16 @@ void indicatorUp(Call call) {
     crossbind::onMainThread([call] { call.resolve(indicatorState()); });
 }
 
-// An item of the Preview menu, by its words, pressed now or once ms passed, as when the page's own dialog will hold it.
+// An item of the Preview menu or of its Permissions, by its words, pressed now or once ms passed, as when the page's
+// own dialog will hold it.
 void pressIndicator(Call call) {
     const std::string words = call.options()["item"].asString();
     const double ms = call.options()["ms"].asNumber(0);
     const auto press = [words]() -> std::optional<std::string> {
-        NSMenuItem *menu = previewMenu();
-        for (NSMenuItem *item in menu.submenu.itemArray) {
-            if (textOf(item.title) != words || !item.enabled) continue;
-            [menu.submenu performActionForItemAtIndex:[menu.submenu indexOfItem:item]];
-            return std::nullopt;
-        }
-        return "crossbind e2e: the Preview menu has no item " + words + " to press";
+        NSMenuItem *item = itemOf(previewMenu().submenu, words);
+        if (!item) return "crossbind e2e: the Preview menu has no item " + words + " to press";
+        [item.menu performActionForItemAtIndex:[item.menu indexOfItem:item]];
+        return std::nullopt;
     };
     if (ms > 0) {
         call.resolve();
@@ -158,6 +185,26 @@ void pressIndicator(Call call) {
         const std::optional<std::string> failure = press();
         if (failure) call.reject(*failure);
         else call.resolve();
+    });
+}
+
+// An item of the preview's Permissions, held while the preview ends by the app's own code, then pressed: a change that
+// comes as its preview ends.
+void pressAfterEnd(Call call) {
+    const std::string words = call.options()["item"].asString();
+    crossbind::onMainThread([call, words] {
+        NSMenuItem *item = itemOf(previewMenu().submenu, words);
+        if (!item) {
+            call.reject("crossbind e2e: the Preview menu has no item " + words + " to hold");
+            return;
+        }
+        crossbind::invoke("preview.close", Value::Object{}, [call, item](std::optional<std::string> failure, Value) {
+            crossbind::onMainThread([call, item, failure] {
+                [NSApp sendAction:item.action to:item.target from:item];
+                if (failure) call.reject(*failure);
+                else call.resolve();
+            });
+        });
     });
 }
 
