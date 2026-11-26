@@ -1,7 +1,7 @@
 export default function pageFiles() {
     return {
         name: 'page-files',
-        contract: 1,
+        contract: 6,
         root: import.meta.dirname,
         app: {
             macos: { sources: ['native/darwin.mm'] },

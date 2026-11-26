@@ -22,6 +22,9 @@ void crossbind_extension_page_files(crossbind::Registry &registry) {
             for (NSURL *url in panel.URLs) paths.emplace_back(url.path.UTF8String ?: "");
             input.pick(paths);
         };
+        // The panel closes as the input's page goes, as a sheet and where it runs modal to the app.
+        __weak NSOpenPanel *shown = panel;
+        input.onCancel([shown] { dispatch_async(dispatch_get_main_queue(), ^{ [shown cancel:nil]; }); });
         const std::optional<crossbind::Window> open = crossbind::windowOf(input.page().windowId());
         NSWindow *window = (__bridge NSWindow *)(open ? open->native() : crossbind::appWindow());
         if (window) {
