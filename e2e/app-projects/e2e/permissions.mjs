@@ -56,9 +56,9 @@ export async function checkPermissions(run) {
 
     let tags = 7000;
     const noted = (tag) => endpoint.notes.find((note) => note.event === 'requested' && note.tag === tag);
-    async function start(kind, via) {
+    async function start(kind, via, positionMs = platform === 'android' ? POSITION_MS : undefined) {
         const tag = (tags += 1);
-        const position = platform === 'android' && kind === 'location' ? { positionMs: POSITION_MS } : {};
+        const position = kind === 'location' && positionMs ? { positionMs } : {};
         const started = await step('project', { do: 'request', requests: [{ tag, kinds: [kind], via, ...position }] });
         expect(started === 'started', `the project's request of ${kind} started as ${JSON.stringify(started)}`);
         return tag;
@@ -226,6 +226,17 @@ export async function checkPermissions(run) {
     expect(isAllowed(await outcome(await start('location', allowVia('location'))), allowVia('location')), 'the location turned on was not allowed');
     await noQuestion('the location turned on');
     report.turned = { cameraOff: 'denied, false kept', locationOn: 'allowed, true kept' };
+    // On Windows and Linux, where the requests above go by the hook, the page's own: its location, with a time of its
+    // own as no position may come, allowed once turned on and denied once turned off again, so that neither web view
+    // keeps an answer of its own past the reload.
+    if (platform === 'windows' || platform === 'linux') {
+        const onByPage = await outcome(await start('location', 'page', POSITION_MS));
+        expect(isAllowed(onByPage, 'page'), `the location turned on was ${onByPage} to the page`);
+        await changed(['Location'], 'the location turned off');
+        const offByPage = await outcome(await start('location', 'page', POSITION_MS));
+        expect(offByPage === 'denied', `the location turned off was ${offByPage} to the page`);
+        report.byPage = { locationOn: onByPage, locationOff: offByPage };
+    }
 
     // A store that cannot be written: a change holds for the run, and the output says so. Written again, a change takes
     // the place of the answer held for the run.
