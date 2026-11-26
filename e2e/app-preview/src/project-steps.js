@@ -2,9 +2,12 @@
 // then takes each step from the run through the fixture's hooks, as the app's page does, and reports what each
 // answered: every function the app may register, called past its crossbind/app, and some through it; the events it
 // hears; its origin's storage; reads of its source; what it asks to use, and the question that asks its user; a reload;
-// and the preview's end, with a message dialog of its own up or none. Its storage step is the app's page's too.
+// the preview's end, with a message dialog of its own up or none; and what the preview's indicator and its menu do with
+// the page: a press of the menu with the page's own dialog up, its history, its whole viewport painted, its full
+// screen. Its storage and full screen steps are the app's page's too.
 const DIALOG = "crossbind e2e: a project's dialog, which its preview's end closes";
 const SHOWN_MS = 1500;
+const STAYED_MS = 3000;
 
 const failure = (error) => `${error?.name ?? 'Error'}: ${error?.message ?? error}`;
 const outcome = (promise) => promise.then((value) => ({ value: value ?? null }), (error) => ({ error: failure(error) }));
@@ -155,6 +158,51 @@ async function request({ requests }, invoke, note) {
     return 'started';
 }
 
+// The page's full screen as its user's click asks it, which the click itself, or a script run as one, starts once the
+// step armed it: the page's own element, a video's element, or a video's own full screen. Its answer is noted.
+export async function fullScreen({ way }, note) {
+    let video = document.querySelector('video');
+    if (way !== 'page' && !video) {
+        video = document.body.appendChild(Object.assign(document.createElement('video'), {
+            muted: true, playsInline: true, controls: true, src: '/inline.mp4',
+        }));
+        await new Promise((done) => {
+            video.addEventListener('loadedmetadata', done, { once: true });
+            setTimeout(done, 5000);
+        });
+    }
+    const asked = () => {
+        if (way === 'video') {
+            video.webkitEnterFullscreen();
+            return Promise.resolve('asked');
+        }
+        const element = way === 'page' ? document.documentElement : video;
+        return element.requestFullscreen ? element.requestFullscreen().then(() => 'full') : Promise.reject(new TypeError('no requestFullscreen'));
+    };
+    globalThis.e2eFullScreen = () => {
+        Promise.resolve().then(asked).then(
+            (outcome) => note({ event: 'fullScreen', way, outcome, element: document.fullscreenElement?.localName ?? null }),
+            (error) => note({ event: 'fullScreen', way, outcome: `${error.name}: ${error.message}` }),
+        ).catch(() => {});
+    };
+    document.addEventListener('click', globalThis.e2eFullScreen, { once: true });
+    return { enabled: document.fullscreenEnabled ?? null };
+}
+
+export async function exitFullScreen() {
+    await document.exitFullscreen?.().catch(() => {});
+    document.querySelector('video')?.webkitExitFullscreen?.();
+    return document.fullscreenElement ?? null;
+}
+
+// The page's whole viewport one colour above everything the page can draw, and its user's touch on it noted.
+async function paint({ color }, note) {
+    const cover = document.body.appendChild(document.createElement('div'));
+    cover.style.cssText = `position: fixed; inset: 0; z-index: 2147483647; background: ${color}`;
+    cover.addEventListener('click', (event) => note({ event: 'touched', x: event.clientX, y: event.clientY }).catch(() => {}));
+    return { width: innerWidth, height: innerHeight, ratio: devicePixelRatio };
+}
+
 // The web's own question for notifications, which a page of the app asks no one.
 async function notified() {
     return globalThis.Notification?.requestPermission ? String(await Notification.requestPermission()) : 'no Notification';
@@ -176,16 +224,101 @@ export async function runSteps(invoke, api) {
         fetched,
         request: (step) => request(step, invoke, (body) => ask('/report', body)),
         question: () => invoke('e2e-hooks.question'),
-        press: ({ button, words }) => invoke('e2e-hooks.press', { button, words }),
+        press: ({ button, words, ms }) => invoke('e2e-hooks.press', { button, words, ms }),
         cancel: () => invoke('e2e-hooks.cancel'),
         notified,
+        indicator: () => invoke('e2e-hooks.indicator'),
+        fullScreen: (step) => fullScreen(step, (body) => ask('/report', body)),
+        exitFullScreen,
+        paint: (step) => paint(step, (body) => ask('/report', body)),
+        // A message dialog of the page's own, up until the step after cancels its call.
+        dialogUp: async ({ text }) => {
+            globalThis.e2eDialog = new AbortController();
+            return (await shownDialog(invoke, text, globalThis.e2eDialog.signal)).first;
+        },
+        cancelDialog: async () => {
+            globalThis.e2eDialog?.abort();
+            return 'cancelled';
+        },
+        // A file input clicked as its user's click, by the hooks' script, and the picker it brings up read.
+        clickFile: async () => {
+            const input = document.body.appendChild(Object.assign(document.createElement('input'), { type: 'file' }));
+            globalThis.e2eFile = () => input.click();
+            await invoke('e2e-hooks.gesture', { script: 'e2eFile(); undefined' });
+            return 'clicked';
+        },
+        pickerUp: () => invoke('e2e-hooks.pickerUp'),
+        noteLater: ({ ms, tag }) => invoke('e2e-hooks.noteLater', { ms, tag }),
+        // Whether the page heard the preview's end, which it keeps where its next page reads it.
+        listenEnded: async () => {
+            api.events.on('preview.ended', () => localStorage.setItem('e2e-heard-ended', 'yes'));
+            return localStorage.getItem('e2e-heard-ended');
+        },
+        pressIndicator: ({ item, ms }) => invoke('e2e-hooks.pressIndicator', { item, ms }),
+        gesture: ({ script }) => invoke('e2e-hooks.gesture', { script }),
+        fillScreen: () => invoke('e2e-hooks.fillScreen'),
+        cycleActive: () => invoke('e2e-hooks.cycleActive'),
+        title: async ({ text }) => {
+            document.title = text;
+            return document.title;
+        },
     };
     // On Windows, where a task dialog up holds the page's answers, the run calls through DevTools.
     globalThis.crossbindE2e = { invoke };
-    await ask('/report', { loaded: location.origin });
+    await ask('/report', { loaded: location.origin, path: location.pathname, length: history.length });
     for (;;) {
         const step = await ask('/next');
         if (step.do === 'wait') continue;
+        // A press of the preview's menu that reloads or ends the page, which comes once the page has reported it: the
+        // page asks for no next step, which another page would get.
+        // The page takes no next step, as a press its user's taps make, on Android, will reload or end it.
+        if (step.do === 'stop') {
+            await ask('/report', { id: step.id, value: 'stopped' });
+            return;
+        }
+        // Several presses of the preview's menu armed natively at once, and a session opened by the app's own code after
+        // them, as the presses may end the page before a step could arm the next.
+        if (step.do === 'presses') {
+            for (const press of step.presses) await invoke('e2e-hooks.pressIndicator', { item: press.item, ms: press.ms });
+            if (step.open) await invoke('e2e-hooks.openPreview', { session: step.open, ms: step.openMs });
+            await ask('/report', { id: step.id, value: 'armed' });
+            return;
+        }
+        if (step.do === 'pressIndicator' && step.ms) {
+            await ask('/report', { id: step.id, ...(await outcome(steps.pressIndicator(step))) });
+            return;
+        }
+        // A move of the page's own history, or to a path of its origin, once reported, and once the page has loaded: a
+        // page's navigation before its load, with no user's activation, takes the page's own entry of the history.
+        if (step.do === 'navigate') {
+            await ask('/report', { id: step.id, value: { length: history.length } });
+            if (document.readyState !== 'complete') await new Promise((resolve) => { addEventListener('load', () => setTimeout(resolve), { once: true }); });
+            if (step.path) {
+                location.assign(step.path);
+                return;
+            }
+            history.go(step.n);
+            // A page the move left in place, as where the app refuses it, takes the run's steps again.
+            setTimeout(() => runSteps(invoke, api), STAYED_MS);
+            return;
+        }
+        // The page's own dialog up as the preview's menu is pressed: the press, and the dialog's answer where the run
+        // gives one, armed natively first, as the dialog holds the page; the dialog's answer noted once it comes.
+        if (step.do === 'held') {
+            for (const press of step.presses) {
+                if (press.item) await invoke('e2e-hooks.pressIndicator', { item: press.item, ms: press.ms });
+                else await invoke('e2e-hooks.press', { button: press.button, words: press.words, ms: press.ms });
+            }
+            await ask('/report', { id: step.id, value: 'armed' });
+            // A page that stays once its dialog is answered, as no press reloads or ends it, takes the run's steps again.
+            const answered = async (body) => {
+                await ask('/report', { event: 'answered', dialog: step.dialog, ...body }).catch(() => {});
+                if (step.resume) runSteps(invoke, api);
+            };
+            if (step.dialog === 'alert') setTimeout(() => answered({ value: String(alert(step.text)) }), 100);
+            else outcome(invoke('dialog.message', { message: step.text })).then(answered);
+            return;
+        }
         if (step.do === 'reload') {
             await ask('/report', { id: step.id, value: 'reloading' });
             location.reload();

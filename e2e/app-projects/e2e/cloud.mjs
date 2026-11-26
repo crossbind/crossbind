@@ -22,7 +22,7 @@ const SESSION_PATH = /^\/v1\/sessions\/([A-Za-z0-9_-]{22})$/;
 const SNAPSHOT_PATH = /^\/v1\/snapshots\/([A-Za-z0-9_-]{22})$/;
 const BLOCK = 512;
 const TYPES = {
-    html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8', css: 'text/css; charset=utf-8', json: 'application/json', wasm: 'application/wasm', svg: 'image/svg+xml',
+    html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8', css: 'text/css; charset=utf-8', json: 'application/json', wasm: 'application/wasm', svg: 'image/svg+xml', mp4: 'video/mp4',
 };
 
 export const newId = () => randomBytes(16).toString('base64url');
@@ -108,6 +108,8 @@ export async function standInCloud({ apiPort, snapshotsPort }) {
         return secret;
     };
     const settings = { page: null };
+    // The readings of a session the run holds the answer of until it lets them go, by the session's id.
+    const held = new Map();
     let api = '';
     const listed = (account) => [...sessions.values()].filter((session) => session.account.id === account.id && (session.source === 'dev' || session.version > 0))
         .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
@@ -149,7 +151,8 @@ export async function standInCloud({ apiPort, snapshotsPort }) {
         return { ...held, token };
     };
 
-    function answerApi(asked, answer, text) {
+    function answerApi(asked, answer, text, isLetGo = false) {
+        if (isLetGo) held.delete(SESSION_PATH.exec(new URL(asked.url, 'http://cloud').pathname)?.[1]);
         const { pathname } = new URL(asked.url, 'http://cloud');
         const route = routes[`${asked.method} ${pathname}`];
         if (route) return route(asked, answer, text.length > 0 ? JSON.parse(text) : {});
@@ -182,9 +185,11 @@ export async function standInCloud({ apiPort, snapshotsPort }) {
             return held && json(answer, 200, { sessions: listed(held.account).map(shown) });
         }
         if (call === 'GET /v1/sessions/<id>') {
-            const held = signedIn(asked, answer, app);
-            if (!held) return null;
-            const found = listed(held.account).find(({ id }) => id === session);
+            const holding = held.get(session);
+            if (holding) return holding.then(() => answerApi(asked, answer, text, true));
+            const caller = signedIn(asked, answer, app);
+            if (!caller) return null;
+            const found = listed(caller.account).find(({ id }) => id === session);
             return found ? json(answer, 200, shown(found)) : json(answer, 404, { error: 'No session of this account has this id.' });
         }
         if (call === 'POST /v1/snapshots') {
@@ -307,6 +312,32 @@ export async function standInCloud({ apiPort, snapshotsPort }) {
         // A new key for a snapshot, as a sign-out of a device makes one.
         rekey(id) {
             sessions.get(id).key = kept(newKey());
+        },
+        // A snapshot of a project's files, as crossbind app preview --cloud makes one, at version 1; a higher version of
+        // it, as an upload again makes one; and its removal.
+        snapshot(account, project, files) {
+            const id = newId();
+            sessions.set(id, {
+                id, source: 'snapshot', account, project, addresses: [], protocol: 1, key: kept(newKey()), version: 1, createdAt: new Date().toISOString(),
+                files: new Map(Object.entries(files).map(([path, body]) => [path, Buffer.from(body)])),
+            });
+            return sessions.get(id);
+        },
+        raise(id) {
+            sessions.get(id).version += 1;
+        },
+        remove(id) {
+            sessions.delete(id);
+        },
+        // The app's tokens taken back, as a sign-out elsewhere does: its next call gets 401.
+        revokeApps() {
+            for (const [token, kept] of tokens) if (kept.kind === 'app') tokens.delete(token);
+        },
+        // The next readings of this session wait until the function given back lets them go.
+        hold(id) {
+            let release;
+            held.set(id, new Promise((done) => { release = done; }));
+            return release;
         },
         // The device page the next sign-in names.
         pageAt(page) {

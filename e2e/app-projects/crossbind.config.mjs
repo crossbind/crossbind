@@ -24,7 +24,8 @@ export default {
             location: 'A project this app opens may use your location. It asks you again for each project.',
         },
     },
-    extensions: [preview(CLOUD), clipboard(), hooks({ endpoint: ENDPOINT })],
+    // The hooks first, whose note of each page start reads the indicator before the preview's own hook changes it.
+    extensions: [hooks({ endpoint: ENDPOINT }), preview(CLOUD), clipboard()],
     paths: {
         config: import.meta.url,
         base: '../..',

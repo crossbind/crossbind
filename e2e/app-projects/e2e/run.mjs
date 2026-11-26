@@ -14,6 +14,7 @@ import {
     ACCOUNTS, CLI_TOKEN, COMPILED, gateToken, newId, newKey, sessionAnswer, standInCloud, standInSource,
 } from './cloud.mjs';
 import { checkConsents } from './consents.mjs';
+import { checkIndicator } from './indicator.mjs';
 import { serveEndpoint } from './endpoint.mjs';
 import {
     CLOUD, CLOUD_PORT, ENDPOINT_PORT, SNAPSHOTS_PORT,
@@ -415,11 +416,23 @@ const STEPS_PAGE = '<!doctype html><meta charset="utf-8"><title>e2e project</tit
     + "const api = await import('/__crossbind/app.js'); const { runSteps } = await import('/project-steps.js'); runSteps(api.invoke, api);</script>";
 const stepsModule = () => readFileSync(join(fixture, 'src', 'project-steps.js'), 'utf8');
 
+// The files of a page of the project's steps alone: its first page, two more of the same origin, and a video.
+const stepsFiles = () => ({
+    'index.html': STEPS_PAGE, 'first.html': STEPS_PAGE, 'second.html': STEPS_PAGE, 'project-steps.js': stepsModule(), 'inline.mp4': readFileSync(join(repository, 'e2e', 'desktop-app', 'public', 'inline.mp4')),
+});
+
 // A project of this name, served by a server of the run's own, whose page takes the project's steps alone: at its
 // origin's name and URL.
 async function stepsProject(address, projectName) {
-    const files = { '/index.html': STEPS_PAGE, '/project-steps.js': stepsModule() };
+    const files = Object.fromEntries(Object.entries(stepsFiles()).map(([path, body]) => [`/${path}`, body]));
     const { session } = await listedSource(address, { project: { id: newId(), name: projectName } }, asPreview(), files);
+    const origin = originName(ACCOUNTS.main, session.project.id);
+    return { session, origin, url: originUrl(origin) };
+}
+
+// A snapshot of a project of this name, of the same steps page, which the stand-in's snapshot host serves.
+function stepsSnapshot(projectName) {
+    const session = cloud.snapshot(ACCOUNTS.main, { id: newId(), name: projectName }, stepsFiles());
     const origin = originName(ACCOUNTS.main, session.project.id);
     return { session, origin, url: originUrl(origin) };
 }
@@ -747,6 +760,48 @@ async function clickedRead() {
     return inPage('globalThis.crossbindClicked', mouse('mousePressed'), mouse('mouseReleased'));
 }
 
+// A click on the page as its user's, on which a step of its armed what the click asks: on Apple's platforms a script
+// the hooks run as WebKit takes its user's tap, on Linux xdotool's click in the app's window, on Windows DevTools' mouse.
+async function clickPage(role) {
+    if (isApple) {
+        await endpoint.step(role, { do: 'gesture', script: 'e2eFullScreen(); undefined' });
+        return;
+    }
+    if (isWindows) {
+        const mouse = (type) => ({ method: 'Input.dispatchMouseEvent', params: { type, x: 120, y: 120, button: 'left', clickCount: 1 } });
+        await devTools([mouse('mousePressed'), mouse('mouseReleased')]);
+        return;
+    }
+    const windows = spawnSync('xdotool', ['search', '--onlyvisible', '--pid', String(opened.child.pid)], { encoding: 'utf8' }).stdout.split('\n').filter(Boolean);
+    const window = windows.at(-1);
+    expect(window, "xdotool found no window of the app's to click");
+    spawnSync('xdotool', ['windowactivate', '--sync', window]);
+    spawnSync('xdotool', ['mousemove', '--window', window, '200', '240', 'click', '1']);
+}
+
+// The app gone behind another and in front again, where a run can make its return to the front: whether it did.
+async function returnToFront() {
+    if (!platform && process.platform === 'darwin') {
+        const { value } = await project({ do: 'cycleActive' });
+        return value?.wasActive === true && value.isActive === true;
+    }
+    if (platform === 'ios') {
+        const app = execFileSync('plutil', ['-extract', 'CFBundleIdentifier', 'raw', join(builtForDevice, 'Info.plist')], { encoding: 'utf8' }).trim();
+        execFileSync('xcrun', ['simctl', 'launch', 'booted', 'com.apple.Preferences']);
+        await new Promise((done) => { setTimeout(done, 2000); });
+        execFileSync('xcrun', ['simctl', 'launch', 'booted', app]);
+        return true;
+    }
+    if (platform === 'android') {
+        const { adbPath } = await import('crossbind/src/actions/androidDevice.js');
+        execFileSync(adbPath(), ['shell', 'input', 'keyevent', 'KEYCODE_HOME']);
+        await new Promise((done) => { setTimeout(done, 2000); });
+        execFileSync(adbPath(), ['shell', 'monkey', '-p', applicationIdOf(builtForDevice), '-c', 'android.intent.category.LAUNCHER', '1']);
+        return true;
+    }
+    return false;
+}
+
 // 2, 4 and 5 for the first project: its page's lines, its JavaScript in place, every function the app may register
 // called by it, the events it hears, a path the app picked, the clipboard's read on its user's click on Windows, and its
 // storage.
@@ -979,6 +1034,29 @@ async function flow() {
         appTitle: config.app.name,
     });
 
+    // 8: what shows that a preview is one, and what leaves it.
+    const indicator = await checkIndicator({
+        closePreview,
+        appPid: () => opened.child.pid,
+        clickPage,
+        returnToFront,
+        platform: devicePlatform,
+        endpoint,
+        app,
+        openSession,
+        stepsProject: (projectName) => stepsProject(address, projectName),
+        stepsSnapshot,
+        second: { session: second.session, origin: originName(ACCOUNTS.main, second.session.project.id) },
+        cloud,
+        signIn: () => signIn(ACCOUNTS.main, NUMBER),
+        inPage,
+        adb: adbPath,
+        applicationId: () => applicationIdOf(builtForDevice),
+        appTitle: config.app.name,
+        accountName: ACCOUNTS.main.name,
+        signedOutWords: WORDS.signedOut,
+    });
+
     // 7: the snapshot, at the project's one origin.
     const snapshotSheet = await openSession(snapshot, devOrigin);
     expect(snapshotSheet.source === 'snapshot' && snapshotSheet.version === 1 && snapshotSheet.opened === null, `the snapshot's Open sheet read ${JSON.stringify(snapshotSheet)}`);
@@ -995,7 +1073,7 @@ async function flow() {
     const dependency = await checkOptimizedDependency(source, gateToken(dev.key));
     const secrets = checkSecrets();
     console.log(`PROJECTS CHECKS ${JSON.stringify({
-        platform: devicePlatform, keyring, stops, ownClipboard, first, consents, ranges, other, dependency, secrets,
+        platform: devicePlatform, keyring, stops, ownClipboard, first, consents, indicator, ranges, other, dependency, secrets,
     })}`);
     console.log(`TIMING a JavaScript edit to the page: ${first.js} ms`);
     console.log(`ok: ${devicePlatform} projects of e2e/app-projects`);

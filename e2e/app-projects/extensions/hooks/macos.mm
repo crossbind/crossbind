@@ -4,6 +4,7 @@
 #include "crossbind/extension.h"
 
 #import <AppKit/AppKit.h>
+#import <WebKit/WebKit.h>
 
 namespace {
 
@@ -59,18 +60,28 @@ void questionUp(Call call) {
     });
 }
 
+// A button of the sheet up pressed, now or once ms passed, as when the page's own dialog will hold the page.
 void pressInQuestion(Call call) {
     const std::string title = call.options()["button"].asString();
-    crossbind::onMainThread([call, title] {
+    const double ms = call.options()["ms"].asNumber(0);
+    const auto press = [title]() -> bool {
         NSWindow *sheet = sheetUp();
         Value::Array texts;
         for (NSButton *button in sheet ? buttonsOf(sheet, texts) : @[]) {
             if (textOf(button.title) != title) continue;
             [button performClick:nil];
-            call.resolve();
-            return;
+            return true;
         }
-        call.reject("crossbind e2e: no sheet up has a button " + title);
+        return false;
+    };
+    if (ms > 0) {
+        call.resolve();
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, static_cast<int64_t>(ms * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{ press(); });
+        return;
+    }
+    crossbind::onMainThread([call, title, press] {
+        if (press()) call.resolve();
+        else call.reject("crossbind e2e: no sheet up has a button " + title);
     });
 }
 
@@ -83,6 +94,143 @@ void cancelInQuestion(Call call) {
             return;
         }
         [(sheet.firstResponder ?: sheet) tryToPerform:@selector(cancelOperation:) with:nil];
+        call.resolve();
+    });
+}
+
+// The preview's indicator as its user sees it on macOS: the app window's title and the Preview menu of the menu bar,
+// its items with their words, and whether the window and its web view may fill the screen; an item of the menu pressed
+// as AppKit performs a click on it; a script run in the page as its user's click would run it, which WebKit takes as
+// its user's gesture; and the window's own full screen, as its green button asks it.
+namespace {
+
+NSMenuItem *previewMenu() {
+    for (NSMenuItem *top in NSApp.mainMenu.itemArray) {
+        if ([top.title isEqualToString:@"Preview"] && top.submenu) return top;
+    }
+    return nil;
+}
+
+bool webFullScreenOf(WKWebView *web) {
+    if (@available(macOS 12.3, *)) return web.configuration.preferences.elementFullscreenEnabled;
+    return [[web.configuration.preferences valueForKey:@"fullScreenEnabled"] boolValue];
+}
+
+}  // namespace
+
+Value indicatorState() {
+    NSWindow *window = (__bridge NSWindow *)crossbind::appWindow();
+    WKWebView *web = (__bridge WKWebView *)crossbind::appWebView();
+    NSMenuItem *menu = previewMenu();
+    Value::Array items;
+    for (NSMenuItem *item in menu.submenu.itemArray) {
+        NSString *words = item.attributedTitle.length > 0 ? item.attributedTitle.string : item.title;
+        items.emplace_back(Value::Object{{"words", textOf(words)}, {"enabled", static_cast<bool>(item.enabled)}});
+    }
+    return Value::Object{{"up", menu != nil}, {"title", textOf(window.title)}, {"items", menu ? Value(items) : Value()},
+        {"fullScreen", (window.styleMask & NSWindowStyleMaskFullScreen) != 0},
+        {"windowTakesFullScreen", (window.collectionBehavior & NSWindowCollectionBehaviorFullScreenNone) == 0}, {"webTakesFullScreen", webFullScreenOf(web)}};
+}
+
+void indicatorUp(Call call) {
+    crossbind::onMainThread([call] { call.resolve(indicatorState()); });
+}
+
+// An item of the Preview menu, by its words, pressed now or once ms passed, as when the page's own dialog will hold it.
+void pressIndicator(Call call) {
+    const std::string words = call.options()["item"].asString();
+    const double ms = call.options()["ms"].asNumber(0);
+    const auto press = [words]() -> std::optional<std::string> {
+        NSMenuItem *menu = previewMenu();
+        for (NSMenuItem *item in menu.submenu.itemArray) {
+            if (textOf(item.title) != words || !item.enabled) continue;
+            [menu.submenu performActionForItemAtIndex:[menu.submenu indexOfItem:item]];
+            return std::nullopt;
+        }
+        return "crossbind e2e: the Preview menu has no item " + words + " to press";
+    };
+    if (ms > 0) {
+        call.resolve();
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, static_cast<int64_t>(ms * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{ press(); });
+        return;
+    }
+    crossbind::onMainThread([call, press] {
+        const std::optional<std::string> failure = press();
+        if (failure) call.reject(*failure);
+        else call.resolve();
+    });
+}
+
+// The app in front first, as WebKit takes no full screen of a page whose window is hidden behind another app's.
+void gesture(Call call) {
+    NSString *script = @(call.options()["script"].asString().c_str());
+    crossbind::onMainThread([call, script] {
+        [NSApp activateIgnoringOtherApps:YES];
+        [(__bridge NSWindow *)crossbind::appWindow() makeKeyAndOrderFront:nil];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 800 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+            [(__bridge WKWebView *)crossbind::appWebView() evaluateJavaScript:script completionHandler:^(id, NSError *error) {
+                if (error) call.reject(textOf(error.localizedDescription));
+                else call.resolve();
+            }];
+        });
+    });
+}
+
+// The app in front first, as a window behind another's takes no full screen, then the window's own toggle.
+void fillScreen(Call call) {
+    crossbind::onMainThread([call] {
+        NSWindow *window = (__bridge NSWindow *)crossbind::appWindow();
+        [NSApp activateIgnoringOtherApps:YES];
+        [window makeKeyAndOrderFront:nil];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 800 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+            [window toggleFullScreen:nil];
+            call.resolve();
+        });
+    });
+}
+
+// The app hidden, as another app taking its user's front does, then in front again: its return to the front, which
+// macOS gives only where no other app holds its user's front. Whether the app was active, and is.
+void cycleActive(Call call) {
+    crossbind::onMainThread([call] {
+        const bool wasActive = NSApp.active;
+        [NSApp hide:nil];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 800 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+            [NSApp unhide:nil];
+            [NSApp activateIgnoringOtherApps:YES];
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 800 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+                call.resolve(Value::Object{{"wasActive", wasActive}, {"isActive", static_cast<bool>(NSApp.active)}});
+            });
+        });
+    });
+}
+
+// The indicator and what the app shows over the page noted at the run's endpoint once ms passed, as when the page's own
+// dialog will hold the page; a file input of the page clicked as its user's click, the picker it brings up read, and
+// closed as its user's Cancel closes it.
+void noteLater(const std::string &endpoint, Call call) {
+    const double ms = call.options()["ms"].asNumber();
+    const std::string tag = call.options()["tag"].asString();
+    call.resolve();
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, static_cast<int64_t>(ms * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
+        NSWindow *sheet = sheetUp();
+        const Value noted = Value::Object{{"event", "later"}, {"tag", tag}, {"indicator", indicatorState()},
+            {"sheet", sheet ? Value(textOf(NSStringFromClass(sheet.class))) : Value()}};
+        crossbind::fetch("POST", endpoint + "/report?role=app", {{"Content-Type", "application/json"}}, noted.json(), [](std::optional<std::string>, crossbind::FetchResponse) {});
+    });
+}
+
+void pickerUp(Call call) {
+    crossbind::onMainThread([call] {
+        NSWindow *sheet = sheetUp();
+        call.resolve([sheet isKindOfClass:NSOpenPanel.class] ? Value("NSOpenPanel") : Value());
+    });
+}
+
+void dismissPicker(Call call) {
+    crossbind::onMainThread([call] {
+        NSWindow *sheet = sheetUp();
+        if ([sheet isKindOfClass:NSOpenPanel.class]) [(NSOpenPanel *)sheet cancel:nil];
         call.resolve();
     });
 }

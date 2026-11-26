@@ -72,3 +72,75 @@ void pressInQuestion(Call call) {
         call.reject("crossbind e2e: no dialog up has a button " + label);
     });
 }
+
+// The preview's indicator as its user sees it on Linux: the app window's title, and the bar above its page, with the
+// project's name and the preview's menu, its items with their words; an item of the menu pressed as its user's click
+// activates it.
+namespace {
+
+// The bar the preview adds to the window's box, above the page: a box of a label and a menu button.
+GtkWidget *menuButtonOf(GtkWidget *box, GtkWidget **name) {
+    GtkWidget *found = nullptr;
+    GList *children = gtk_container_get_children(GTK_CONTAINER(box));
+    for (GList *each = children; each && !found; each = each->next) {
+        if (!GTK_IS_BOX(each->data)) continue;
+        GList *inner = gtk_container_get_children(GTK_CONTAINER(each->data));
+        for (GList *part = inner; part; part = part->next) {
+            if (GTK_IS_MENU_BUTTON(part->data)) found = GTK_WIDGET(part->data);
+            else if (GTK_IS_LABEL(part->data) && name) *name = GTK_WIDGET(part->data);
+        }
+        g_list_free(inner);
+    }
+    g_list_free(children);
+    return found;
+}
+
+GtkWidget *previewButton(GtkWidget **name = nullptr) {
+    void *web = crossbind::appWebView();
+    return web ? menuButtonOf(gtk_widget_get_parent(GTK_WIDGET(web)), name) : nullptr;
+}
+
+std::vector<GtkWidget *> itemsOf(GtkWidget *button) {
+    std::vector<GtkWidget *> items;
+    GtkMenu *menu = button ? gtk_menu_button_get_popup(GTK_MENU_BUTTON(button)) : nullptr;
+    if (!menu) return items;
+    GList *children = gtk_container_get_children(GTK_CONTAINER(menu));
+    for (GList *each = children; each; each = each->next) items.push_back(GTK_WIDGET(each->data));
+    g_list_free(children);
+    return items;
+}
+
+}  // namespace
+
+Value indicatorState() {
+    GtkWidget *name = nullptr;
+    GtkWidget *button = previewButton(&name);
+    const gchar *title = crossbind::appWindow() ? gtk_window_get_title(GTK_WINDOW(crossbind::appWindow())) : nullptr;
+    Value::Array items;
+    for (GtkWidget *item : itemsOf(button)) {
+        const gchar *words = gtk_menu_item_get_label(GTK_MENU_ITEM(item));
+        items.emplace_back(Value::Object{{"words", Value(words ? words : "")}, {"enabled", static_cast<bool>(gtk_widget_get_sensitive(item))}});
+    }
+    // A dialog of the window's own holds its input while it is up.
+    return Value::Object{{"up", button != nullptr}, {"title", Value(title ? title : "")}, {"name", name ? Value(gtk_label_get_text(GTK_LABEL(name))) : Value()},
+        {"button", button ? Value(gtk_button_get_label(GTK_BUTTON(button))) : Value()}, {"items", button ? Value(items) : Value()},
+        {"takesInput", gtk_grab_get_current() == nullptr}};
+}
+
+void indicatorUp(Call call) {
+    crossbind::onMainThread([call] { call.resolve(indicatorState()); });
+}
+
+void pressIndicator(Call call) {
+    const std::string words = call.options()["item"].asString();
+    crossbind::onMainThread([call, words] {
+        for (GtkWidget *item : itemsOf(previewButton())) {
+            const gchar *label = gtk_menu_item_get_label(GTK_MENU_ITEM(item));
+            if (!label || words != label || !gtk_widget_get_sensitive(item)) continue;
+            gtk_menu_item_activate(GTK_MENU_ITEM(item));
+            call.resolve();
+            return;
+        }
+        call.reject("crossbind e2e: the preview's bar has no item " + words + " to press");
+    });
+}
