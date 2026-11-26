@@ -97,6 +97,7 @@ const STEPS = {
     exitFullScreen,
     gesture: ({ script }) => invoke('e2e-hooks.gesture', { script }),
     openPreview: ({ session }) => invoke('e2e-hooks.openPreview', { session }),
+    openTwo: ({ first, second }) => invoke('e2e-hooks.openTwo', { first, second }),
     pickerUp: () => invoke('e2e-hooks.pickerUp'),
     dismissPicker: () => invoke('e2e-hooks.dismissPicker'),
     cycleActive: () => invoke('e2e-hooks.cycleActive'),
@@ -123,7 +124,7 @@ async function run() {
         }
         const result = await outcome(STEPS[step.do](step));
         await ask('/report', { id: step.id, ...result });
-        if (step.do === 'open' && result.value?.url) {
+        if ((step.do === 'open' || step.do === 'openTwo') && result.value?.url) {
             location.href = result.value.url;
             return;
         }

@@ -416,9 +416,15 @@ const STEPS_PAGE = '<!doctype html><meta charset="utf-8"><title>e2e project</tit
     + "const api = await import('/__crossbind/app.js'); const { runSteps } = await import('/project-steps.js'); runSteps(api.invoke, api);</script>";
 const stepsModule = () => readFileSync(join(fixture, 'src', 'project-steps.js'), 'utf8');
 
-// The files of a page of the project's steps alone: its first page, two more of the same origin, and a video.
+// The files of a page of the project's steps alone: its first page, three more of the same origin, one of which would
+// hold Back, and a video.
 const stepsFiles = () => ({
-    'index.html': STEPS_PAGE, 'first.html': STEPS_PAGE, 'second.html': STEPS_PAGE, 'project-steps.js': stepsModule(), 'inline.mp4': readFileSync(join(repository, 'e2e', 'desktop-app', 'public', 'inline.mp4')),
+    'index.html': STEPS_PAGE,
+    'first.html': STEPS_PAGE,
+    'second.html': STEPS_PAGE,
+    'holds-back.html': STEPS_PAGE,
+    'project-steps.js': stepsModule(),
+    'inline.mp4': readFileSync(join(repository, 'e2e', 'desktop-app', 'public', 'inline.mp4')),
 });
 
 // A project of this name, served by a server of the run's own, whose page takes the project's steps alone: at its
