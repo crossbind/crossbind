@@ -382,11 +382,14 @@ public interface Extension {
         private final ValueCallback<Uri[]> files;
         private final String role;
         private final AnswerOnce once = new AnswerOnce();
+        // The origin of the page whose input it is, whose end cancels it.
+        final String origin;
 
-        FileInput(WebChromeClient.FileChooserParams params, ValueCallback<Uri[]> files, String role) {
+        FileInput(WebChromeClient.FileChooserParams params, ValueCallback<Uri[]> files, String role, String origin) {
             this.params = params;
             this.files = files;
             this.role = role;
+            this.origin = origin;
         }
 
         // The role of the page whose input it is, as a native page's role() names it: "app", or the role of an origin

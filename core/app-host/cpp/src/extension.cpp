@@ -1563,18 +1563,39 @@ bool hasFileInputs() { return static_cast<bool>(hooks().fileInputs); }
 
 namespace {
 
-// The page dialogs the holder of page-dialogs was given, while any of it holds them.
+// The page dialogs and the file inputs their holders were given, while any of them holds one.
 std::mutex dialogsMutex;
 std::vector<std::weak_ptr<StateOf<PageDialog>>> askedDialogs;
+std::vector<std::weak_ptr<StateOf<FileInput>>> askedInputs;
+
+template <typename State>
+void keepAsked(std::vector<std::weak_ptr<State>> &asked, std::shared_ptr<State> state) {
+    std::lock_guard<std::mutex> lock(dialogsMutex);
+    asked.erase(std::remove_if(asked.begin(), asked.end(), [](const auto &one) { return one.expired(); }), asked.end());
+    asked.push_back(std::move(state));
+}
+
+// What a holder was given of this page, which goes from what it kept.
+template <typename State>
+std::vector<std::shared_ptr<State>> takeAsked(std::vector<std::weak_ptr<State>> &asked, uint64_t page) {
+    std::vector<std::shared_ptr<State>> gone;
+    std::lock_guard<std::mutex> lock(dialogsMutex);
+    for (auto one = asked.begin(); one != asked.end();) {
+        const std::shared_ptr<State> state = one->lock();
+        if (state && state->page.id() != page) {
+            ++one;
+            continue;
+        }
+        if (state) gone.push_back(state);
+        one = asked.erase(one);
+    }
+    return gone;
+}
 
 }  // namespace
 
 bool askPageDialog(PageDialog dialog) {
-    {
-        std::lock_guard<std::mutex> lock(dialogsMutex);
-        askedDialogs.erase(std::remove_if(askedDialogs.begin(), askedDialogs.end(), [](const auto &asked) { return asked.expired(); }), askedDialogs.end());
-        askedDialogs.push_back(stateOf(dialog));
-    }
+    keepAsked(askedDialogs, stateOf(dialog));
     return askOwner(hooks().pageDialogs, dialog, "page-dialogs");
 }
 
@@ -1588,25 +1609,17 @@ void askPagePermission(PagePermission request) {
     askOwner(hooks().pagePermissions, request, "page-permissions");
 }
 
-bool askFileInput(FileInput input) { return askOwner(hooks().fileInputs, input, "page-files"); }
+bool askFileInput(FileInput input) {
+    keepAsked(askedInputs, stateOf(input));
+    return askOwner(hooks().fileInputs, input, "page-files");
+}
 #endif
 
 void pageGone(uint64_t page) {
 #if !defined(__ANDROID__)
-    std::vector<std::shared_ptr<StateOf<PageDialog>>> gone;
-    {
-        std::lock_guard<std::mutex> lock(dialogsMutex);
-        for (auto asked = askedDialogs.begin(); asked != askedDialogs.end();) {
-            const std::shared_ptr<StateOf<PageDialog>> state = asked->lock();
-            if (state && state->page.id() != page) {
-                ++asked;
-                continue;
-            }
-            if (state) gone.push_back(state);
-            asked = askedDialogs.erase(asked);
-        }
-    }
-    for (const auto &state : gone) {
+    // What its user picks afterwards reaches no page.
+    for (const auto &state : takeAsked(askedInputs, page)) state->answer.give(std::nullopt);
+    for (const auto &state : takeAsked(askedDialogs, page)) {
         std::vector<std::function<void()>> cancels;
         {
             std::lock_guard<std::mutex> lock(state->mutex);
