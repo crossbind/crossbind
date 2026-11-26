@@ -40,25 +40,30 @@ crossbind's OPFS backend needs; so nothing is turned on (measured 18 Nov 2026).
 - Remove when a WebKitGTK the app runs on gives a Worker the sync access handle with the features on, and the host
   turns them on; then drop the Linux sentence of `docs/api/extensions.md`'s Limits.
 
-## A file input's picker outlives its page on macOS and iOS
+## A file input's picker outlives its page on iOS
 
-A file input's picker that is up as its page goes, at a reload or as the page's origin ends, stays over the page that
-comes: on macOS the host's `page-files` opens `NSOpenPanel` as a sheet of the window, and the SDK's `FileInput` gives
-it no cancel to close it with as the page goes; iOS's picker is WebKit's own. The preview extension's Reload and the
-end of a preview meet it; measured on macOS 27 and the iOS 27 Simulator on 26 Nov 2026.
+An iOS app's file input shows WebKit's own picker, which no extension takes, and a picker that is up as its page goes,
+at a reload or as the page's origin ends, stays over the page that comes. The preview extension's Reload and the end of
+a preview meet it; measured on the iOS 27 Simulator on 26 Nov 2026. Nothing the host may call closes it and tells
+WebKit: the one way, `-[WKWebView _dismissFilePicker]`, is private, and a controller dismissed from the host's side
+tells WebKit's `WKFileUploadPanel` nothing, as UIKit tells it of its user's dismissal alone, which would leave its input
+waiting and every later file input of the web view without a picker.
 
-What a file chosen in it reaches was not run on macOS or iOS, as no run chooses a file in those pickers. Read in the
-host's code: `page-files` and `FileInput::pick()` allow no path, and WebKit hands the files to the input that asked,
-whose page is gone. Not read: what WebKit does with them where that page is kept in its back/forward cache and comes
-back. On Android, where a run can choose a file, a file chosen in the system's picker left up after a preview's end
-reached no page.
+What a file chosen in it reaches was not run, as no run chooses a file in that picker. Read: no crossbind code is on
+its path, so it allows no path, and WebKit hands the files to the input that asked, whose page is gone. Not read: what
+WebKit does with them where that page is kept in its back/forward cache and comes back.
+
+The host's own `page-files` closes the picker it shows, on macOS and Android, as its page goes. Not measured: the
+pickers that WebKitGTK on Linux and WebView2 on Windows show themselves.
 
 - Seen: 2026-11-26
-- Check: the macOS job of the last conformance run on main prints the picker left up after a preview's end:
-  `gh api "repos/:owner/:repo/actions/jobs/$(gh run view "$(gh run list --workflow test-node-addon-conformance.yml --branch main --limit 1 --json databaseId --jq '.[0].databaseId')" --json jobs --jq '.jobs[] | select(.name == "app") | .databaseId')/logs" | grep -m1 'PREVIEW KNOWN picker-after-end "stays"'`
+- Check: the iOS job of the last conformance run on main prints the picker left up after a preview's end:
+  `gh api "repos/:owner/:repo/actions/jobs/$(gh run view "$(gh run list --workflow test-node-addon-conformance.yml --branch main --limit 1 --json databaseId --jq '.[0].databaseId')" --json jobs --jq '.jobs[] | select(.name == "app-ios") | .databaseId')/logs" | grep -m1 'PREVIEW KNOWN picker-after-end "stays"'`
   prints a line.
-- Remove when `FileInput` has a cancel that `page-files` calls as its page goes or its origin ends, and the line says
-  `"closed"`; then make `knownPicker()` in `e2e/app-projects/e2e/indicator.mjs` expect it closed.
+- Remove when the host shows an iOS app's file input itself, through the `runOpenPanelWithParameters` of
+  `WKUIDelegate` that iOS 18.4 and later offer, and closes it as its page goes, or WebKit closes its own as the page
+  goes, and the line says `"closed"`; then make `checkPickers()` in `e2e/app-projects/e2e/pickers.mjs` expect it closed
+  on iOS as on macOS.
 
 ## fsync in a Node.js wasm build does not reach the disk
 
