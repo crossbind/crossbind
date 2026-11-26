@@ -16,6 +16,7 @@ import {
 } from '@crossbind/conformance/native/confextras.h';
 import { Counter } from './native/counter.rs';
 import { reportWebFeatures } from './web-features.js';
+import { checkPickers, isPickerWindow, runPickerWindow } from './pickers.js';
 import {
     checkPageApi, checkServedReports, goWithinTheAppFirst, isServedPage, runPageApiTrip, runProjectPage, runServedRoundTrip,
 } from './served-origins.js';
@@ -1062,7 +1063,8 @@ async function checkWindows(m, isDesktop, isAndroid) {
 }
 
 const otherWindow = new URLSearchParams(location.search).get('window');
-if (otherWindow) runOtherWindow(otherWindow);
+if (isPickerWindow()) runPickerWindow();
+else if (otherWindow) runOtherWindow(otherWindow);
 else if (isServedPage()) runProjectPage();
 else if (!goWithinTheAppFirst()) initNative().then(async (m) => {
     try {
@@ -1119,6 +1121,7 @@ else if (!goWithinTheAppFirst()) initNative().then(async (m) => {
         await checkCalls(isAndroid);
         await checkAppGroup(!isAndroid && !isDesktop);
         await checkWindows(m, isDesktop, isAndroid);
+        if (isDesktop && navigator.userAgent.includes('Macintosh')) console.log(`PAGE GETS pickers ${JSON.stringify(await checkPickers())}`);
         // The app's own functions answer over the page's channel on every platform, and the host checks what it opens.
         const folders = await host.paths();
         if (![folders.data, folders.cache, folders.logs].every((folder) => /^(\/|[A-Za-z]:\\)/.test(folder))) {
