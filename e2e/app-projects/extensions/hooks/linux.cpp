@@ -4,6 +4,7 @@
 
 #include <gtk/gtk.h>
 
+#include <memory>
 #include <vector>
 
 namespace {
@@ -131,16 +132,32 @@ void indicatorUp(Call call) {
     crossbind::onMainThread([call] { call.resolve(indicatorState()); });
 }
 
+bool pressItem(const std::string &words) {
+    for (GtkWidget *item : itemsOf(previewButton())) {
+        const gchar *label = gtk_menu_item_get_label(GTK_MENU_ITEM(item));
+        if (!label || words != label || !gtk_widget_get_sensitive(item)) continue;
+        gtk_menu_item_activate(GTK_MENU_ITEM(item));
+        return true;
+    }
+    return false;
+}
+
+// An item of the bar's menu activated now, or once ms passed, the call answered first, as when the press will reload
+// or end the page that asked.
 void pressIndicator(Call call) {
     const std::string words = call.options()["item"].asString();
-    crossbind::onMainThread([call, words] {
-        for (GtkWidget *item : itemsOf(previewButton())) {
-            const gchar *label = gtk_menu_item_get_label(GTK_MENU_ITEM(item));
-            if (!label || words != label || !gtk_widget_get_sensitive(item)) continue;
-            gtk_menu_item_activate(GTK_MENU_ITEM(item));
+    const double ms = call.options()["ms"].asNumber(0);
+    crossbind::onMainThread([call, words, ms] {
+        if (ms > 0) {
             call.resolve();
+            g_timeout_add(static_cast<guint>(ms), [](gpointer data) -> gboolean {
+                const std::unique_ptr<std::string> later(static_cast<std::string *>(data));
+                pressItem(*later);
+                return G_SOURCE_REMOVE;
+            }, new std::string(words));
             return;
         }
-        call.reject("crossbind e2e: the preview's bar has no item " + words + " to press");
+        if (pressItem(words)) call.resolve();
+        else call.reject("crossbind e2e: the preview's bar has no item " + words + " to press");
     });
 }
