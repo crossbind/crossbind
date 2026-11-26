@@ -48,7 +48,7 @@ public final class PreviewExtension implements Extension {
             "microphone", Manifest.permission.RECORD_AUDIO);
 
     private final Consents consents = new Consents(PreviewExtension::grant);
-    private final Indicator indicator = new Indicator();
+    private final Indicator indicator = new Indicator(consents);
 
     // The app's own page gets the devices the manifest asks for, as the host's page-permissions does; a project's page
     // those its user allows at the app's own question, then as the app's own; a page of no role nothing.

@@ -101,6 +101,15 @@ void relineIndicator(uint64_t preview, std::string line) {
     }
 }
 
+void answerIndicator(const std::string &origin, Answers answers) {
+    std::lock_guard<std::mutex> lock(indicatorMutex);
+    if (!shown || shown->origin != origin) return;
+    shown->answers = std::move(answers);
+    for (const auto &[window, mark] : marked) {
+        if (mark.preview == shownPreview && !mark.isEnding) showIndicator(window, *shown, [] {});
+    }
+}
+
 void addIndicatorHooks(crossbind::Registry &registry) {
     registry.onPage(pageStarted);
 #if defined(__ANDROID__)

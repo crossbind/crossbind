@@ -91,11 +91,15 @@ void readPreviewAgain();
 // and down once the preview ended and the window's next page that is no project's started; the app's own page that
 // comes to show in a window whose preview is open ends that preview. Each mark is of the preview serve() numbered: an
 // end or a line of another preview changes nothing of it.
+// The kinds the preview's user answered, kept or held for the run, in the order camera, microphone, location, each
+// with whether it is allowed: what the menu's Permissions shows. Android's Java reads its own.
+using Answers = std::vector<std::pair<std::string, bool>>;
 struct Shown {
     std::string project;
     std::string line;
-    // The preview's origin, by which Android's Java tells the WebView's pages.
+    // The preview's origin, by which Android's Java tells the WebView's pages, and a change at Permissions its preview.
     std::string origin;
+    Answers answers;
 };
 // The preview of this number up on the window of this id, 0 for the app's oldest, with these words, then runs then with
 // the window it is on.
@@ -104,6 +108,8 @@ void markPreview(uint64_t preview, uint64_t window, Shown shown, std::function<v
 void unmarkPreview(uint64_t preview);
 // The menu's line of the preview of this number, as what it serves changed.
 void relineIndicator(uint64_t preview, std::string line);
+// The menu's Permissions of the preview whose origin is this URL, as an answer of its was kept.
+void answerIndicator(const std::string &origin, Answers answers);
 void addIndicatorHooks(crossbind::Registry &registry);
 // The platform's own, apple.mm, windows.cpp, linux.cpp and android.cpp, each on the main thread, Android's on its
 // Java's UI thread: the window's indicator up with these words, or its words changed; down; at the preview's end,
@@ -125,18 +131,25 @@ void addPageRequests(crossbind::Registry &registry);
 // consents.cpp: the camera, the microphone and the location a project's page asks for, which its user allows at the
 // app's own question or not, for the preview the extension serves: its origin's URL, the origin's name its answers are
 // kept under, and the project's name from the account's list, which the question shows. then runs once whatever takes
-// the page's requests knows it. The preview's end closes the question unanswered and denies what waits for it.
+// the page's requests knows it, with the origin's answers. The preview's end closes the question unanswered and denies
+// what waits for it.
 struct Served {
     std::string url;
     std::string name;
     std::string project;
 };
-void serveConsents(Served served, std::function<void()> then);
+void serveConsents(Served served, std::function<void(Answers answers)> then);
 void endConsents();
 #if !defined(__ANDROID__)
 // A request of a page whose role is a served origin's, which the extension's own question decides; Android's are its
 // Java's.
 void askConsent(crossbind::PagePermission request);
+// A control's change at the menu's Permissions: the answer of a kind its user answered before, kept as its question's
+// is, for the preview whose origin is this URL while it is the one served; what waits is decided again. Whether it was
+// kept. The one place beside the question that gives an answer, called by a native control alone.
+bool changeConsent(const std::string &origin, const std::string &kind, bool isAllowed);
+// A kind's word on its control: "Camera", "Microphone", "Location".
+std::string controlWordOf(const std::string &kind);
 // The platform's own question over the window of this id, the app's oldest for 0, on the main thread: modal to that
 // window alone, its default button Don't Allow, its two buttons its only way out. done gets whether its user pressed
 // Allow, once, on the main thread, or none where it could not be shown; the function it gives closes it unanswered,

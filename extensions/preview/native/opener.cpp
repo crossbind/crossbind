@@ -502,7 +502,8 @@ void serve(const Call &call, const Checked &found) {
         // The page goes to the origin once its requests' holder knows the preview they are of, and the indicator is up
         // on the page's window.
         Shown shown{found.session.projectName, proxy->line(), origin.url()};
-        serveConsents({origin.url(), found.originName, found.session.projectName}, [call, url = origin.url(), shown, proxy] {
+        serveConsents({origin.url(), found.originName, found.session.projectName}, [call, url = origin.url(), shown, proxy](Answers answers) mutable {
+            shown.answers = std::move(answers);
             markPreview(proxy->number(), call.page().windowId(), shown, [call, url, proxy](uint64_t window) {
                 {
                     std::lock_guard<std::mutex> lock(openerMutex);

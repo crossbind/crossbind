@@ -87,10 +87,17 @@ constexpr UINT NAME_ITEM = 0x1F20;
 constexpr UINT LINE_ITEM = 0x1F30;
 constexpr UINT CLOSE_ITEM = 0x1F40;
 constexpr UINT SEPARATOR_ITEM = 0x1F50;
+constexpr UINT PERMISSIONS_ITEM = 0x1F60;
+constexpr UINT PROJECT_ITEM = 0x1F70;
+constexpr UINT NOTHING_ITEM = 0x1F80;
+// Permissions' item of each kind.
+const std::pair<const char *, UINT> KIND_ITEMS[] = {{"camera", 0x1F90}, {"microphone", 0x1FA0}, {"location", 0x1FB0}};
 constexpr UINT_PTR SUBCLASS = 0x5F5;
 
-// The title a window the indicator is up on had, which it gets back once it comes down; on the main thread.
+// The title a window the indicator is up on had, which it gets back once it comes down, and the origin of the preview
+// its Permissions changes; on the main thread.
 std::map<uint64_t, std::wstring> marked;
+std::string menuOrigin;
 
 // A menu item's text as text: an & of its own draws as itself, and a tab, which would start the item's shortcut, as a
 // space.
@@ -114,41 +121,67 @@ LRESULT CALLBACK onSystemCommand(HWND window, UINT message, WPARAM wParam, LPARA
             closePreview();
             return 0;
         }
+        // A kind's check mark turned the other way: the answer kept, and the page reloaded so that it holds for it.
+        for (const auto &[kind, item] : KIND_ITEMS) {
+            if (command != item) continue;
+            const bool isOn = (GetMenuState(GetSystemMenu(window, FALSE), item, MF_BYCOMMAND) & MF_CHECKED) == 0;
+            if (changeConsent(menuOrigin, kind, isOn)) reloadPreview();
+            return 0;
+        }
     }
     return DefSubclassProc(window, message, wParam, lParam);
 }
 
-void insertItem(HMENU menu, UINT at, UINT command, const std::wstring &text, bool isEnabled) {
+void insertItem(HMENU menu, UINT at, UINT command, const std::wstring &text, UINT state, HMENU submenu = nullptr) {
     std::wstring shown = text;
     MENUITEMINFOW item{};
     item.cbSize = sizeof item;
-    item.fMask = MIIM_ID | MIIM_FTYPE | MIIM_STATE | MIIM_STRING;
+    item.fMask = MIIM_ID | MIIM_FTYPE | MIIM_STATE | MIIM_STRING | (submenu ? MIIM_SUBMENU : 0);
     item.fType = MFT_STRING;
-    item.fState = isEnabled ? MFS_ENABLED : MFS_DISABLED;
+    item.fState = state;
     item.wID = command;
+    item.hSubMenu = submenu;
     item.dwTypeData = shown.data();
     InsertMenuItemW(menu, at, TRUE, &item);
 }
 
+// Deleting Permissions destroys its submenu with it.
 void dropItems(HMENU menu) {
-    for (const UINT command : {RELOAD_ITEM, NAME_ITEM, LINE_ITEM, CLOSE_ITEM, SEPARATOR_ITEM}) DeleteMenu(menu, command, MF_BYCOMMAND);
+    for (const UINT command : {RELOAD_ITEM, NAME_ITEM, LINE_ITEM, PERMISSIONS_ITEM, CLOSE_ITEM, SEPARATOR_ITEM}) DeleteMenu(menu, command, MF_BYCOMMAND);
 }
 
-// Reload; the project's name over its line, which do nothing, as a menu draws one line an item; Close preview.
+// Permissions: the project's name, then a check mark for each kind its user answered, on where Allow is kept; or that
+// nothing was asked yet.
+HMENU permissionsOf(const Shown &shown) {
+    HMENU menu = CreatePopupMenu();
+    insertItem(menu, 0, PROJECT_ITEM, menuText(shown.project), MFS_DISABLED);
+    if (shown.answers.empty()) insertItem(menu, 1, NOTHING_ITEM, L"Nothing asked yet.", MFS_DISABLED);
+    UINT at = 1;
+    for (const auto &[kind, isAllowed] : shown.answers) {
+        for (const auto &[named, item] : KIND_ITEMS) {
+            if (kind == named) insertItem(menu, at++, item, wide(controlWordOf(kind)), MFS_ENABLED | (isAllowed ? MFS_CHECKED : MFS_UNCHECKED));
+        }
+    }
+    return menu;
+}
+
+// Reload; the project's name over its line, which do nothing, as a menu draws one line an item; Permissions; Close
+// preview.
 void setItems(HWND window, const Shown &shown) {
     HMENU menu = GetSystemMenu(window, FALSE);
     if (!menu) return;
     dropItems(menu);
-    insertItem(menu, 0, RELOAD_ITEM, L"Reload", true);
-    insertItem(menu, 1, NAME_ITEM, menuText(shown.project), false);
-    insertItem(menu, 2, LINE_ITEM, menuText(shown.line), false);
-    insertItem(menu, 3, CLOSE_ITEM, L"Close preview", true);
+    insertItem(menu, 0, RELOAD_ITEM, L"Reload", MFS_ENABLED);
+    insertItem(menu, 1, NAME_ITEM, menuText(shown.project), MFS_DISABLED);
+    insertItem(menu, 2, LINE_ITEM, menuText(shown.line), MFS_DISABLED);
+    insertItem(menu, 3, PERMISSIONS_ITEM, L"Permissions", MFS_ENABLED, permissionsOf(shown));
+    insertItem(menu, 4, CLOSE_ITEM, L"Close preview", MFS_ENABLED);
     MENUITEMINFOW separator{};
     separator.cbSize = sizeof separator;
     separator.fMask = MIIM_ID | MIIM_FTYPE;
     separator.fType = MFT_SEPARATOR;
     separator.wID = SEPARATOR_ITEM;
-    InsertMenuItemW(menu, 4, TRUE, &separator);
+    InsertMenuItemW(menu, 5, TRUE, &separator);
 }
 
 }  // namespace
@@ -286,6 +319,7 @@ void showIndicator(uint64_t window, const Shown &shown, std::function<void()> do
                 SetWindowSubclass(native, onSystemCommand, SUBCLASS, 0);
             }
             SetWindowTextW(native, wide(shown.project + " \xE2\x80\x93 crossbind preview").c_str());
+            menuOrigin = shown.origin;
             setItems(native, shown);
         }
         done();

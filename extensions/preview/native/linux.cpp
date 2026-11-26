@@ -60,15 +60,48 @@ struct Marked {
     GtkWidget *bar = nullptr;
     GtkWidget *name = nullptr;
     GtkWidget *line = nullptr;
+    GtkWidget *permissions = nullptr;
 };
 std::map<uint64_t, Marked> marked;
+// The origin of the preview Permissions changes.
+std::string menuOrigin;
 
 void onReload(GtkMenuItem *, gpointer) { reloadPreview(); }
 
 void onClose(GtkMenuItem *, gpointer) { closePreview(); }
 
-// The project's name and a menu button: Reload, the project's name over its line, which does nothing, and Close
-// preview. Each label is text, its underscores and its marks as they are.
+// A kind's check mark turned: the answer kept, and the page reloaded so that it holds for it.
+void onChanged(GtkCheckMenuItem *item, gpointer kind) {
+    if (changeConsent(menuOrigin, *static_cast<std::string *>(kind), gtk_check_menu_item_get_active(item))) reloadPreview();
+}
+
+void forgetKind(gpointer kind, GClosure *) { delete static_cast<std::string *>(kind); }
+
+// Permissions: the project's name, then a check mark for each kind its user answered, on where Allow is kept; or that
+// nothing was asked yet. Made anew, each mark set before it is heard, as GTK's own setting of one activates it.
+void fillPermissions(GtkWidget *menu, const Shown &shown) {
+    GList *children = gtk_container_get_children(GTK_CONTAINER(menu));
+    for (GList *each = children; each; each = each->next) gtk_widget_destroy(GTK_WIDGET(each->data));
+    g_list_free(children);
+    GtkWidget *name = gtk_menu_item_new_with_label(shown.project.c_str());
+    gtk_widget_set_sensitive(name, FALSE);
+    gtk_menu_shell_append(GTK_MENU_SHELL(menu), name);
+    if (shown.answers.empty()) {
+        GtkWidget *nothing = gtk_menu_item_new_with_label("Nothing asked yet.");
+        gtk_widget_set_sensitive(nothing, FALSE);
+        gtk_menu_shell_append(GTK_MENU_SHELL(menu), nothing);
+    }
+    for (const auto &[kind, isAllowed] : shown.answers) {
+        GtkWidget *item = gtk_check_menu_item_new_with_label(controlWordOf(kind).c_str());
+        gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(item), isAllowed);
+        g_signal_connect_data(item, "toggled", G_CALLBACK(onChanged), new std::string(kind), forgetKind, GConnectFlags(0));
+        gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+    }
+    gtk_widget_show_all(menu);
+}
+
+// The project's name and a menu button: Reload, the project's name over its line, which does nothing, Permissions and
+// Close preview. Each label is text, its underscores and its marks as they are.
 Marked barOf(GtkWindow *window, WebKitWebView *web) {
     Marked made;
     const char *title = gtk_window_get_title(window);
@@ -85,9 +118,12 @@ Marked barOf(GtkWindow *window, WebKitWebView *web) {
     g_signal_connect(reload, "activate", G_CALLBACK(onReload), nullptr);
     made.line = gtk_menu_item_new_with_label("");
     gtk_widget_set_sensitive(made.line, FALSE);
+    GtkWidget *permissions = gtk_menu_item_new_with_label("Permissions");
+    made.permissions = gtk_menu_new();
+    gtk_menu_item_set_submenu(GTK_MENU_ITEM(permissions), made.permissions);
     GtkWidget *close = gtk_menu_item_new_with_label("Close preview");
     g_signal_connect(close, "activate", G_CALLBACK(onClose), nullptr);
-    for (GtkWidget *item : {reload, made.line, close}) gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+    for (GtkWidget *item : {reload, made.line, permissions, close}) gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
     gtk_widget_show_all(menu);
     GtkWidget *button = gtk_menu_button_new();
     gtk_button_set_label(GTK_BUTTON(button), "Preview");
@@ -240,6 +276,8 @@ void showIndicator(uint64_t window, const Shown &shown, std::function<void()> do
             const Marked &state = marked[window];
             gtk_label_set_text(GTK_LABEL(state.name), shown.project.c_str());
             gtk_label_set_text(GTK_LABEL(gtk_bin_get_child(GTK_BIN(state.line))), (shown.project + "\n" + shown.line).c_str());
+            menuOrigin = shown.origin;
+            fillPermissions(state.permissions, shown);
             gtk_window_set_title(native, (shown.project + " \xE2\x80\x93 crossbind preview").c_str());
         }
         done();

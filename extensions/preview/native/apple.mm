@@ -37,6 +37,69 @@
 @property(nonatomic, weak) UIButton *pill;
 @property(nonatomic, copy) NSString *project;
 @property(nonatomic, copy) NSString *line;
+// The preview's origin, and the kinds its user answered with whether each is allowed, which Permissions shows.
+@property(nonatomic, copy) NSString *origin;
+@property(nonatomic, copy) NSArray<NSString *> *kinds;
+@property(nonatomic, copy) NSArray<NSNumber *> *states;
+@end
+
+// The preview's Permissions on iOS: a sheet of the system's, the project's name its title, a switch for each kind its
+// user answered, on where Allow is kept, whose change is kept at once; the page reloads once the sheet closes, where a
+// switch changed.
+@interface CBPreviewPermissions : UITableViewController <UIAdaptivePresentationControllerDelegate>
+@property(nonatomic, copy) NSString *origin;
+@property(nonatomic, copy) NSArray<NSString *> *kinds;
+@property(nonatomic, strong) NSMutableArray<NSNumber *> *states;
+@property(nonatomic) BOOL isChanged;
+@end
+
+@implementation CBPreviewPermissions
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+    return MAX(self.kinds.count, 1);
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)path {
+    UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
+    cell.selectionStyle = UITableViewCellSelectionStyleNone;
+    UIListContentConfiguration *words = cell.defaultContentConfiguration;
+    if (self.kinds.count == 0) {
+        words.text = @"Nothing asked yet.";
+    } else {
+        words.text = self.kinds[path.row].capitalizedString;
+        UISwitch *control = [UISwitch new];
+        control.on = self.states[path.row].boolValue;
+        control.tag = path.row;
+        [control addTarget:self action:@selector(changed:) forControlEvents:UIControlEventValueChanged];
+        cell.accessoryView = control;
+    }
+    cell.contentConfiguration = words;
+    return cell;
+}
+
+- (void)changed:(UISwitch *)control {
+    if (!preview::changeConsent(self.origin.UTF8String ?: "", self.kinds[control.tag].UTF8String, control.on)) {
+        [control setOn:!control.on animated:YES];
+        return;
+    }
+    self.states[control.tag] = @(control.on);
+    self.isChanged = YES;
+}
+
+- (void)done {
+    [self dismissViewControllerAnimated:YES completion:^{ [self closed]; }];
+}
+
+- (void)presentationControllerDidDismiss:(UIPresentationController *)presentation {
+    [self closed];
+}
+
+- (void)closed {
+    if (!self.isChanged) return;
+    self.isChanged = NO;
+    preview::reloadPreview();
+}
+
 @end
 
 // Its controller, which leaves the status bar and the screen's turns to the app's window below.
@@ -63,11 +126,28 @@
     if (self.rootViewController.presentedViewController) return;
     UIAlertController *menu = [UIAlertController alertControllerWithTitle:self.project message:self.line preferredStyle:UIAlertControllerStyleActionSheet];
     [menu addAction:[UIAlertAction actionWithTitle:@"Reload" style:UIAlertActionStyleDefault handler:^(UIAlertAction *) { preview::reloadPreview(); }]];
+    [menu addAction:[UIAlertAction actionWithTitle:@"Permissions…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *) { [self openPermissions]; }]];
     [menu addAction:[UIAlertAction actionWithTitle:@"Close preview" style:UIAlertActionStyleDefault handler:^(UIAlertAction *) { preview::closePreview(); }]];
     [menu addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
     menu.popoverPresentationController.sourceView = pill;
     menu.popoverPresentationController.sourceRect = pill.bounds;
     [[self topPresenter] presentViewController:menu animated:YES completion:nil];
+}
+
+- (void)openPermissions {
+    CBPreviewPermissions *permissions = [[CBPreviewPermissions alloc] initWithStyle:UITableViewStyleInsetGrouped];
+    permissions.title = self.project;
+    permissions.origin = self.origin;
+    permissions.kinds = self.kinds;
+    permissions.states = [self.states mutableCopy];
+    permissions.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemDone
+                                                                                                   target:permissions
+                                                                                                   action:@selector(done)];
+    UINavigationController *sheet = [[UINavigationController alloc] initWithRootViewController:permissions];
+    sheet.modalPresentationStyle = UIModalPresentationPageSheet;
+    sheet.sheetPresentationController.detents = @[UISheetPresentationControllerDetent.mediumDetent];
+    sheet.presentationController.delegate = permissions;
+    [[self topPresenter] presentViewController:sheet animated:YES completion:nil];
 }
 
 @end
@@ -92,8 +172,9 @@
 
 @end
 #else
-// The Preview menu's actions.
+// The Preview menu's actions, and the origin of the preview its Permissions changes.
 @interface CBPreviewMenuTarget : NSObject
+@property(nonatomic, copy) NSString *origin;
 @end
 
 @implementation CBPreviewMenuTarget
@@ -104,6 +185,11 @@
 
 - (void)closePreview:(id)sender {
     preview::closePreview();
+}
+
+// A kind's check mark turned the other way: the answer kept, and the page reloaded so that the change holds for it.
+- (void)change:(NSMenuItem *)sender {
+    if (preview::changeConsent(self.origin.UTF8String ?: "", [sender.representedObject UTF8String] ?: "", sender.state != NSControlStateValueOn)) preview::reloadPreview();
 }
 
 @end
@@ -334,6 +420,15 @@ void showIndicator(uint64_t window, const Shown &shown, std::function<void()> do
         }
         pill.project = stringOf(shown.project);
         pill.line = stringOf(shown.line);
+        pill.origin = stringOf(shown.origin);
+        NSMutableArray<NSString *> *kinds = [NSMutableArray array];
+        NSMutableArray<NSNumber *> *states = [NSMutableArray array];
+        for (const auto &[kind, isAllowed] : shown.answers) {
+            [kinds addObject:stringOf(kind)];
+            [states addObject:@(isAllowed)];
+        }
+        pill.kinds = kinds;
+        pill.states = states;
         pill.pill.accessibilityLabel = [pill.project stringByAppendingString:@" \u2013 crossbind preview"];
         done();
     });
@@ -418,9 +513,10 @@ struct Marked {
 };
 std::map<uint64_t, Marked> marked;
 CBPreviewMenuTarget *menuTarget;
-// The Preview menu, in the menu bar while a window shows a preview, and its line.
+// The Preview menu, in the menu bar while a window shows a preview, its line and its Permissions.
 NSMenuItem *previewItem;
 NSMenuItem *lineItem;
+NSMenuItem *permissionsItem;
 
 BOOL webFullScreenOf(WKWebView *web) {
     if (@available(macOS 12.3, *)) return web.configuration.preferences.elementFullscreenEnabled;
@@ -441,7 +537,23 @@ NSAttributedString *nameOverLine(const Shown &shown) {
     return text;
 }
 
-// Reload, the project's line, which does nothing, and Close preview, before the Window menu.
+// Permissions: the project's name, then a check mark for each kind its user answered, on where Allow is kept; or that
+// nothing was asked yet.
+NSMenu *permissionsOf(const Shown &shown) {
+    NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Permissions"];
+    menu.autoenablesItems = NO;
+    [menu addItemWithTitle:stringOf(shown.project) action:nil keyEquivalent:@""].enabled = NO;
+    if (shown.answers.empty()) [menu addItemWithTitle:@"Nothing asked yet." action:nil keyEquivalent:@""].enabled = NO;
+    for (const auto &[kind, isAllowed] : shown.answers) {
+        NSMenuItem *item = [menu addItemWithTitle:stringOf(controlWordOf(kind)) action:@selector(change:) keyEquivalent:@""];
+        item.target = menuTarget;
+        item.representedObject = stringOf(kind);
+        item.state = isAllowed ? NSControlStateValueOn : NSControlStateValueOff;
+    }
+    return menu;
+}
+
+// Reload, the project's line, which does nothing, Permissions and Close preview, before the Window menu.
 void showMenu(const Shown &shown) {
     if (!previewItem) {
         menuTarget = [CBPreviewMenuTarget new];
@@ -450,11 +562,14 @@ void showMenu(const Shown &shown) {
         [menu addItemWithTitle:@"Reload" action:@selector(reload:) keyEquivalent:@""].target = menuTarget;
         lineItem = [menu addItemWithTitle:@"" action:nil keyEquivalent:@""];
         lineItem.enabled = NO;
+        permissionsItem = [menu addItemWithTitle:@"Permissions" action:nil keyEquivalent:@""];
         [menu addItemWithTitle:@"Close preview" action:@selector(closePreview:) keyEquivalent:@""].target = menuTarget;
         previewItem = [[NSMenuItem alloc] initWithTitle:@"Preview" action:nil keyEquivalent:@""];
         previewItem.submenu = menu;
     }
     lineItem.attributedTitle = nameOverLine(shown);
+    menuTarget.origin = stringOf(shown.origin);
+    permissionsItem.submenu = permissionsOf(shown);
     NSMenu *bar = NSApp.mainMenu;
     if (!bar || previewItem.menu == bar) return;
     [previewItem.menu removeItem:previewItem];
