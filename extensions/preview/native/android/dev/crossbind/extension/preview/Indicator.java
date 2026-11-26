@@ -145,14 +145,14 @@ final class Indicator {
         menu.show();
     }
 
-    // The history entry before this one, where it is the project's, by the page's own history.back(), which takes one
-    // entry: the WebView's goBack() and goBackOrForward() skip each entry its page made without its user's activation,
-    // as far as an older page of the origin or the app's. Else the preview closes.
+    // The WebView's own goBack(), as a built app's Back is, where the history entry before this one is the project's: it
+    // skips each entry a page made without its user's activation, as far as an older page of the project's or the app's,
+    // whose page ends the preview, and no page holds it. Else the preview closes.
     private void goBack(ExtensionHost host) {
         WebView view = host.webView();
         WebBackForwardList history = view == null ? null : view.copyBackForwardList();
         int current = history == null ? -1 : history.getCurrentIndex();
-        if (current > 0 && isPreviews(history.getItemAtIndex(current - 1).getUrl())) view.evaluateJavascript("history.back()", null);
+        if (current > 0 && view.canGoBack() && isPreviews(history.getItemAtIndex(current - 1).getUrl())) view.goBack();
         else ask("close");
     }
 

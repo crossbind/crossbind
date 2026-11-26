@@ -99,10 +99,10 @@ snapshot, version <n>", which does nothing; and Close preview.
   and never on a timer.
 - Close preview ends the preview as `close()` does, its question and its page's dialogs with it, and holds
   `preview.ended` with no words.
-- Back on Android goes back within the project's own history, one entry at a time by the page's own `history.back()`,
-  as the WebView's `goBack()` skips each entry a page made without its user's activation; at its first entry it closes
-  the preview as Close preview does. A page that takes over its own `history.back()` takes over Back within its pages;
-  the menu's Close preview stays. Once the preview ended, Back is the host's again.
+- Back on Android is the WebView's own `goBack()` within the project's own history, as a built app's Back is: it skips
+  each entry a page made without its user's activation, as far as an older page of the project's, or the app's page,
+  which ends the preview. No page holds it. At the project's first entry it closes the preview as Close preview does.
+  Once the preview ended, Back is the host's again.
 - The app's own page that comes to show in the preview's window, by the page going back past its first entry or any
   other way, ends the preview.
 
