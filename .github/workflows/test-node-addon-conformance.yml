@@ -337,6 +337,16 @@ jobs:
               run: pnpm --filter=@crossbind/e2e-app-projects run build
             - name: Open the previews of made-up accounts in it in the Simulator, against a stand-in for crossbind cloud
               run: pnpm --filter=@crossbind/e2e-app-projects run e2e
+            # The project's page painted whole under the preview's pill, which the run's check reads.
+            - name: Keep the screenshot of the preview's pill
+              if: ${{ always() }}
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+              with:
+                  name: preview-pill-ios
+                  if-no-files-found: ignore
+                  overwrite: true
+                  path: e2e/app-projects/dist/indicator/
+                  retention-days: 7
             # sccache finishes the cache writes it still holds as it stops, and reports what the job took from the cache.
             - name: Stop the compiler cache
               if: ${{ always() && env.CROSSBIND_SCCACHE == '1' }}
@@ -885,3 +895,13 @@ jobs:
                   script: |
                       pnpm --filter=@crossbind/e2e-desktop-app run e2e:prod
                       pnpm --filter=@crossbind/e2e-app-projects run e2e
+            # The project's page painted whole under the preview's pill, which the run's check reads.
+            - name: Keep the screenshot of the preview's pill
+              if: ${{ always() }}
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+              with:
+                  name: preview-pill-android
+                  if-no-files-found: ignore
+                  overwrite: true
+                  path: e2e/app-projects/dist/indicator/
+                  retention-days: 7
