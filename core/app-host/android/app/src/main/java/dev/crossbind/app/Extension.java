@@ -31,7 +31,7 @@ import org.json.JSONStringer;
 public interface Extension {
     // The version of crossbind's extension contract this host is built for, as CROSSBIND_EXTENSION_CONTRACT is to native
     // code.
-    int CONTRACT = 5;
+    int CONTRACT = 6;
 
     // One of the extension's functions, which answers call once, from any thread. What it throws fails the call.
     void call(ExtensionHost host, String function, JSONObject options, Call call);
@@ -382,8 +382,11 @@ public interface Extension {
         private final ValueCallback<Uri[]> files;
         private final String role;
         private final AnswerOnce once = new AnswerOnce();
-        // The origin of the page whose input it is, whose end cancels it.
+        // The origin of the page whose input it is, whose end cancels it, and what its holder closes its picker with
+        // then.
         final String origin;
+        private final List<Runnable> cancels = new ArrayList<>();
+        private boolean isGone;
 
         FileInput(WebChromeClient.FileChooserParams params, ValueCallback<Uri[]> files, String role, String origin) {
             this.params = params;
@@ -427,8 +430,35 @@ public interface Extension {
             if (!once.leaves()) cancel();
         }
 
+        // Runs fn once, on the UI thread, as the page whose input it is goes before its answer: as its origin ends or
+        // another page starts in the WebView. The input has answered as cancelled then, and its holder closes its picker.
+        // For an input whose page went already, fn runs at once; for one answered, never.
+        public void onCancel(Runnable fn) {
+            synchronized (cancels) {
+                if (!isGone) {
+                    if (!once.isAnswered()) cancels.add(fn);
+                    return;
+                }
+            }
+            fn.run();
+        }
+
         boolean isLeft() {
             return once.isLeft();
+        }
+
+        // Its page went, on the UI thread: unanswered, it answers as cancelled, and its holder hears of it; answered
+        // meanwhile, it shows nothing to close, and a holder that asks later hears nothing.
+        void gone() {
+            final List<Runnable> closing;
+            synchronized (cancels) {
+                if (isGone || !once.gives()) return;
+                isGone = true;
+                closing = new ArrayList<>(cancels);
+                cancels.clear();
+            }
+            CrossbindActivity.MAIN.post(() -> files.onReceiveValue(null));
+            for (Runnable fn : closing) fn.run();
         }
 
         private void answer(Uri[] picked) {

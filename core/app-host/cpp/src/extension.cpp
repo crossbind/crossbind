@@ -844,6 +844,23 @@ void Registry::onDrop(std::function<void(const Drop &drop)> fn) {
 }
 
 #if !defined(__ANDROID__)
+namespace {
+
+// What a request's holder closes it with as its page goes, kept until then, or run at once where it went already.
+template <typename State>
+void onGone(State &state, std::function<void()> fn) {
+    {
+        std::lock_guard<std::mutex> lock(state.mutex);
+        if (!state.isGone) {
+            if (!state.answer.isAnswered()) state.cancels.push_back(std::move(fn));
+            return;
+        }
+    }
+    fn();
+}
+
+}  // namespace
+
 void Registry::onPageDialog(std::function<void(PageDialog)> fn) {
     takePageRequests(hooks().pageDialogs, std::move(fn), extension_, roles_, given_, "page-dialogs", "onPageDialog");
 }
@@ -870,16 +887,7 @@ void PageDialog::cancel() const { state_->answer.give(std::nullopt); }
 
 void PageDialog::useDefault() const { state_->answer.giveDefault(); }
 
-void PageDialog::onCancel(std::function<void()> fn) const {
-    {
-        std::lock_guard<std::mutex> lock(state_->mutex);
-        if (!state_->isGone) {
-            if (!state_->answer.isAnswered()) state_->cancels.push_back(std::move(fn));
-            return;
-        }
-    }
-    fn();
-}
+void PageDialog::onCancel(std::function<void()> fn) const { onGone(*state_, std::move(fn)); }
 
 const std::vector<std::string> &PagePermission::kinds() const { return state_->kinds; }
 
@@ -908,6 +916,8 @@ void FileInput::pick(const std::vector<std::string> &paths) const { state_->answ
 void FileInput::cancel() const { state_->answer.give(std::nullopt); }
 
 void FileInput::useDefault() const { state_->answer.giveDefault(); }
+
+void FileInput::onCancel(std::function<void()> fn) const { onGone(*state_, std::move(fn)); }
 #endif
 
 void inBackground(Call call, std::function<Value()> work) {
@@ -1592,6 +1602,26 @@ std::vector<std::shared_ptr<State>> takeAsked(std::vector<std::weak_ptr<State>> 
     return gone;
 }
 
+// A request of a page that went answers as cancelled, and its holder hears of it.
+template <typename State>
+void cancelGone(State &state, const char *role, const char *what) {
+    std::vector<std::function<void()>> cancels;
+    {
+        std::lock_guard<std::mutex> lock(state.mutex);
+        // One its user answered meanwhile shows nothing to close, and a holder that asks later hears nothing.
+        if (!state.answer.give(std::nullopt)) return;
+        state.isGone = true;
+        cancels.swap(state.cancels);
+    }
+    for (const auto &fn : cancels) {
+        try {
+            fn();
+        } catch (const std::exception &error) {
+            std::fprintf(stderr, "crossbind: the extension %s failed as %s page went: %s\n", holderOf(role).c_str(), what, error.what());
+        }
+    }
+}
+
 }  // namespace
 
 bool askPageDialog(PageDialog dialog) {
@@ -1618,24 +1648,8 @@ bool askFileInput(FileInput input) {
 void pageGone(uint64_t page) {
 #if !defined(__ANDROID__)
     // What its user picks afterwards reaches no page.
-    for (const auto &state : takeAsked(askedInputs, page)) state->answer.give(std::nullopt);
-    for (const auto &state : takeAsked(askedDialogs, page)) {
-        std::vector<std::function<void()>> cancels;
-        {
-            std::lock_guard<std::mutex> lock(state->mutex);
-            // A dialog its user answered meanwhile shows nothing to close, and a holder that asks later hears nothing.
-            if (!state->answer.give(std::nullopt)) continue;
-            state->isGone = true;
-            cancels.swap(state->cancels);
-        }
-        for (const auto &fn : cancels) {
-            try {
-                fn();
-            } catch (const std::exception &error) {
-                std::fprintf(stderr, "crossbind: the extension %s failed as a dialog's page went: %s\n", holderOf("page-dialogs").c_str(), error.what());
-            }
-        }
-    }
+    for (const auto &state : takeAsked(askedInputs, page)) cancelGone(*state, "page-files", "a file input's");
+    for (const auto &state : takeAsked(askedDialogs, page)) cancelGone(*state, "page-dialogs", "a dialog's");
 #endif
 }
 

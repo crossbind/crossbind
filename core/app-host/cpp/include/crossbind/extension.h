@@ -21,7 +21,7 @@
 // The newest version of the contract between crossbind and its extensions this host is built for, which an extension's
 // crossbind.extension.js names: one written for several tells them apart with it, as #if CROSSBIND_EXTENSION_CONTRACT >=
 // 2 does.
-#define CROSSBIND_EXTENSION_CONTRACT 5
+#define CROSSBIND_EXTENSION_CONTRACT 6
 
 namespace crossbind {
 
@@ -399,6 +399,11 @@ public:
     void pick(const std::vector<std::string> &paths) const;
     void cancel() const;
     void useDefault() const;
+    // Runs fn once, on the module's thread, which it must not hold up, as the page whose input it is goes before its
+    // answer: as the origin it is of ends, another page replaces it, or its window closes. The input has answered as
+    // cancelled then, and its holder closes its picker. For an input whose page went already, fn runs at once, on the
+    // caller's thread; for one answered, never.
+    void onCancel(std::function<void()> fn) const;
 
 private:
     friend struct app::RegistryAccess;
