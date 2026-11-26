@@ -6,7 +6,12 @@
 #include "crossbind/extension.h"
 
 #include <chrono>
+#include <condition_variable>
 #include <functional>
+#include <future>
+#include <memory>
+#include <mutex>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -18,6 +23,91 @@ using crossbind::Call;
 using crossbind::Value;
 
 const std::vector<std::string> PAGES{"app", "project"};
+
+// Where the main thread may be held while a session is checked: Linux's fetch runs on the main thread's loop, and
+// Android's HMAC is the preview extension's Java's, on the UI thread.
+#if defined(__APPLE__) || defined(_WIN32)
+constexpr bool CAN_HOLD = true;
+#else
+constexpr bool CAN_HOLD = false;
+#endif
+// How long the second open is given to be served before the main thread goes on.
+constexpr auto SERVED_IN = std::chrono::milliseconds(500);
+
+// What a function the app's own code calls answered: why it failed, or its value.
+struct Answer {
+    std::optional<std::string> failure;
+    Value value;
+};
+
+std::future<Answer> invoked(const std::string &name, Value options) {
+    auto answer = std::make_shared<std::promise<Answer>>();
+    std::future<Answer> answered = answer->get_future();
+    crossbind::invoke(name, std::move(options), [answer](std::optional<std::string> failure, Value value) { answer->set_value({std::move(failure), std::move(value)}); });
+    return answered;
+}
+
+Value outcomeOf(const Answer &answer) {
+    return answer.failure ? Value(Value::Object{{"error", *answer.failure}}) : Value(Value::Object{{"value", answer.value}});
+}
+
+// The main thread held from once it is until released, ten seconds at most; Android's UI thread is the Java's.
+class MainHold {
+public:
+    void hold() {
+#if !defined(__ANDROID__)
+        auto isHeld = std::make_shared<std::promise<void>>();
+        std::future<void> held = isHeld->get_future();
+        crossbind::onMainThread([state = state_, isHeld] {
+            const auto heldAtMost = std::chrono::seconds(10);
+            isHeld->set_value();
+            std::unique_lock<std::mutex> lock(state->mutex);
+            state->released.wait_for(lock, heldAtMost, [&] { return state->isReleased; });
+        });
+        held.wait();
+#endif
+    }
+
+    void release() {
+        {
+            std::lock_guard<std::mutex> lock(state_->mutex);
+            state_->isReleased = true;
+        }
+        state_->released.notify_all();
+    }
+
+private:
+    struct State {
+        std::mutex mutex;
+        std::condition_variable released;
+        bool isReleased = false;
+    };
+    std::shared_ptr<State> state_ = std::make_shared<State>();
+};
+
+// Two sessions checked and opened by the app's own code, the second's open on its way while the first one's indicator
+// waits for the main thread, which is held from before the first open until the second is served where the second's
+// check needs none of it: whether it was held, what each open answered, and the URL the page goes to, the second's.
+void openTwo(Call call) {
+    const Value first = Value::Object{{"session", call.options()["first"]}};
+    const Value second = Value::Object{{"session", call.options()["second"]}};
+    std::thread([call, first, second] {
+        const Answer firstChecked = invoked("preview.check", first).get();
+        if (firstChecked.failure) return call.reject("the first session's check: " + *firstChecked.failure);
+        MainHold hold;
+        if (CAN_HOLD) hold.hold();
+        std::future<Answer> firstOpened = invoked("preview.open", first);
+        const Answer secondChecked = invoked("preview.check", second).get();
+        std::optional<std::future<Answer>> secondOpened;
+        if (!secondChecked.failure) secondOpened = invoked("preview.open", second);
+        std::this_thread::sleep_for(SERVED_IN);
+        hold.release();
+        const Answer firstAnswer = firstOpened.get();
+        const Answer secondAnswer = secondOpened ? secondOpened->get() : secondChecked;
+        call.resolve(Value::Object{{"held", CAN_HOLD}, {"first", outcomeOf(firstAnswer)}, {"second", outcomeOf(secondAnswer)},
+            {"url", secondAnswer.failure ? Value() : secondAnswer.value["url"]}});
+    }).detach();
+}
 
 }  // namespace
 
@@ -116,6 +206,7 @@ void crossbind_extension_e2e_hooks(crossbind::Registry &registry) {
             });
         }).detach();
     });
+    registry.function("e2e-hooks.openTwo", PAGES, openTwo);
     registry.function("e2e-hooks.closePreview", PAGES, [](Call call) {
         crossbind::invoke("preview.close", Value::Object{}, [call](std::optional<std::string> failure, Value) {
             if (failure) call.reject(*failure);

@@ -21,6 +21,7 @@ const HELD_MS = 4000;
 const SETTLED_MS = 3000;
 const TOOL_MS = 30000;
 const DUMP_TRIES = 5;
+const TOUCH_TRIES = 3;
 const DASH = '–';
 const DOT = '·';
 const PAINT = [255, 0, 255];
@@ -31,6 +32,8 @@ const PILL_WORDS = ` ${DASH} crossbind preview`;
 const RENEWED = "The snapshot's key was renewed; it opened again.";
 const GONE = "This snapshot is no longer on your account's list.";
 const DIALOG = "crossbind e2e: a project's own dialog, up at the preview's menu";
+const SECOND_NAME = 'e2e second project';
+const ENDED_AS_OPENED = 'crossbind: the preview ended as it opened.';
 
 function expect(isHeld, problem) {
     if (!isHeld) throw new Error(problem);
@@ -180,10 +183,10 @@ export function indicatorsOn({
             await byPage(role, { do: 'presses', presses, ...extra });
             await sleep(Math.max(...presses.map(({ ms }) => ms)));
         },
-        // Back as its user presses it; a page it will move takes no next step first.
-        async back(role) {
+        // Back as its user presses it, as many times at once as given; a page it will move takes no next step first.
+        async back(role, times = 1) {
             if (role) await byPage(role, { do: 'stop' });
-            adbShell('input', 'keyevent', 'KEYCODE_BACK');
+            adbShell('input', 'keyevent', ...Array(times).fill('KEYCODE_BACK'));
         },
         tap: (x, y) => adbShell('input', 'tap', String(x), String(y)),
     };
@@ -535,8 +538,8 @@ export async function checkIndicator(run) {
     }
 
     // On a phone the pill is above a page that paints its whole viewport, its own pixels at its place; where a run touches
-    // the screen, a touch beside the pill reaches the page; and on Android, Back within the project's history, at its
-    // first entry, and on the app's own page.
+    // the screen, a touch beside the pill reaches the page; and on Android, Back within the project's history, from a
+    // page that would hold it, twice at the project's first entry, and on the app's own page.
     async function checkPhone() {
         const out = {};
         await openSession(marked.session, marked.origin);
@@ -555,32 +558,61 @@ export async function checkIndicator(run) {
         out.screenshot = { inside, beside };
         console.log(`PREVIEW SCREENSHOT ${platform} ${shot}`);
         if (platform === 'android') {
-            // Back within the project's own history goes back an entry at a time, before a touch gives the project's
-            // page its user's activation: the WebView's own goBack() skips an entry that went on without one, and would
-            // land on an older entry of the same origin, as each preview of the run is. A path no other entry has tells
-            // them apart.
+            // Back within the project's own history is the WebView's own, which skips each entry a page made without its
+            // user's activation: a touch beside the pill gives each page its user's activation before it goes on, as its
+            // user's tap would. A path no other entry has tells the entries apart, as each preview of the run is of the
+            // same origin.
             const origin = marked.url.replace(/\/$/, '');
-            for (const path of ['/first.html', '/second.html']) {
+            // A page just come may not take a touch until it has drawn: one given its user's activation is touched again
+            // until a touch reaches it, the first page once, as a touch beside the pill must reach it.
+            const touchBeside = async (what, tries = TOUCH_TRIES) => {
+                await step('project', { do: 'paint', color: `rgb(${PAINT.join(', ')})` });
+                for (let tried = 1; ; tried += 1) {
+                    if (tries > 1) await sleep(SETTLED_MS / 3);
+                    const touched = endpoint.waitForNote((note) => note.event === 'touched', tries > 1 ? SETTLED_MS : SHOWN_MS, `a touch beside the pill ${what}`);
+                    indicators.tap(Math.max(0, x - 60), y + Math.round(height / 2));
+                    const note = await touched.catch((error) => {
+                        if (tried >= tries) throw error;
+                        return null;
+                    });
+                    if (note) return { ...note, tried };
+                }
+            };
+            const goTo = async (path) => {
                 const shownAt = projectLoaded(`the project's ${path}`);
                 await step('project', { do: 'navigate', path });
-                await shownAt;
-            }
-            const before = projectLoaded("the project's page before, after Back");
-            await indicators.back('project');
-            const back = await before;
+                return shownAt;
+            };
+            const backTo = async (what) => {
+                const before = endpoint.waitForNote((note) => note.role === 'project' && note.loaded, SHOWN_MS, what);
+                await indicators.back('project');
+                return before;
+            };
+            out.touchBeside = await touchBeside('on the first page', 1);
+            await goTo('/first.html');
+            const touches = [(await touchBeside('on /first.html')).tried];
+            await goTo('/second.html');
+            const back = await backTo("the project's page before, after Back");
             expect(back.loaded === origin && back.path === '/first.html', `Back within the project went to ${back.loaded}${back.path}, not to the page before`);
             expect((await indicators.read('project')).up, 'Back within the project brought the indicator down');
-            // A page that comes anew, painted again for the touch beside the pill.
-            await step('project', { do: 'paint', color: `rgb(${PAINT.join(', ')})` });
-            const touched = endpoint.waitForNote((note) => note.event === 'touched', SHOWN_MS, 'a touch beside the pill');
-            indicators.tap(Math.max(0, x - 60), y + Math.round(height / 2));
-            out.touchBeside = await touched;
-            const first = projectLoaded("the project's first page after Back");
-            await indicators.back('project');
-            expect((await first).path === '/', "Back within the project did not reach its first page");
-            // At its first entry Back closes the preview.
-            const backEnd = await ended('Back at the first entry', () => indicators.back('project'));
+            expect((await backTo("the project's first page after Back")).path === '/', 'Back within the project did not reach its first page');
+            // A page that pushes a state of its own as it loads and replaces history.back() does not hold Back.
+            touches.push((await touchBeside('before the page that would hold Back')).tried);
+            await goTo('/holds-back.html');
+            const past = await backTo('the project\'s page before the one that would hold Back');
+            expect(past.path === '/', `Back from the page that would hold it went to ${past.path}`);
+            out.backPastHolder = 'not held';
+            out.touchesTried = touches;
+            // Back twice at its first entry: one end, one event, the app's page.
+            from = endpoint.notes.length;
+            const backEnd = await ended('Back twice at the first entry', () => indicators.back('project', 2));
             expect(backEnd.length === 1 && Object.keys(backEnd[0]).length === 0, `Back's end held ${JSON.stringify(backEnd)}`);
+            await sleep(SETTLED_MS);
+            const after = pagesSince(from);
+            const appPages = endpoint.notes.slice(from).filter((note) => note.role === 'app' && note.loaded);
+            expect(appPages.length === 1 && after.at(-1)?.role === 'app' && await served(marked.origin) === false,
+                `Back twice at the first entry left ${JSON.stringify({ pages: after.map((note) => note.role), appPages: appPages.length })}`);
+            out.backTwice = 'one end, one event, the app\'s page';
             // On the app's own page Back is the host's, as before: the WebView goes back in its history, and no preview
             // comes back.
             const moved = endpoint.waitForNote((note) => note.event === 'page', SHOWN_MS, "a page after Back on the app's own page");
@@ -617,6 +649,7 @@ export async function checkIndicator(run) {
     async function checkReadings() {
         const out = {};
         const snapshot = stepsSnapshot(SNAPSHOT_NAME);
+        const another = stepsSnapshot(`${SNAPSHOT_NAME} two`);
         const lineOf = async () => menuWords(platform, await indicators.menu('project')).line;
         const versions = storeOn({ ...run, data: (await step('app', { do: 'paths' })).data }, 'versions.json');
         await openSession(snapshot.session, snapshot.origin);
@@ -659,6 +692,13 @@ export async function checkIndicator(run) {
         // brings a higher version.
         release = cloud.hold(snapshot.session.id);
         await ended('Close preview with a reading held', () => indicators.presses('project', [{ item: 'Reload', ms: PRESS_MS }, { item: 'Close preview', ms: PRESS_MS * 4 }]));
+        // Another snapshot's Reload while that reading still waits: read and reloaded all the same.
+        await openSession(another.session, another.origin);
+        reloaded = endpoint.waitForNote((note) => note.role === 'project' && note.loaded, SHOWN_MS, 'another snapshot after its Reload, as a reading of the one before waited');
+        await indicators.press('project', 'Reload');
+        await reloaded;
+        out.reloadBesideHeld = 'reloaded';
+        await ended('Close preview of another snapshot', () => indicators.press('project', 'Close preview'));
         await openSession(second.session, second.origin);
         const secondLine = await lineOf();
         from = endpoint.notes.length;
@@ -686,7 +726,6 @@ export async function checkIndicator(run) {
         out.gone = gone[0].message;
         // Rule 12: Close preview as an end of the extension's own comes, another snapshot's gone: one end, with its
         // words or none.
-        const another = stepsSnapshot(`${SNAPSHOT_NAME} two`);
         await openSession(another.session, another.origin);
         cloud.remove(another.session.id);
         const both = await ended('Reload of a snapshot gone, and Close preview at once',
@@ -717,6 +756,31 @@ export async function checkIndicator(run) {
         out.secondAsFirstEnds = isServed ? 'the second open, its indicator up' : 'none, its indicator down';
         if (isServed) await step('app', { do: 'close' });
         await down('the indicator after the second project');
+        out.twoOpens = await twoOpens();
         return out;
+    }
+
+    // Rule 1 with two sessions the app's own code opens, the second's open on its way while the first one's indicator
+    // waits for the main thread, which the hook holds where the second's check needs none of it: the second served, its
+    // indicator up with its name as its first page starts and after a Reload, down after Close preview, the first one's
+    // open refused.
+    async function twoOpens() {
+        from = endpoint.notes.length;
+        const shownAt = projectLoaded('the second of two sessions opened at once');
+        const two = await step('app', { do: 'openTwo', first: marked.session.id, second: second.session.id });
+        const firstPage = await shownAt;
+        const started = pagesSince(from).find((note) => note.role === 'project');
+        expect(two.url && firstPage.loaded === two.url.replace(/\/$/, '') && isUp(started?.indicator ?? {}, SECOND_NAME),
+            `the second of two opened at once showed ${firstPage.loaded} with ${JSON.stringify({ two, indicator: started?.indicator })}`);
+        if (two.held) expect(two.first.error === ENDED_AS_OPENED, `the first of two opened at once answered ${JSON.stringify(two.first)}, the second's open past it`);
+        from = endpoint.notes.length;
+        const reloaded = projectLoaded('the second of two after Reload');
+        await indicators.press('project', 'Reload');
+        await reloaded;
+        const again = pagesSince(from).find((note) => note.role === 'project');
+        expect(isUp(again?.indicator ?? {}, SECOND_NAME) && isUp(await indicators.read('project'), SECOND_NAME),
+            `the second of two after Reload: ${JSON.stringify(again?.indicator)}`);
+        await ended('Close preview of the second of two', () => indicators.press('project', 'Close preview'));
+        return two.held ? 'the second served, the first refused' : `one after the other here: the first ${two.first.error ? 'refused' : 'served, then ended'}`;
     }
 }

@@ -265,6 +265,12 @@ export async function runSteps(invoke, api) {
     };
     // On Windows, where a task dialog up holds the page's answers, the run calls through DevTools.
     globalThis.crossbindE2e = { invoke };
+    // A page that would hold Back: as it loads, with no user's activation, it pushes a state of its own and replaces
+    // history.back().
+    if (location.pathname === '/holds-back.html' && !location.hash) {
+        history.pushState(null, '', '#held');
+        history.back = () => {};
+    }
     await ask('/report', { loaded: location.origin, path: location.pathname, length: history.length });
     for (;;) {
         const step = await ask('/next');
