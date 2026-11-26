@@ -16,9 +16,9 @@ public interface ExtensionHost {
     // Asks the app's user for whichever of these permissions it lacks, then runs then, which checks what it was given.
     void afterAsking(String[] permissions, Runnable then);
 
-    // Starts an activity for its result, which then gets on the UI thread. It throws ActivityNotFoundException, as
-    // startActivityForResult() does.
-    void startForResult(Intent intent, ActivityResult then);
+    // Starts an activity for its result, which then gets on the UI thread, and gives what finishes that activity, on the
+    // UI thread, as finishActivity() does. It throws ActivityNotFoundException, as startActivityForResult() does.
+    Runnable startForResult(Intent intent, ActivityResult then);
 
     interface ActivityResult {
         void onResult(int result, Intent data);

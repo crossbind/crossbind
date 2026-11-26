@@ -574,10 +574,10 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
     }
 
     // The file input whose page went, as its origin ended or another page started: unanswered, it answers as
-    // cancelled.
+    // cancelled, and its holder hears of it.
     private void filesGone(Predicate<String> isGoneOrigin) {
         if (pendingFiles == null || !isGoneOrigin.test(pendingFiles.origin)) return;
-        pendingFiles.cancel();
+        pendingFiles.gone();
         pendingFiles = null;
     }
 
@@ -760,10 +760,11 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
     }
 
     @Override
-    public void startForResult(Intent intent, ActivityResult then) {
+    public Runnable startForResult(Intent intent, ActivityResult then) {
         int request = nextRequest++;
         startActivityForResult(intent, request);
         results.put(request, then);
+        return () -> finishActivity(request);
     }
 
     @Override

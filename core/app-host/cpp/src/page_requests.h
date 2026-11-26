@@ -263,6 +263,10 @@ struct FileInput::State {
     std::vector<std::string> accept;
     Page page;
     AnswerOnce<std::optional<std::vector<std::string>>> answer;
+    // What its holder closes its picker with as its page goes before its answer, and whether it went.
+    std::mutex mutex;
+    std::vector<std::function<void()>> cancels;
+    bool isGone = false;
 };
 
 }  // namespace crossbind

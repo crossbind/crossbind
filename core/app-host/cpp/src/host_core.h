@@ -111,7 +111,7 @@ void answerOriginRequest(const std::string &name, std::function<void(Request)> h
 // The running module cancels each call that waits for its answer of a page of an origin that ended; from any thread.
 void endCallsOf(const std::string &name);
 // The page of this id went, as its origin ended, another page replaced it or its window closed: each dialog and file
-// input of it that waits for its answer answers as cancelled, and a dialog's holder hears of it. On the module's thread.
+// input of it that waits for its answer answers as cancelled, and its holder hears of it. On the module's thread.
 void pageGone(uint64_t page);
 // Ends the origin of this name that this serveOrigin() of it made, once, from any thread: its pages' calls are cancelled
 // and refused from then on, its windows show the app's first page, and its requests get 404.
