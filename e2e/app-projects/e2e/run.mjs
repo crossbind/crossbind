@@ -955,8 +955,10 @@ async function flow() {
     // A token a run before left in this Mac's file-based keychain, which a rebuilt app would ask its user for.
     if (!platform && process.platform === 'darwin') spawnSync('security', ['delete-generic-password', '-s', `dev.crossbind.${name}.cloud`, '-a', CLOUD.cloud]);
     if (isWebBuilt) {
+        const uploading = terminal.lines.length;
         await uploadSnapshot();
-        expect(/uploaded as a snapshot, version 1,/.test(terminal.text()), `crossbind app preview --cloud did not upload version 1:\n${terminal.text()}`);
+        // Its last lines may come after its exit.
+        await terminal.waitFor(/uploaded as a snapshot, version 1,/, LINE_MS, 'crossbind app preview --cloud\'s line of version 1', uploading);
     }
     const started = terminal.lines.length;
     preview = startPreview([]);
