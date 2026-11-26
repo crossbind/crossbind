@@ -28,7 +28,7 @@ public final class PageFilesExtension implements Extension {
         Intent intent = input.params().createIntent();
         if (input.allowsMultiple()) intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
         try {
-            host.startForResult(intent, (result, data) -> input.pick(picked(result, data)));
+            input.onCancel(host.startForResult(intent, (result, data) -> input.pick(picked(result, data))));
         } catch (ActivityNotFoundException none) {
             Log.w("crossbind", "nothing on this device picks a file");
             input.useDefault();
