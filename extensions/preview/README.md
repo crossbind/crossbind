@@ -64,9 +64,9 @@ project. You can change this in the preview's menu.", with Don't Allow, its defa
 project's from the account's list. A request of two kinds, as `getUserMedia({ video: true, audio: true })` is where the
 web view asks for both at once, is one question that names both; Windows asks for each apart, so two come there, one
 after the other. The answer is kept for the project's origin and the kind, in `preview/consents.json` in the app's data
-folder, and the kind is asked no more: Don't Allow is kept as Allow is. A store that cannot be read, is no JSON or has
-another shape gives no consent. Any other kind is denied a project with no question, the clipboard's read and the web's
-notifications among them.
+folder, and the kind is asked no more: Don't Allow is kept as Allow is, until the menu's Permissions changes it. A store
+that cannot be read, is no JSON or has another shape gives no consent. Any other kind is denied a project with no
+question, the clipboard's read and the web's notifications among them.
 
 The question is the preview's: a reload leaves it up, and the preview's end closes it, keeping nothing. It is a sheet of
 the window on macOS, an alert on iOS, a task dialog of the window on Windows, a dialog of the window on Linux and an
@@ -88,8 +88,8 @@ hides, reads or presses it.
 - Windows: the title, and the menu's items at the top of the window's system menu.
 - Linux: the title, and a bar above the page with the project's name and a menu button.
 
-The menu has three items: Reload; the project's name over its line, "<account> · on <address>:<port>" or "<account> · a
-snapshot, version <n>", which does nothing; and Close preview.
+The menu has four items: Reload; the project's name over its line, "<account> · on <address>:<port>" or "<account> · a
+snapshot, version <n>", which does nothing; Permissions; and Close preview.
 
 - Reload is the web view's own reload: the origin stays served, a page's own `alert()`, `confirm()` or `prompt()` holds
   it until answered, a message dialog closes with its page, and the consent's question stays. For a snapshot, the
@@ -97,6 +97,14 @@ snapshot, version <n>", which does nothing; and Close preview.
   proof holds, and the line says so; a snapshot gone, a sign-out or a session that reads as another's ends the preview
   with its words. The session is read again as the app comes back to the front, where a higher version reloads the page,
   and never on a timer.
+- Permissions names the project and has a control of two states for each kind its user answered, in the order Camera,
+  Microphone, Location: on where Allow is kept, off where Don't Allow is; a project asked nothing reads "Nothing asked
+  yet.". On a desktop it is a submenu of check marks, in the Preview menu, the system menu or the bar's menu; on a
+  phone, "Permissions…" opens a sheet of switches on iOS and a dialog of check boxes on Android. A change is kept as the
+  question's answer is, an answer the store cannot take held for the run, and turning one on gives what Don't Allow
+  refused, with no question: beside the question it is the one place an answer is given, and no page reaches it. The
+  project's page then reloads once, as Permissions closes, by the web view's own reload, so that the change holds for
+  the page: a stream it had under an Allow taken back goes with it, and a web view keeps no answer of its own past it.
 - Close preview ends the preview as `close()` does, its question and its page's dialogs with it, and holds
   `preview.ended` with no words.
 - Back on Android is the WebView's own `goBack()` within the project's own history, as a built app's Back is: it skips

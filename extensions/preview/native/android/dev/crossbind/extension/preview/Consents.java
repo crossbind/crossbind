@@ -74,6 +74,29 @@ final class Consents {
         for (PagePermission request : ending) request.deny();
     }
 
+    // The kinds its user answered, kept or held for the run, in the order camera, microphone, location, each with
+    // whether it is allowed: what the menu's Permissions shows.
+    Map<String, Boolean> answers(ExtensionHost host) {
+        Map<String, Boolean> answers = new LinkedHashMap<>();
+        if (name == null) return answers;
+        Object store = read(storeOf(host));
+        for (String kind : ASKED) {
+            Boolean answer = keptOf(store, kind);
+            if (answer != null) answers.put(kind, answer);
+        }
+        return answers;
+    }
+
+    // A control's change at the menu's Permissions: the answer of a kind its user answered before, kept as its
+    // question's is, for the preview of this origin while it is the one served; what waits is decided again. Whether it
+    // was kept. The one place beside the question that gives an answer, called by a native control alone.
+    boolean change(ExtensionHost host, String origin, String kind, boolean isAllowed) {
+        if (url == null || !url.equals(origin) || keptOf(read(storeOf(host)), kind) == null) return false;
+        keep(host, List.of(kind), isAllowed);
+        settle(host);
+        return true;
+    }
+
     // One of the three kinds alone, each listed in app.permissions, of the preview's own origin.
     void ask(ExtensionHost host, PagePermission request) {
         boolean isAskable = request.isListed() && !request.kinds().isEmpty() && ASKED.containsAll(request.kinds());
@@ -164,8 +187,8 @@ final class Consents {
         return isOpen ? null : true;
     }
 
-    // Keeps an answer for these kinds of the preview's origin, the store's other entries as they were; one the store
-    // cannot take holds for the app's run, and the log says so.
+    // Keeps an answer for these kinds of the preview's origin, the store's other entries as they were, in place of one
+    // held for the run; one the store cannot take holds for the app's run, and the log says so.
     private void keep(ExtensionHost host, List<String> kinds, boolean isAllowed) {
         File file = storeOf(host);
         Object store = read(file);
@@ -185,6 +208,8 @@ final class Consents {
             for (String kind : kinds) entry.put(kind, isAllowed);
             entries.put(name, entry);
             write(file, entries.toString());
+            Map<String, Boolean> run = held.get(name);
+            if (run != null) run.keySet().removeAll(kinds);
         } catch (IOException | JSONException error) {
             Map<String, Boolean> run = held.computeIfAbsent(name, (origin) -> new HashMap<>());
             for (String kind : kinds) run.put(kind, isAllowed);

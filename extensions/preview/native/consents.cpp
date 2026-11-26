@@ -9,10 +9,11 @@
 
 namespace preview {
 
-// Its Java takes the page's requests: it holds the preview served from here on.
-void serveConsents(Served served, std::function<void()> then) {
+// Its Java takes the page's requests and keeps the answers its Permissions shows: it holds the preview served from here
+// on.
+void serveConsents(Served served, std::function<void(Answers answers)> then) {
     crossbind::android::callJava("preview", "serving", {{"url", served.url}, {"name", served.name}, {"project", served.project}},
-        [then](Failure, Value) { then(); });
+        [then](Failure, Value) { then({}); });
 }
 
 void endConsents() {
@@ -105,6 +106,14 @@ std::optional<bool> keptOf(const Value &kept, const std::string &origin, const s
     return answer.isBool() ? std::optional<bool>(answer.asBool()) : std::nullopt;
 }
 
+Answers answersOf(const Value &kept, const std::string &origin) {
+    Answers answers;
+    for (const auto &kind : ASKED) {
+        if (const std::optional<bool> answer = keptOf(kept, origin, kind)) answers.emplace_back(kind, *answer);
+    }
+    return answers;
+}
+
 Kept keptFor(const Value &kept, const std::string &origin, const std::vector<std::string> &kinds) {
     bool isOpen = false;
     for (const auto &kind : kinds) {
@@ -115,8 +124,8 @@ Kept keptFor(const Value &kept, const std::string &origin, const std::vector<std
     return isOpen ? Kept::open : Kept::allowed;
 }
 
-// Keeps an answer for these kinds of the origin, the store's other entries as they were; one the store cannot take
-// holds for the app's run, and the output says so.
+// Keeps an answer for these kinds of the origin, the store's other entries as they were, in place of one held for the
+// run; one the store cannot take holds for the app's run, and the output says so.
 void keep(const std::string &origin, const std::vector<std::string> &kinds, bool isAllowed) {
     const Value kept = store();
     Value::Object entries;
@@ -137,9 +146,11 @@ void keep(const std::string &origin, const std::vector<std::string> &kinds, bool
     for (const auto &kind : kinds) entry.emplace_back(kind, isAllowed);
     entries.emplace_back(origin, Value(std::move(entry)));
     const Failure failure = writeDataFile(CONSENTS, Value(std::move(entries)).json());
-    if (!failure) return;
-    for (const auto &kind : kinds) held[origin][kind] = isAllowed;
-    std::fprintf(stderr, "crossbind: preview could not keep an answer in its %s, which holds for this run: %s\n", CONSENTS.c_str(), failure->c_str());
+    for (const auto &kind : kinds) {
+        if (failure) held[origin][kind] = isAllowed;
+        else if (const auto run = held.find(origin); run != held.end()) run->second.erase(kind);
+    }
+    if (failure) std::fprintf(stderr, "crossbind: preview could not keep an answer in its %s, which holds for this run: %s\n", CONSENTS.c_str(), failure->c_str());
 }
 
 // Decides each waiting request that what is kept decides, and asks about the first other one's kinds not answered yet,
@@ -188,6 +199,7 @@ void answered(uint64_t number, const std::vector<std::string> &kinds, std::optio
         if (isAllowed.has_value()) {
             keep(served->name, kinds, *isAllowed);
             settled = settle();
+            answerIndicator(served->url, answersOf(store(), served->name));
         } else {
             settled.denied.swap(waiting);
         }
@@ -218,13 +230,35 @@ void give(Settled settled) {
 
 }  // namespace
 
-void serveConsents(Served preview, std::function<void()> then) {
+void serveConsents(Served preview, std::function<void(Answers answers)> then) {
     endConsents();
+    Answers answers;
     {
         std::lock_guard<std::mutex> lock(consentsMutex);
+        answers = answersOf(store(), preview.name);
         served = std::move(preview);
     }
-    then();
+    then(std::move(answers));
+}
+
+// Under the lock, the indicator's own taken inside it: the menu shows the answers in the order they were kept.
+bool changeConsent(const std::string &origin, const std::string &kind, bool isAllowed) {
+    Settled settled;
+    {
+        std::lock_guard<std::mutex> lock(consentsMutex);
+        if (!served || served->url != origin || !keptOf(store(), served->name, kind)) return false;
+        keep(served->name, {kind}, isAllowed);
+        settled = settle();
+        answerIndicator(served->url, answersOf(store(), served->name));
+    }
+    give(std::move(settled));
+    return true;
+}
+
+std::string controlWordOf(const std::string &kind) {
+    std::string word = kind;
+    if (!word.empty()) word.front() = static_cast<char>(word.front() - 'a' + 'A');
+    return word;
 }
 
 void endConsents() {

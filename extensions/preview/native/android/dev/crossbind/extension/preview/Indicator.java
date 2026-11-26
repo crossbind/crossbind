@@ -23,17 +23,22 @@ import dev.crossbind.app.Extension.Call;
 import dev.crossbind.app.ExtensionHost;
 
 import java.util.ArrayDeque;
+import java.util.Map;
 
 // What shows that a preview is one on Android: a pill above the WebView, inside the system bars, which opens the
 // preview's menu; and Back, which within the project's own history goes back and at its first entry closes the
-// preview. What its user asks for, Reload or Close preview, answers the native code's call it holds. On the UI thread.
+// preview. What its user asks for, Reload or Close preview, answers the native code's call it holds; Permissions
+// changes the answers Consents keeps. On the UI thread.
 final class Indicator {
     private static final int PILL_DP = 28;
     private static final int MARK_DP = 16;
     private static final int MARGIN_DP = 8;
 
+    private final Consents consents;
+    private ExtensionHost host;
     private LinearLayout pill;
     private AlertDialog menu;
+    private AlertDialog permissions;
     private OnBackInvokedCallback back;
     private Activity shownOn;
     private String project = "";
@@ -43,7 +48,12 @@ final class Indicator {
     private Call waiting;
     private final ArrayDeque<String> asked = new ArrayDeque<>();
 
+    Indicator(Consents consents) {
+        this.consents = consents;
+    }
+
     void mark(ExtensionHost host, String project, String line, String origin) {
+        this.host = host;
         this.project = project;
         this.line = line;
         this.origin = origin;
@@ -53,9 +63,15 @@ final class Indicator {
         pill.setContentDescription(project + " – crossbind preview");
     }
 
+    // Permissions closes with it, and reloads no page.
     void unmark() {
         if (menu != null) menu.dismiss();
         menu = null;
+        if (permissions != null) {
+            permissions.setOnDismissListener(null);
+            permissions.dismiss();
+        }
+        permissions = null;
         if (back != null && shownOn != null) shownOn.getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(back);
         back = null;
         if (pill != null && pill.getParent() instanceof ViewGroup parent) parent.removeView(pill);
@@ -123,7 +139,7 @@ final class Indicator {
         activity.getOnBackInvokedDispatcher().registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_OVERLAY, back);
     }
 
-    // The project's name over its line, which does nothing, then Reload and Close preview.
+    // The project's name over its line, which does nothing, then Reload, Permissions… and Close preview.
     private void openMenu(Activity activity) {
         if (menu != null && menu.isShowing()) return;
         LinearLayout title = new LinearLayout(activity);
@@ -139,10 +155,42 @@ final class Indicator {
         title.addView(below);
         menu = new AlertDialog.Builder(activity)
                 .setCustomTitle(title)
-                .setItems(new CharSequence[] {"Reload", "Close preview"}, (dialog, which) -> ask(which == 0 ? "reload" : "close"))
+                .setItems(new CharSequence[] {"Reload", "Permissions…", "Close preview"}, (dialog, which) -> {
+                    if (which == 1) openPermissions(activity);
+                    else ask(which == 0 ? "reload" : "close");
+                })
                 .setNegativeButton("Cancel", null)
                 .create();
         menu.show();
+    }
+
+    // Permissions: the project's name, then a check box for each kind its user answered, on where Allow is kept, whose
+    // change is kept at once; or that nothing was asked yet. The page reloads once the dialog closes, where one changed.
+    private void openPermissions(Activity activity) {
+        Map<String, Boolean> answers = consents.answers(host);
+        String[] kinds = answers.keySet().toArray(new String[0]);
+        CharSequence[] words = new CharSequence[kinds.length];
+        boolean[] states = new boolean[kinds.length];
+        for (int at = 0; at < kinds.length; at += 1) {
+            words[at] = Character.toUpperCase(kinds[at].charAt(0)) + kinds[at].substring(1);
+            states[at] = answers.get(kinds[at]);
+        }
+        boolean[] isChanged = {false};
+        AlertDialog.Builder builder = new AlertDialog.Builder(activity).setTitle(project).setPositiveButton("Done", null);
+        if (kinds.length == 0) {
+            builder.setMessage("Nothing asked yet.");
+        } else {
+            builder.setMultiChoiceItems(words, states, (dialog, which, isChecked) -> {
+                if (consents.change(host, origin, kinds[which], isChecked)) isChanged[0] = true;
+                else ((AlertDialog) dialog).getListView().setItemChecked(which, !isChecked);
+            });
+        }
+        permissions = builder.create();
+        permissions.setOnDismissListener((dialog) -> {
+            permissions = null;
+            if (isChanged[0]) ask("reload");
+        });
+        permissions.show();
     }
 
     // The WebView's own goBack(), as a built app's Back is, where the history entry before this one is the project's: it
