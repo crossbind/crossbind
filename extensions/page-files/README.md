@@ -6,7 +6,8 @@ It comes with `@crossbind/core-app-host`: there is nothing to install or list.
 
 ## What it does
 
-A page's file input opens the system's picker, with the types and the multiple choice the input asks for.
+A page's file input opens the system's picker, with the types and the multiple choice the input asks for. The picker
+closes as its page goes before its user picks: as another page replaces it, its origin ends or its window closes.
 
 ## Platforms
 
