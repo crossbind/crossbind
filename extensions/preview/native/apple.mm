@@ -540,7 +540,8 @@ void giveWebFullScreenBack(const crossbind::Window &open) {
 }
 
 // A sheet of the window, which leaves the menu bar and the app's other windows working: Don't Allow its first button,
-// which Return presses, and Escape none, as NSAlert gives Escape to a button named Cancel alone.
+// which Return presses, and Escape none, as NSAlert gives Escape to a button named Cancel alone. A sheet that ends by
+// neither button, as when another's code ends it, answers as one that could not be shown.
 std::function<void()> showConsent(uint64_t window, const std::string &message, const std::string &detail,
     std::function<void(std::optional<bool> isAllowed)> done) {
     const std::optional<crossbind::Window> open = crossbind::windowOf(window);
@@ -560,6 +561,7 @@ std::function<void()> showConsent(uint64_t window, const std::string &message, c
                       if (*isClosed) return;
                       if (response == NSAlertFirstButtonReturn) done(false);
                       else if (response == NSAlertSecondButtonReturn) done(true);
+                      else done(std::nullopt);
                   }];
     __weak NSAlert *shown = alert;
     __weak NSWindow *weakParent = parent;
