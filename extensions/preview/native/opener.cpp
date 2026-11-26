@@ -176,10 +176,13 @@ bool isOpenProxy(const Proxy *proxy);
 // origin, answer 502 with the reason.
 class Proxy : public std::enable_shared_from_this<Proxy> {
 public:
-    Proxy(Session session, Account account, std::string source, std::string gateToken)
-        : isSnapshot_(session.source == "snapshot"), sessionId_(session.id), projectId_(session.projectId), openedVersion_(session.version),
-          account_(std::move(account)), source_(std::move(source)), session_(std::move(session)), token_(std::move(gateToken)) {}
+    Proxy(uint64_t number, Session session, Account account, std::string source, std::string gateToken)
+        : number_(number), isSnapshot_(session.source == "snapshot"), sessionId_(session.id), projectId_(session.projectId),
+          openedVersion_(session.version), account_(std::move(account)), source_(std::move(source)), session_(std::move(session)),
+          token_(std::move(gateToken)) {}
 
+    // The preview's number, which its indicator's marks carry.
+    uint64_t number() const { return number_; }
     const std::string &sessionId() const { return sessionId_; }
     bool isSnapshot() const { return isSnapshot_; }
 
@@ -335,7 +338,7 @@ private:
                 renewal = ++renewals_;
             }
         }
-        relineIndicator(line());
+        relineIndicator(number_, line());
         if (!isNewKey) return;
         std::thread([weak = std::weak_ptr<Proxy>(shared_from_this()), renewal] {
             std::this_thread::sleep_for(RENEWED_SHOWN);
@@ -345,7 +348,7 @@ private:
                 std::lock_guard<std::mutex> lock(self->mutex_);
                 if (self->renewals_ != renewal) return;
             }
-            relineIndicator(self->line());
+            relineIndicator(self->number_, self->line());
         }).detach();
     }
 
@@ -359,6 +362,7 @@ private:
         for (const auto &then : waiting) then(reading);
     }
 
+    const uint64_t number_;
     const bool isSnapshot_;
     const std::string sessionId_;
     const std::string projectId_;
@@ -376,10 +380,12 @@ private:
 
 std::mutex openerMutex;
 std::optional<Checked> checked;
-// The preview open, at most one: its origin, its proxy and the window its indicator went up on as it opened.
+// The preview open, at most one: its origin, its proxy and the window its indicator went up on as it opened; and the
+// number the last one served took.
 std::optional<crossbind::Origin> openOrigin;
 std::shared_ptr<Proxy> openProxy;
 uint64_t openWindow = 0;
+uint64_t previews = 0;
 // Whether a Reload waits for its reading of the session, which another Reload joins.
 bool isReloading = false;
 
@@ -470,7 +476,12 @@ void check(Call call) {
 
 void serve(const Call &call, const Checked &found) {
     endPreview();
-    auto proxy = std::make_shared<Proxy>(found.session, found.account, found.source, found.gateToken);
+    uint64_t number = 0;
+    {
+        std::lock_guard<std::mutex> lock(openerMutex);
+        number = ++previews;
+    }
+    auto proxy = std::make_shared<Proxy>(number, found.session, found.account, found.source, found.gateToken);
     try {
         const crossbind::Origin origin = crossbind::serveOrigin(
             found.originName, "project", [proxy](Request request) { proxy->answer(std::move(request)); }, found.session.projectName);
@@ -484,7 +495,7 @@ void serve(const Call &call, const Checked &found) {
         // on the page's window.
         Shown shown{found.session.projectName, proxy->line(), origin.url()};
         serveConsents({origin.url(), found.originName, found.session.projectName}, [call, url = origin.url(), shown, proxy] {
-            markPreview(call.page().windowId(), shown, [call, url, proxy](uint64_t window) {
+            markPreview(proxy->number(), call.page().windowId(), shown, [call, url, proxy](uint64_t window) {
                 {
                     std::lock_guard<std::mutex> lock(openerMutex);
                     if (openProxy == proxy) {
@@ -493,8 +504,8 @@ void serve(const Call &call, const Checked &found) {
                         return;
                     }
                 }
-                // Ended before its indicator went up: it comes down again.
-                unmarkPreview();
+                // Ended before its indicator went up: it comes down again, where no other preview's came up meanwhile.
+                unmarkPreview(proxy->number());
                 call.reject(ENDED_AS_OPENED);
             });
         });
@@ -526,18 +537,20 @@ void open(Call call) {
 
 bool endPreview(const std::string &words, const std::string &session) {
     std::optional<crossbind::Origin> ending;
+    uint64_t number = 0;
     {
         std::lock_guard<std::mutex> lock(openerMutex);
         if (!openOrigin || (!session.empty() && (!openProxy || openProxy->sessionId() != session))) return false;
         ending.swap(openOrigin);
+        number = openProxy ? openProxy->number() : 0;
         openProxy.reset();
         openWindow = 0;
     }
     // Its question closes unanswered, and what it asked for is denied, before the origin ends; its indicator comes down
-    // with each window's next page.
+    // with each window's next page that is no project's.
     endConsents();
     ending->end();
-    unmarkPreview();
+    unmarkPreview(number);
     if (!words.empty()) holdEvent("ended", Value::Object{{"message", words}});
     return true;
 }

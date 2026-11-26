@@ -76,9 +76,9 @@ project's question for the camera and the microphone.
 
 ## What marks a preview
 
-While a preview shows, the extension marks its window, before the project's page can load there and until the window's
-next page after the end has started. No page reaches the mark: no function, event or option shows, hides, reads or
-presses it.
+While a preview shows, the extension marks its window, before the project's page can load there and until a page that
+is no project's has started in the window after the end. No page reaches the mark: no function, event or option shows,
+hides, reads or presses it.
 
 - iOS: a pill, the app's mark and "Preview", at the top trailing corner, in a window of the extension's own above the
   page's alerts, which takes touches at the pill and at what it presents alone. Its menu is an action sheet, and the
