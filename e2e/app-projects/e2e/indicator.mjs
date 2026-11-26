@@ -665,8 +665,11 @@ export async function checkIndicator(run) {
         cloud.raise(snapshot.session.id);
         release();
         await sleep(SETTLED_MS);
-        const after = { pages: pagesSince(from).length, shown: await indicators.read('project'), line: await lineOf() };
-        expect(after.pages === 0 && isUp(after.shown, 'e2e second project') && after.line === secondLine, `an answer after its preview ended changed the second project's: ${JSON.stringify(after)}`);
+        // Read before the second's page is asked anything, which a reload of it would leave unanswered.
+        const started = pagesSince(from).length;
+        expect(started === 0, `an answer after its preview ended started ${started} pages in the second project's window`);
+        const after = { shown: await indicators.read('project'), line: await lineOf() };
+        expect(isUp(after.shown, 'e2e second project') && after.line === secondLine, `an answer after its preview ended changed the second project's: ${JSON.stringify(after)}`);
         out.heldAnswer = 'changed nothing of the second';
         await ended('Close preview of the second project', () => indicators.press('project', 'Close preview'));
         // 401 signs the app out, the preview ending with its words.
@@ -675,13 +678,21 @@ export async function checkIndicator(run) {
         const signedOut = await ended('Reload as the app was signed out', () => indicators.press('project', 'Reload'));
         expect(signedOut.some((each) => each.message === signedOutWords), `a 401 at Reload held ${JSON.stringify(signedOut)}`);
         await run.signIn();
-        // The session gone, as Close preview comes too: one end, with the snapshot's words or none.
+        // The session gone: Reload ends the preview with its words.
         await openSession(snapshot.session, snapshot.origin);
         cloud.remove(snapshot.session.id);
-        const gone = await ended('Reload of a snapshot gone, and Close preview at once',
+        const gone = await ended('Reload of a snapshot gone', () => indicators.press('project', 'Reload'));
+        expect(gone.length === 1 && gone[0].message === GONE, `a snapshot gone held ${JSON.stringify(gone)}`);
+        out.gone = gone[0].message;
+        // Rule 12: Close preview as an end of the extension's own comes, another snapshot's gone: one end, with its
+        // words or none.
+        const another = stepsSnapshot(`${SNAPSHOT_NAME} two`);
+        await openSession(another.session, another.origin);
+        cloud.remove(another.session.id);
+        const both = await ended('Reload of a snapshot gone, and Close preview at once',
             () => indicators.presses('project', [{ item: 'Reload', ms: PRESS_MS }, { item: 'Close preview', ms: PRESS_MS + 20 }]));
-        expect(gone.length === 1 && (gone[0].message === GONE || Object.keys(gone[0]).length === 0), `a snapshot gone held ${JSON.stringify(gone)}`);
-        out.gone = gone[0];
+        expect(both.length === 1 && (both[0].message === GONE || Object.keys(both[0]).length === 0), `a snapshot gone as Close preview came held ${JSON.stringify(both)}`);
+        out.goneAndClosed = both[0].message ?? 'Close preview\'s';
         return out;
     }
 
