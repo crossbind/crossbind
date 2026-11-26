@@ -44,9 +44,14 @@ crossbind's OPFS backend needs; so nothing is turned on (measured 18 Nov 2026).
 
 A file input's picker that is up as its page goes, at a reload or as the page's origin ends, stays over the page that
 comes: on macOS the host's `page-files` opens `NSOpenPanel` as a sheet of the window, and the SDK's `FileInput` gives
-it no cancel to close it with as the page goes; iOS's picker is WebKit's own. A file chosen in it reaches no page, as
-WebKit hands it to the input that asked, whose page is gone, and allows no path. The preview extension's Reload and the
+it no cancel to close it with as the page goes; iOS's picker is WebKit's own. The preview extension's Reload and the
 end of a preview meet it; measured on macOS 27 and the iOS 27 Simulator on 26 Nov 2026.
+
+What a file chosen in it reaches was not run on macOS or iOS, as no run chooses a file in those pickers. Read in the
+host's code: `page-files` and `FileInput::pick()` allow no path, and WebKit hands the files to the input that asked,
+whose page is gone. Not read: what WebKit does with them where that page is kept in its back/forward cache and comes
+back. On Android, where a run can choose a file, a file chosen in the system's picker left up after a preview's end
+reached no page.
 
 - Seen: 2026-11-26
 - Check: the macOS job of the last conformance run on main prints the picker left up after a preview's end:
