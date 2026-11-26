@@ -15,6 +15,7 @@ import {
 } from './cloud.mjs';
 import { checkConsents } from './consents.mjs';
 import { checkIndicator } from './indicator.mjs';
+import { checkPickers } from './pickers.mjs';
 import { serveEndpoint } from './endpoint.mjs';
 import {
     CLOUD, CLOUD_PORT, ENDPOINT_PORT, SNAPSHOTS_PORT,
@@ -1064,6 +1065,15 @@ async function flow() {
         accountName: ACCOUNTS.main.name,
         signedOutWords: WORDS.signedOut,
     });
+    // A file input's picker closes as its page goes, where the host shows it.
+    const pickers = await checkPickers({
+        platform: devicePlatform,
+        endpoint,
+        openSession,
+        stepsProject: (projectName) => stepsProject(address, projectName),
+        adb: adbPath,
+        applicationId: () => applicationIdOf(builtForDevice),
+    });
 
     // 7: the snapshot, at the project's one origin.
     const snapshotSheet = await openSession(snapshot, devOrigin);
@@ -1081,7 +1091,7 @@ async function flow() {
     const dependency = await checkOptimizedDependency(source, gateToken(dev.key));
     const secrets = checkSecrets();
     console.log(`PROJECTS CHECKS ${JSON.stringify({
-        platform: devicePlatform, keyring, stops, ownClipboard, first, consents, indicator, ranges, other, dependency, secrets,
+        platform: devicePlatform, keyring, stops, ownClipboard, first, consents, indicator, pickers, ranges, other, dependency, secrets,
     })}`);
     console.log(`TIMING a JavaScript edit to the page: ${first.js} ms`);
     console.log(`ok: ${devicePlatform} projects of e2e/app-projects`);

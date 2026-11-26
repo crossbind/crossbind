@@ -6,7 +6,7 @@ import '/crossbind.js';
 import { events, invoke } from 'crossbind/app';
 import { preview } from '@crossbind/extension-preview';
 import {
-    exitFullScreen, fullScreen, shownDialog, storage,
+    clickFileInput, exitFullScreen, fileInput, fullScreen, shownDialog, storage,
 } from '../../app-preview/src/project-steps.js';
 
 const DIALOG = "crossbind e2e: the app's own dialog, after a preview";
@@ -98,6 +98,8 @@ const STEPS = {
     gesture: ({ script }) => invoke('e2e-hooks.gesture', { script }),
     openPreview: ({ session }) => invoke('e2e-hooks.openPreview', { session }),
     openTwo: ({ first, second }) => invoke('e2e-hooks.openTwo', { first, second }),
+    fileInput: async () => fileInput((body) => ask('/report', body)),
+    clickFile: () => clickFileInput(invoke, (body) => ask('/report', body)),
     pickerUp: () => invoke('e2e-hooks.pickerUp'),
     dismissPicker: () => invoke('e2e-hooks.dismissPicker'),
     cycleActive: () => invoke('e2e-hooks.cycleActive'),

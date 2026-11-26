@@ -203,6 +203,23 @@ async function paint({ color }, note) {
     return { width: innerWidth, height: innerHeight, ratio: devicePixelRatio };
 }
 
+// A file input over the page's whole viewport, which its user's tap opens, or the hooks' script as its user's click, and
+// the names of the files it got noted.
+export function fileInput(note) {
+    const input = document.body.appendChild(Object.assign(document.createElement('input'), { type: 'file' }));
+    input.style.cssText = 'position: fixed; inset: 0; width: 100%; height: 100%; z-index: 2147483647; opacity: 0.01';
+    input.addEventListener('change', () => note({ event: 'files', origin: location.origin, names: [...input.files].map((file) => file.name) }).catch(() => {}));
+    globalThis.e2eFile = () => input.click();
+    return 'shown';
+}
+
+// The same input clicked as its user's click, by the hooks' script.
+export async function clickFileInput(invoke, note) {
+    fileInput(note);
+    await invoke('e2e-hooks.gesture', { script: 'e2eFile(); undefined' });
+    return 'clicked';
+}
+
 // The web's own question for notifications, which a page of the app asks no one.
 async function notified() {
     return globalThis.Notification?.requestPermission ? String(await Notification.requestPermission()) : 'no Notification';
@@ -241,13 +258,10 @@ export async function runSteps(invoke, api) {
             return 'cancelled';
         },
         // A file input clicked as its user's click, by the hooks' script, and the picker it brings up read.
-        clickFile: async () => {
-            const input = document.body.appendChild(Object.assign(document.createElement('input'), { type: 'file' }));
-            globalThis.e2eFile = () => input.click();
-            await invoke('e2e-hooks.gesture', { script: 'e2eFile(); undefined' });
-            return 'clicked';
-        },
+        clickFile: () => clickFileInput(invoke, (body) => ask('/report', body)),
+        fileInput: async () => fileInput((body) => ask('/report', body)),
         pickerUp: () => invoke('e2e-hooks.pickerUp'),
+        dismissPicker: () => invoke('e2e-hooks.dismissPicker'),
         noteLater: ({ ms, tag }) => invoke('e2e-hooks.noteLater', { ms, tag }),
         // Whether the page heard the preview's end, which it keeps where its next page reads it.
         listenEnded: async () => {
@@ -324,6 +338,22 @@ export async function runSteps(invoke, api) {
             };
             if (step.dialog === 'alert') setTimeout(() => answered({ value: String(alert(step.text)) }), 100);
             else outcome(invoke('dialog.message', { message: step.text })).then(answered);
+            return;
+        }
+        // What the page does once ms passed, as its picker is up: a move within its document, a reload, or the
+        // preview's end by the app's own code. A page that stays takes the run's steps again.
+        if (step.do === 'later') {
+            await ask('/report', { id: step.id, value: 'armed' });
+            setTimeout(() => {
+                if (step.what === 'pushState') {
+                    history.pushState(null, '', '#moved');
+                    runSteps(invoke, api);
+                } else if (step.what === 'reload') {
+                    location.reload();
+                } else {
+                    invoke('e2e-hooks.closePreview').catch(() => {});
+                }
+            }, step.ms);
             return;
         }
         if (step.do === 'reload') {

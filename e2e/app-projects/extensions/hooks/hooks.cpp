@@ -206,19 +206,31 @@ void crossbind_extension_e2e_hooks(crossbind::Registry &registry) {
             });
         }).detach();
     });
-    // A step's presses, of the preview's menu or of a question's button, and a session the app's own code opens, each
-    // once its ms passed, armed only once the run has the step's report, which the hook makes for the page: a press that
-    // ends the page cannot come before it, however slow the calls.
+    // A step's presses, of the preview's menu, of a question's button or a script run as its user's click, and a session
+    // the app's own code opens, each once its ms passed, armed only once the run has the step's report, which the hook
+    // makes for the page: a press that ends the page cannot come before it, however slow the calls.
     registry.function("e2e-hooks.presses", PAGES, [endpoint](Call call) {
         const Value step = call.options();
         const std::string report = Value(Value::Object{{"id", step["id"]}, {"value", "armed"}}).json();
         crossbind::fetch("POST", endpoint + "/report?role=" + call.page().role(), {{"Content-Type", "application/json"}}, report,
-            [call, step](std::optional<std::string> failure, crossbind::FetchResponse) {
+            [call, step, endpoint](std::optional<std::string> failure, crossbind::FetchResponse) {
                 if (failure) {
                     call.reject(*failure);
                     return;
                 }
                 for (const Value &press : step["presses"].asArray()) {
+                    // A script's outcome is noted at the endpoint: it fails where its page went before it ran.
+                    if (!press["gesture"].isNull()) {
+                        const auto ms = std::chrono::milliseconds(static_cast<long>(press["ms"].asNumber(0)));
+                        std::thread([script = press["gesture"], ms, endpoint] {
+                            std::this_thread::sleep_for(ms);
+                            crossbind::invoke("e2e-hooks.gesture", Value::Object{{"script", script}}, [endpoint](std::optional<std::string> failure, Value) {
+                                const std::string noted = Value(Value::Object{{"event", "gesture"}, {"failure", failure ? Value(*failure) : Value()}}).json();
+                                crossbind::fetch("POST", endpoint + "/report?role=app", {{"Content-Type", "application/json"}}, noted, [](std::optional<std::string>, crossbind::FetchResponse) {});
+                            });
+                        }).detach();
+                        continue;
+                    }
                     crossbind::invoke(press["item"].isNull() ? "e2e-hooks.press" : "e2e-hooks.pressIndicator", press, [](std::optional<std::string>, Value) {});
                 }
                 if (!step["open"].isNull()) {
