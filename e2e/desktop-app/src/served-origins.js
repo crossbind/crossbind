@@ -77,6 +77,8 @@ const SLOW_END_MS = 1000;
 const GONE_MS = 3000;
 // How long the UI thread's Java messages wait on Android as a page starts, past what that page asks first.
 const HOLD_UI_MS = 2000;
+// Longer than e2e/run.mjs's steps for a project's full screen may take together.
+const FULL_SCREEN_MS = 90000;
 
 const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 // A path of an origin, or of a URL whose path is "/".
@@ -831,6 +833,23 @@ async function endFromWithin() {
     throw new Error("the window did not show the app's first page once the project's origin ended");
 }
 
+// 11. On Windows, its element full screen at its user's click, which e2e/run.mjs gives it, then its end, which the run
+// asks for once it read that the window kept its title and place.
+async function checkWindowFullScreen() {
+    let changes = 0;
+    let counted;
+    const changed = new Promise((resolve) => {
+        counted = () => {
+            changes += 1;
+            if (changes === 2) resolve();
+        };
+        document.addEventListener('fullscreenchange', counted);
+    });
+    console.log('FILL SERVED WINDOW');
+    const timeout = sleep(FULL_SCREEN_MS).then(() => { throw new Error(`the project's page went in and out of full screen ${changes} times, not twice`); });
+    await Promise.race([changed, timeout]).finally(() => document.removeEventListener('fullscreenchange', counted));
+}
+
 // What the project's page heard on WebView2's channel from its first script on, index.html's: none of the app's page's
 // replies that holdUpReplies() asked for.
 function checkHeardReplies() {
@@ -852,6 +871,7 @@ async function projectStage(m, isAndroid) {
     await checkAppFrame(app.origin, isAndroid);
     await checkNavigation(app);
     await checkProxy();
+    if (isWebView2()) await checkWindowFullScreen();
     if (isAndroid && device.isVirtual) checkPlainHttp(got);
     show('label', { project: await checkLabel(PROJECT_LABEL) });
     const prompted = JSON.parse(prompt('role', '') ?? 'null');

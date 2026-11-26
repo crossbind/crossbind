@@ -1,6 +1,7 @@
 // A Windows app's windows: each one the webview library makes, which holds its webview to the window's scale, with the
 // host's procedure before the library's, which tells the host of its close, its front and the session's end, holds it
 // to its limits and fills the screen for it.
+#include "access.h"
 #include "desktop.h"
 #include "webview/webview.h"
 #include "windows/com.h"
@@ -319,6 +320,8 @@ void endLoop() { PostQuitMessage(0); }
 // The app ends with its last window, and with its user's session; anything else ends the process as it ends any other.
 void onQuit(std::function<void()> quit) { quitWithSession = std::move(quit); }
 
+// A page of the role app alone takes its window with its element: one of another role, as a project's page a served
+// origin shows, keeps it filling the window, under the window's title.
 void followPageFullScreen(void *controller) {
     auto *changed = new Handler<ICoreWebView2ContainsFullScreenElementChangedEventHandler, ICoreWebView2 *, IUnknown *>(
         IID_ICoreWebView2ContainsFullScreenElementChangedEventHandler, [controller](ICoreWebView2 *sender, IUnknown *) -> HRESULT {
@@ -329,7 +332,8 @@ void followPageFullScreen(void *controller) {
             }
             HWND window = GetAncestor(widget, GA_ROOT);
             const auto found = made.find(window);
-            setFullScreen(window, hasElement || (found != made.end() && found->second.opensFullScreen));
+            const bool isFollowed = hasElement && app::pageOf(controller).role() == "app";
+            setFullScreen(window, isFollowed || (found != made.end() && found->second.opensFullScreen));
             return S_OK;
         });
     EventRegistrationToken token;

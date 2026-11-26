@@ -626,6 +626,10 @@ What its pages reach:
   `app` alone.
 - It stays on its origin: the app's own origins and the other served ones are refused it, as [Navigation](#navigation)
   tells.
+- Its element full screen fills its window, not the screen, on Windows, where WebView2 leaves a page's full screen to
+  the host: the window follows a page of the role `app` alone, so a served origin's page keeps the window's title and
+  frame. macOS's and Linux's web views take the window full screen themselves, which an extension turns off where it
+  must.
 
 `fetch(method, url, headers, done)` and `fetch(method, url, headers, body, done)` are the host's fetch, which a handler
 asks its pages' source with, and an extension a server of its own, from any thread:
