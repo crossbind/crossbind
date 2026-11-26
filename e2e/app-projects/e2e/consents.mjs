@@ -8,6 +8,7 @@ import { questionsOn, storeOn } from './questions.mjs';
 // else by the fixture's hook, which asks for the page's origin as an extension asks.
 const QUESTION_MS = 30000;
 const OUTCOME_MS = 60000;
+const LINE_MS = 30000;
 const LOAD_MS = 180000;
 const POLL_MS = 300;
 const SETTLED_MS = 1500;
@@ -278,6 +279,7 @@ export async function checkConsents(run) {
     // The store fails closed: one that is no JSON, of another shape or that cannot be read gives no consent, and the kind
     // is asked again; an answer it cannot take holds for the app's run, and the output says so.
     const name = allowed.origin;
+    const linesFrom = device.lines.length;
     const broken = {
         'no JSON': `{"${name}":{"camera":true`,
         'an array': JSON.stringify([{ [name]: { camera: true } }]),
@@ -294,7 +296,8 @@ export async function checkConsents(run) {
         await expectDenied(tag, `the camera asked again of a store ${shape}`);
         report.store[shape] = 'asked again';
     }
-    expect(device.lines.some((line) => line.text.includes(COULD_NOT_KEEP)), `the app did not say "${COULD_NOT_KEEP}"`);
+    // The app's output comes through a pipe of its own, which may bring the line after the page's note.
+    await device.waitFor(new RegExp(COULD_NOT_KEEP.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), LINE_MS, `the app's line "${COULD_NOT_KEEP}"`, linesFrom);
     const [held] = await start([{ kinds: ['camera'], via: againVia() }]);
     await expectDenied(held, "the camera once its store could not keep Don't Allow");
     await noQuestion('project', 'an answer held for the run');
