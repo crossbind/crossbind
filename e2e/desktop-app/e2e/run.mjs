@@ -28,6 +28,7 @@ const FINISHED = /^(CONFORMANCE .*|CONFORMANCE ERR: .*)\r?\n/m;
 const LAUNCH_AGAIN = /^LAUNCH AGAIN$/m;
 const OPEN_LINK = /^OPEN LINK$/m;
 const FILL_SCREEN = /^FILL SCREEN$/m;
+const FILL_WINDOW = /^FILL SERVED WINDOW$/m;
 const CLICK_TRAY = /^CLICK TRAY$/m;
 const REOPEN_APP = /^REOPEN APP$/m;
 const OPEN_FILE = /^OPEN FILE$/m;
@@ -95,6 +96,28 @@ public static class Screen {
 }
 '@
 [Screen]::Check((Get-Process -Id APP_PID).MainWindowHandle)
+`;
+// Prints whether the window has its title, and where it is.
+const FRAME_SCRIPT = `
+$ErrorActionPreference = 'Stop'
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class Frame {
+    [DllImport("user32.dll")] static extern IntPtr GetWindowLongPtrW(IntPtr window, int index);
+    [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr window, out Rect rect);
+    public struct Rect { public int Left, Top, Right, Bottom; }
+    const int STYLE = -16;
+    const long CAPTION = 0x00C00000;
+    public static string Read(IntPtr window) {
+        Rect rect;
+        if (!GetWindowRect(window, out rect)) throw new Exception("where the window is cannot be read");
+        bool isTitled = (GetWindowLongPtrW(window, STYLE).ToInt64() & CAPTION) == CAPTION;
+        return string.Format("{0} at {1},{2},{3},{4}", isTitled ? "titled" : "untitled", rect.Left, rect.Top, rect.Right, rect.Bottom);
+    }
+}
+'@
+[Frame]::Read((Get-Process -Id APP_PID).MainWindowHandle)
 `;
 // Tells the window the system goes to sleep, then that it woke, as Windows does with WM_POWERBROADCAST's PBT_APMSUSPEND
 // and PBT_APMRESUMEAUTOMATIC. A window that takes 5 s to answer fails.
@@ -954,6 +977,29 @@ async function fillScreen() {
     }
 }
 
+// A project's page asks for it on Windows: its element full screen on its user's click, which fills its window under the
+// window's title, as the host follows a page of the role app alone, then the page out of full screen.
+let isWindowFilled = false;
+const frameOfWindow = () => execFileSync('powershell', ['-NoProfile', '-Command', FRAME_SCRIPT.replace('APP_PID', String(app.pid))], { encoding: 'utf8', timeout: ASKED_TIMEOUT_MS }).trim();
+async function fillServedWindow() {
+    if (isWindowFilled || !FILL_WINDOW.test(out)) return;
+    isWindowFilled = true;
+    try {
+        const before = frameOfWindow();
+        console.log(`crossbind e2e: the project's full screen clicked at ${new Date().toISOString()}; ${foreground('Click')}`);
+        let entered = await clickedFull();
+        if (entered !== 'full') entered = `${entered}; asked again: ${foreground('Click')}, ${await clickedFull()}`;
+        if (!entered.endsWith('full')) throw new Error(`the project's page was not shown full screen: ${entered}`);
+        await new Promise((done) => { setTimeout(done, SETTLE_MS); });
+        const during = frameOfWindow();
+        await inPage('document.exitFullscreen()');
+        if (!before.startsWith('titled') || during !== before) finish(`a project's element full screen took its window, ${before}, which then was ${during}`);
+        else console.log(`crossbind e2e: a project's element full screen left its window ${during}`);
+    } catch (error) {
+        finish(`a project's full screen could not be checked: ${error.message}`);
+    }
+}
+
 // The page asks for them once it shows its notification and listens: clicks of the tray's icon, of the menu's first
 // item with checked and of the notification, which the tray host makes on Linux.
 let isTrayClicked = false;
@@ -1038,6 +1084,7 @@ app.stdout.on('data', (chunk) => {
     askEndSession();
     openLink();
     fillScreen();
+    fillServedWindow();
     clickTray();
     checkNotificationArea();
     if (FINISHED.test(out)) summarized();
@@ -1050,6 +1097,7 @@ app.stderr.on('data', (chunk) => {
     askEndSession();
     openLink();
     fillScreen();
+    fillServedWindow();
     clickTray();
     checkNotificationArea();
     if (FINISHED.test(out)) summarized();
