@@ -1,13 +1,16 @@
 // Linux's own for the preview extension: the Secret Service keeps the app's token, through libsecret, and where no
 // keyring runs the extension keeps it for the run alone; GLib makes HMAC-SHA256 and SHA-256; the default browser shows
-// the page that approves a sign-in; and a project's question is a dialog of its window.
+// the page that approves a sign-in; a project's question is a dialog of its window; and what shows that a preview is one
+// is the window's title and a bar above the page, with the project's name and the preview's menu.
 #include "preview.h"
 
 #include <gtk/gtk.h>
 #include <libsecret/secret.h>
 #include <sys/random.h>
+#include <webkit2/webkit2.h>
 
 #include <fstream>
+#include <map>
 #include <memory>
 #include <thread>
 
@@ -48,6 +51,51 @@ void onQuestion(GtkDialog *dialog, gint response, gpointer data) {
 void onQuestionGone(GtkWidget *, gpointer data) { (*static_cast<std::shared_ptr<Asked> *>(data))->dialog = nullptr; }
 
 void forget(gpointer data, GClosure *) { delete static_cast<std::shared_ptr<Asked> *>(data); }
+
+// What a window the indicator is up on had before it, which it gets back once it comes down, and the bar it shows; on
+// the main thread.
+struct Marked {
+    std::string title;
+    gboolean isWebFullScreen = TRUE;
+    GtkWidget *bar = nullptr;
+    GtkWidget *name = nullptr;
+    GtkWidget *line = nullptr;
+};
+std::map<uint64_t, Marked> marked;
+
+void onReload(GtkMenuItem *, gpointer) { reloadPreview(); }
+
+void onClose(GtkMenuItem *, gpointer) { closePreview(); }
+
+// The project's name and a menu button: Reload, the project's name over its line, which does nothing, and Close
+// preview. Each label is text, its underscores and its marks as they are.
+Marked barOf(GtkWindow *window, WebKitWebView *web) {
+    Marked made;
+    const char *title = gtk_window_get_title(window);
+    made.title = title ? title : "";
+    made.isWebFullScreen = webkit_settings_get_enable_fullscreen(webkit_web_view_get_settings(web));
+    made.bar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gtk_container_set_border_width(GTK_CONTAINER(made.bar), 4);
+    made.name = gtk_label_new(nullptr);
+    gtk_label_set_ellipsize(GTK_LABEL(made.name), PANGO_ELLIPSIZE_END);
+    gtk_widget_set_halign(made.name, GTK_ALIGN_START);
+    gtk_box_pack_start(GTK_BOX(made.bar), made.name, TRUE, TRUE, 0);
+    GtkWidget *menu = gtk_menu_new();
+    GtkWidget *reload = gtk_menu_item_new_with_label("Reload");
+    g_signal_connect(reload, "activate", G_CALLBACK(onReload), nullptr);
+    made.line = gtk_menu_item_new_with_label("");
+    gtk_widget_set_sensitive(made.line, FALSE);
+    GtkWidget *close = gtk_menu_item_new_with_label("Close preview");
+    g_signal_connect(close, "activate", G_CALLBACK(onClose), nullptr);
+    for (GtkWidget *item : {reload, made.line, close}) gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+    gtk_widget_show_all(menu);
+    GtkWidget *button = gtk_menu_button_new();
+    gtk_button_set_label(GTK_BUTTON(button), "Preview");
+    gtk_button_set_use_underline(GTK_BUTTON(button), FALSE);
+    gtk_menu_button_set_popup(GTK_MENU_BUTTON(button), menu);
+    gtk_box_pack_end(GTK_BOX(made.bar), button, FALSE, FALSE, 0);
+    return made;
+}
 
 }  // namespace
 
@@ -172,6 +220,60 @@ std::function<void()> showConsent(uint64_t window, const std::string &message, c
             if (asked->dialog) gtk_widget_destroy(asked->dialog);
         });
     };
+}
+
+// The window's title says it shows a preview, and the bar is above the page, in the window's own box; the web view's
+// full screen is off, as a window that filled the screen would show no title.
+void showIndicator(uint64_t window, const Shown &shown, std::function<void()> done) {
+    crossbind::onMainThread([window, shown, done] {
+        const std::optional<crossbind::Window> open = crossbind::windowOf(window);
+        if (open) {
+            GtkWindow *native = static_cast<GtkWindow *>(open->native());
+            WebKitWebView *web = WEBKIT_WEB_VIEW(open->webView());
+            if (!marked.count(window)) {
+                marked[window] = barOf(native, web);
+                gtk_container_add(GTK_CONTAINER(gtk_widget_get_parent(GTK_WIDGET(web))), marked[window].bar);
+                gtk_widget_show_all(marked[window].bar);
+            }
+            // Off before the project's page loads, so that its document has no full screen to ask for.
+            webkit_settings_set_enable_fullscreen(webkit_web_view_get_settings(web), FALSE);
+            const Marked &state = marked[window];
+            gtk_label_set_text(GTK_LABEL(state.name), shown.project.c_str());
+            gtk_label_set_text(GTK_LABEL(gtk_bin_get_child(GTK_BIN(state.line))), (shown.project + "\n" + shown.line).c_str());
+            gtk_window_set_title(native, (shown.project + " \xE2\x80\x93 crossbind preview").c_str());
+        }
+        done();
+    });
+}
+
+void hideIndicator(uint64_t window) {
+    crossbind::onMainThread([window] {
+        const auto found = marked.find(window);
+        if (found == marked.end()) return;
+        if (const std::optional<crossbind::Window> open = crossbind::windowOf(window)) {
+            gtk_window_set_title(static_cast<GtkWindow *>(open->native()), found->second.title.c_str());
+            gtk_widget_destroy(found->second.bar);
+        }
+        marked.erase(found);
+    });
+}
+
+// The web view's own full screen comes back as the preview ends: the app's page that comes next is made with it.
+void endIndicator(uint64_t window, std::function<void(bool isShowingProject)> done) {
+    crossbind::onMainThread([window, done] {
+        const std::optional<crossbind::Window> open = crossbind::windowOf(window);
+        const auto found = marked.find(window);
+        if (open && found != marked.end()) {
+            webkit_settings_set_enable_fullscreen(webkit_web_view_get_settings(WEBKIT_WEB_VIEW(open->webView())), found->second.isWebFullScreen);
+        }
+        done(open && open->page().role() == "project");
+    });
+}
+
+void reloadWindow(uint64_t window) {
+    crossbind::onMainThread([window] {
+        if (const std::optional<crossbind::Window> open = crossbind::windowOf(window)) webkit_web_view_reload(WEBKIT_WEB_VIEW(open->webView()));
+    });
 }
 
 }  // namespace preview

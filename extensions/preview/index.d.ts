@@ -43,5 +43,5 @@ export declare const preview: {
     compile(project: { files: Record<string, string>; packages: string[] }): Promise<{ status: number; [member: string]: unknown }>;
     removeSnapshot(session: string): Promise<void>;
     links(): Promise<Array<{ session: string } | { message: string }>>;
-    ended(): Promise<Array<{ message: string }>>;
+    ended(): Promise<Array<{ message?: string }>>;
 };

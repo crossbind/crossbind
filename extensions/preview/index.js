@@ -31,7 +31,8 @@ export const preview = {
     compile: async ({ files, packages }) => invoke('preview.compile', { files, packages }),
     removeSnapshot: async (session) => invoke('preview.removeSnapshot', { session }),
     // The links that opened the app since its page loaded, each { session } or { message } for one that names none, and
-    // the previews the extension ended itself, each { message }; later ones come as the events preview.link and
+    // the previews that ended but by preview.close, each { message } for one the extension ended itself and {} for one
+    // its user closed from the preview's menu or with Back; later ones come as the events preview.link and
     // preview.ended. Listening first, then asking, misses none.
     links: async () => events.held('preview.link'),
     ended: async () => events.held('preview.ended'),

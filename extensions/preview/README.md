@@ -47,6 +47,9 @@ location.href = (await preview.open(sessions[0].id)).url;
 - `links()` gives the links of `dev.crossbind.app://open?s=<session>`, and on iOS and Android of
   `https://crossbind.dev/open/?s=<session>`, that opened the app; each names a session alone, which the page opens
   from the account's list.
+- `ended()` gives the previews that ended other than by `close()`: `{ message }` for one the extension ended, as a
+  snapshot no longer listed or a sign-out, and `{}` for one its user closed from the preview's menu or with Back; later
+  ones come as the event `preview.ended`.
 
 ## What a project's page reaches
 
@@ -70,6 +73,43 @@ the window on macOS, an alert on iOS, a task dialog of the window on Windows, a 
 `AlertDialog` on Android; neither Escape, Back, a touch outside nor the window's close answers it. After Allow the system
 asks its own question, once for the app, as for the app's own page: on Apple's platforms WebKit asks it before the
 project's question for the camera and the microphone.
+
+## What marks a preview
+
+While a preview shows, the extension marks its window, before the project's page can load there and until the window's
+next page after the end has started. No page reaches the mark: no function, event or option shows, hides, reads or
+presses it.
+
+- iOS: a pill, the app's mark and "Preview", at the top trailing corner, in a window of the extension's own above the
+  page's alerts, which takes touches at the pill and at what it presents alone. Its menu is an action sheet, and the
+  consent's question is presented from that window too.
+- Android: the same pill, a view above the WebView inside the system bars, whose menu is a dialog.
+- macOS: the window's title, "<project> – crossbind preview", and a Preview menu in the menu bar.
+- Windows: the title, and the menu's items at the top of the window's system menu.
+- Linux: the title, and a bar above the page with the project's name and a menu button.
+
+The menu has three items: Reload; the project's name over its line, "<account> · on <address>:<port>" or "<account> · a
+snapshot, version <n>", which does nothing; and Close preview.
+
+- Reload is the web view's own reload: the origin stays served, a page's own `alert()`, `confirm()` or `prompt()` holds
+  it until answered, a message dialog closes with its page, and the consent's question stays. For a snapshot, the
+  session is read from the account's list first, one reading at a time: a higher version or a new key is taken once its
+  proof holds, and the line says so; a snapshot gone, a sign-out or a session that reads as another's ends the preview
+  with its words. The session is read again as the app comes back to the front, where a higher version reloads the page,
+  and never on a timer.
+- Close preview ends the preview as `close()` does, its question and its page's dialogs with it, and holds
+  `preview.ended` with no words.
+- Back on Android goes back within the project's own history, one entry at a time by the page's own `history.back()`,
+  as the WebView's `goBack()` skips each entry a page made without its user's activation; at its first entry it closes
+  the preview as Close preview does. A page that takes over its own `history.back()` takes over Back within its pages;
+  the menu's Close preview stays. Once the preview ended, Back is the host's again.
+- The app's own page that comes to show in the preview's window, by the page going back past its first entry or any
+  other way, ends the preview.
+
+A preview takes no full screen on a desktop, where the title is its mark: on macOS and Linux the web view's own full
+screen is off while a window shows a project's page, and macOS's window takes none of its user's either (its green
+button zooms); on Windows the host's window follows a page of the role `app` alone, so a project's element fills the
+window under its title. The app's own page keeps full screen. A project tries full screen with `crossbind app dev`.
 
 ## Platforms
 
