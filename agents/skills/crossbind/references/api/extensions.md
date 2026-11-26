@@ -62,7 +62,7 @@ keys and Android manifests, as it writes each platform's project (see [crossbind
 ## Versions
 
 An extension names the versions of the contract it is written for: `contract: 1`, or a list, as `[1, 2]` for one
-written for both. Each crossbind takes a range of them, from the oldest it still builds to the newest, `1` to `5`
+written for both. Each crossbind takes a range of them, from the oldest it still builds to the newest, `1` to `6`
 in this one: a build stops on an extension that names none of them, saying what to update, crossbind where the
 extension names newer ones alone, else the extension's package, or `@crossbind/core-app-host` where the host's own
 extensions are of another crossbind. Native code tells the versions apart with `CROSSBIND_EXTENSION_CONTRACT`, the
@@ -82,6 +82,10 @@ nothing else: `fetch()` without a body and `serveOrigin()` without a label are a
 
 Version 5 added [integrations](#integrations) and changed nothing else: an extension written for 1 to 4 builds as it
 did, and one that gives an `integration` names 5.
+
+Version 6 added a file input's `onCancel()`, in the C++ and in Android's Java, and the means to finish the activity
+that Android's `startForResult()` started, which it now gives, and changed nothing else: a caller that takes nothing
+from `startForResult()` is as before.
 
 A change that every extension written for the contract keeps working with raises only the newest version: a new
 function, hook, member of a struct or of a request, key of the descriptor or member of the api, and a role a new
@@ -758,7 +762,8 @@ void crossbind_extension_acme_dialogs(crossbind::Registry &registry) {
   `app.permissions` lists each of them, false for a kind that is no device. `allow()` or `deny()` answers it.
 - `FileInput`: `allowsMultiple()`, `allowsFolders()` and the types its `accept()` names, where the webview tells them:
   macOS's tells no types, and WebKitGTK no folders. `pick(paths)` answers with the files picked, and `cancel()` with
-  none.
+  none. `onCancel(fn)` runs `fn` as a dialog's does, as the page whose input it is goes before its answer: the input
+  has answered as cancelled then, and `fn` closes its holder's picker, as nothing picked in it reaches a page any more.
 
 Each also gets the `page()` that asks, and `useDefault()`, which leaves the request to the webview where it takes one:
 
@@ -808,8 +813,9 @@ each by the name crossbind gives it:
 The host's own `page-dialogs` shows the system's dialog, titled with its page's `label()`, the app's name but for a
 page of an origin served with a label, and closes it as the page goes before its answer; `page-permissions` allows what
 `app.permissions` lists, which the system may then ask its user for, and a clipboard read, and denies the rest; and
-`page-files` shows macOS's open panel and Android's picker. Where the holder of the role has no native code, as one an
-app lists for macOS alone, the webview does as it would without crossbind:
+`page-files` shows macOS's open panel and Android's picker, and closes it as its page goes before its answer. Where
+the holder of the role has no native code, as one an app lists for macOS alone, the webview does as it would without
+crossbind:
 
 - WKWebView answers a dialog at once, as an alert's OK and a confirm's and a prompt's Cancel, and asks its own question
   for a permission, but for a macOS page's location, which `page-location` then denies;
@@ -1005,7 +1011,8 @@ The activity calls each method on the UI thread with the `ExtensionHost`:
 - its `activity()` and the page's `webView()`;
 - `afterAsking(permissions, then)`, which asks the app's user for permissions;
 - `startForResult(intent, (result, data) -> …)`, which starts an activity for its result, so the requests of the
-  activity and of other extensions never meet the extension's own.
+  activity and of other extensions never meet the extension's own, and gives a `Runnable` that finishes that activity,
+  on the UI thread, as `finishActivity()` does: the result it then gets is `RESULT_CANCELED`.
 
 `call` answers once, from any thread: with `resolve()`, which takes one of org.json's values or a `byte[]`, in an object
 or an array as well, which the page gets as a `Uint8Array`; or with `reject()`. What `call()` throws fails the call; a
@@ -1026,7 +1033,9 @@ The Java of the holder of `page-dialogs`, `page-permissions` or `page-files` get
 `Extension`'s, on the UI thread, and answers each once, from any thread. `useDefault()` leaves a dialog or a file input
 to the WebView, which shows its own dialog or no picker, where the hook calls it before it returns, and else cancels it;
 for a permission it denies, as the WebView would. A `PageDialog` has the `label()` a native page's has, and
-`onCancel(fn)` runs `fn` on the UI thread as the native one's does, as its origin ends.
+`onCancel(fn)` runs `fn` on the UI thread as the native one's does, as its origin ends. A `FileInput`'s `onCancel(fn)`
+does the same as its origin ends or another page starts in the WebView, but not at a move within the page's document,
+as its `pushState()`; the host's own `page-files` finishes the system's picker there with what `startForResult()` gave.
 
 - One that is never answered keeps the page waiting, as Java tells the host of no copy let go.
 - One the hook throws on is cancelled, and a frame of another origin, which Android lets the page hold, gets no dialog
