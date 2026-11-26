@@ -6,7 +6,9 @@
 
 #include <windows.h>
 
+#include <chrono>
 #include <string>
+#include <thread>
 
 namespace {
 
@@ -63,16 +65,30 @@ void indicatorUp(Call call) {
     crossbind::onMainThread([call] { call.resolve(indicatorState()); });
 }
 
+// The item's command sent now, or once ms passed, the call answered first, as when the press will reload or end the
+// page that asked.
 void pressIndicator(Call call) {
     const std::string words = call.options()["item"].asString();
-    crossbind::onMainThread([call, words] {
+    const double ms = call.options()["ms"].asNumber(0);
+    const auto press = [words]() -> bool {
         HWND window = static_cast<HWND>(crossbind::appWindow());
         for (const Value &item : itemsOf(window ? GetSystemMenu(window, FALSE) : nullptr)) {
             if (item["words"].asString("") != words || !item["enabled"].asBool(false)) continue;
             PostMessageW(window, WM_SYSCOMMAND, static_cast<WPARAM>(item["command"].asNumber()), 0);
-            call.resolve();
-            return;
+            return true;
         }
-        call.reject("crossbind e2e: the window's system menu has no item " + words + " to press");
+        return false;
+    };
+    if (ms > 0) {
+        call.resolve();
+        std::thread([press, ms] {
+            std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<long long>(ms)));
+            crossbind::onMainThread([press] { press(); });
+        }).detach();
+        return;
+    }
+    crossbind::onMainThread([call, press, words] {
+        if (press()) call.resolve();
+        else call.reject("crossbind e2e: the window's system menu has no item " + words + " to press");
     });
 }

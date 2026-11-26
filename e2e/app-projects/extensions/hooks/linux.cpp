@@ -122,10 +122,13 @@ Value indicatorState() {
         const gchar *words = gtk_menu_item_get_label(GTK_MENU_ITEM(item));
         items.emplace_back(Value::Object{{"words", Value(words ? words : "")}, {"enabled", static_cast<bool>(gtk_widget_get_sensitive(item))}});
     }
-    // A dialog of the window's own holds its input while it is up.
+    // A dialog of the window's own holds its input while it is up, by a grab in the window's group, which the host gives
+    // each window of its own.
+    GtkWindow *window = crossbind::appWindow() ? GTK_WINDOW(crossbind::appWindow()) : nullptr;
+    const bool isHeld = window && gtk_window_group_get_current_grab(gtk_window_get_group(window)) != nullptr;
     return Value::Object{{"up", button != nullptr}, {"title", Value(title ? title : "")}, {"name", name ? Value(gtk_label_get_text(GTK_LABEL(name))) : Value()},
         {"button", button ? Value(gtk_button_get_label(GTK_BUTTON(button))) : Value()}, {"items", button ? Value(items) : Value()},
-        {"takesInput", gtk_grab_get_current() == nullptr}};
+        {"takesInput", window != nullptr && !isHeld}};
 }
 
 void indicatorUp(Call call) {
