@@ -88,20 +88,22 @@ void readPreviewAgain();
 
 // indicator.cpp: what shows that a preview is one, on each window a project's page shows in: the pill on a phone, on a
 // desktop the window's title and the preview's menu. It is up on a window before the project's page can load there,
-// and down once the preview ended and the window's next page started; the app's own page that comes to show in a
-// window whose preview is open ends that preview.
+// and down once the preview ended and the window's next page that is no project's started; the app's own page that
+// comes to show in a window whose preview is open ends that preview. Each mark is of the preview serve() numbered: an
+// end or a line of another preview changes nothing of it.
 struct Shown {
     std::string project;
     std::string line;
     // The preview's origin, by which Android's Java tells the WebView's pages.
     std::string origin;
 };
-// Up on the window of this id, 0 for the app's oldest, with these words, then runs then with the window it is on.
-void markPreview(uint64_t window, Shown shown, std::function<void(uint64_t window)> then);
-// The preview open ended: each window's indicator comes down, at once where its page is no project's.
-void unmarkPreview();
-// The menu's line, as what the preview serves changed.
-void relineIndicator(std::string line);
+// The preview of this number up on the window of this id, 0 for the app's oldest, with these words, then runs then with
+// the window it is on.
+void markPreview(uint64_t preview, uint64_t window, Shown shown, std::function<void(uint64_t window)> then);
+// The preview of this number ended: each window's indicator of it comes down, at once where its page is no project's.
+void unmarkPreview(uint64_t preview);
+// The menu's line of the preview of this number, as what it serves changed.
+void relineIndicator(uint64_t preview, std::string line);
 void addIndicatorHooks(crossbind::Registry &registry);
 // The platform's own, apple.mm, windows.cpp, linux.cpp and android.cpp, each on the main thread, Android's on its
 // Java's UI thread: the window's indicator up with these words, or its words changed; down; at the preview's end,
