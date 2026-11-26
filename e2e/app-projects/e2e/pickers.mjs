@@ -141,16 +141,21 @@ export async function checkPickers(run) {
         adbRun('push', local, `/sdcard/Download/${name}`);
         rmSync(local, { force: true });
         adbRun('shell', 'am', 'broadcast', '-a', 'android.intent.action.MEDIA_SCANNER_SCAN_FILE', '-d', `file:///sdcard/Download/${name}`);
-        // The page's input over its whole viewport, tapped as its user taps it, until the system's picker is in front.
+        // The page's input over its whole viewport, tapped as its user taps it, until the system's picker is in front. A
+        // tap too soon after the page's load may be dropped, so it is tapped again, but only while the app's own activity
+        // is in front: a picker that comes slowly would take the next tap.
+        const isPicker = (front) => front !== null && !isOwn(front);
         async function inFront(role) {
             await step(role, { do: 'fileInput' });
-            for (let tries = 0; tries < TRIES / 4; tries += 1) {
+            for (let tries = 0; tries < TRIES / 4 && !isPicker(resumed()); tries += 1) {
                 await sleep(TAP_MS);
+                if (!isOwn(resumed())) continue;
                 adbRun('shell', 'input', 'tap', ...middle);
-                const front = await until(resumed, (shown) => !isOwn(shown), 'no picker', SETTLED_MS).catch(() => null);
-                if (front) return front;
+                await until(resumed, isPicker, 'no picker').catch(() => null);
             }
-            throw new Error(`a tap on the ${role}'s file input brought no picker in front: ${resumed()}`);
+            const front = resumed();
+            expect(isPicker(front), `a tap on the ${role}'s file input brought no picker in front: ${front}`);
+            return front;
         }
         const ownInFront = (what) => until(resumed, isOwn, `the picker stayed in front after ${what}`);
         // A file chosen as its user chooses it, which reaches the page that asked, with its name.
