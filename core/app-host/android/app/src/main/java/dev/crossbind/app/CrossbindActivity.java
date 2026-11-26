@@ -567,9 +567,18 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
             SERVED.remove(ended);
             CrossbindActivity activity = current;
             if (activity != null) activity.dialogsGone((dialog) -> dialog.origin.equals(ended));
+            if (activity != null) activity.filesGone(ended::equals);
             if (activity == null || activity.webView == null || activity.webView.getUrl() == null) return;
             if (ended.equals(documentOriginOf(activity.webView.getUrl()))) activity.webView.loadUrl(activity.firstUrl);
         });
+    }
+
+    // The file input whose page went, as its origin ended or another page started: unanswered, it answers as
+    // cancelled.
+    private void filesGone(Predicate<String> isGoneOrigin) {
+        if (pendingFiles == null || !isGoneOrigin.test(pendingFiles.origin)) return;
+        pendingFiles.cancel();
+        pendingFiles = null;
     }
 
     // The page dialogs whose page went: each, unanswered, answers as cancelled, and its holder hears of it.
@@ -1209,6 +1218,8 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
         // another origin, which page-navigation loaded, asks for none.
         @Override
         public void onPageStarted(WebView view, String url, Bitmap favicon) {
+            // The page before went, and so did its file input.
+            filesGone((origin) -> true);
             if (url == null || isOwn(documentOriginOf(url))) return;
             nativeNewPage(url.getBytes(StandardCharsets.UTF_8));
             // A page of an origin that ended while it was on its way, which endOrigin() did not see, gives way to the
@@ -1313,7 +1324,8 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
             Extension owner = Extensions.ROLES.get("page-files");
             if (owner == null) return false;
             String page = view.getUrl();
-            Extension.FileInput input = new Extension.FileInput(params, files, page == null ? "" : roleOf(documentOriginOf(page)));
+            String origin = page == null ? "" : documentOriginOf(page);
+            Extension.FileInput input = new Extension.FileInput(params, files, roleOf(origin), origin);
             ask("page-files", () -> owner.onFileInput(CrossbindActivity.this, input), input::cancel);
             if (input.isLeft()) return false;
             if (pendingFiles != null) pendingFiles.cancel();
