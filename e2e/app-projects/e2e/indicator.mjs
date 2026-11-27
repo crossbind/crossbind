@@ -774,6 +774,8 @@ export async function checkIndicator(run) {
         if (isSecond) await step('app', { do: 'close' });
         await down('the indicator after Close preview as the app opened a second');
         out.twoOpens = await twoOpens();
+        // The armed presses a hook refused, in its words.
+        out.refusedPresses = endpoint.notes.filter((note) => note.event === 'press').map(({ item, failure }) => ({ item, failure }));
         return out;
     }
 
