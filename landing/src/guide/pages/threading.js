@@ -76,6 +76,8 @@ console.log(typeof SharedArrayBuffer);  // must be 'function'`,
             rows: [
                 ['Vite dev server and preview', 'sent by `crossbind()`'],
                 ['Webpack and Rspack dev servers', 'sent by `crossbind()`'],
+                ['Rsbuild dev server and preview', 'sent by `crossbind()`'],
+                ['`next dev` and `next start`', 'sent by `crossbind(nextConfig)`'],
                 ['Vercel', 'the `headers` array in `vercel.json`'],
                 ['Netlify, Cloudflare Pages', 'a `_headers` file'],
                 ['nginx', '`add_header Cross-Origin-Opener-Policy same-origin;` and the COEP twin'],

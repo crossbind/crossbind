@@ -7,7 +7,8 @@
     "license": "MIT",
     "type": "module",
     "exports": {
-        "./crossbind.extension.js": "./crossbind.extension.js"
+        "./crossbind.extension.js": "./crossbind.extension.js",
+        "./plugin": "./src/plugin.js"
     },
     "files": [
         "crossbind.extension.js",

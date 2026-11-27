@@ -53,6 +53,9 @@ jobs:
                     - web-vite
                     - web-vite-multithread
                     - web-rspack
+                    - web-rsbuild
+                    - web-esbuild
+                    - web-next
                     - web-vite-conan
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -68,6 +71,12 @@ jobs:
                   path: .
             - name: Install Playwright browsers
               run: pnpm exec playwright install --with-deps
+            # web-esbuild builds its page with esbuild and again with Bun.
+            - name: Install Bun
+              if: matrix.fixture == 'web-esbuild'
+              uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+              with:
+                  bun-version: 1.4.5
             - name: Install the WASI runtime
               if: matrix.fixture == 'cli-wasi' || matrix.fixture == 'cloud-wasi-http'
               run: |

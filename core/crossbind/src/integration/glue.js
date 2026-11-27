@@ -8,6 +8,7 @@ import createLib from '../actions/createLib.js';
 import getAllBridges from '../actions/getAllBridges.js';
 import isSourceNewer from '../actions/isSourceNewer.js';
 import { isAppSource } from '../utils/appSources.js';
+import withDirLock from '../utils/dirLock.js';
 import { getFileHash } from '../utils/hash.js';
 import { getRustJsScript } from './getCrossbindScript.js';
 import { ISOLATION_HEADERS } from './isolationHeaders.js';
@@ -51,7 +52,8 @@ async function linkGlue(target, bridges) {
 }
 
 // One link per target at a time: a call while one runs shares it, and the first call after it settles starts anew. With
-// parallel pages each would otherwise link over the same outputs, and pages would bind glue of different builds.
+// parallel pages each would otherwise link over the same outputs, and pages would bind glue of different builds. A tool
+// that links from more than one process, as Next's loaders do under `next dev`, takes turns on the build directory.
 export function createLinker(bridges, prepare) {
     const linking = new Map();
     const link = (target, { prepare: withDependencies = false, allBridges = false } = {}) => {
@@ -61,7 +63,8 @@ export function createLinker(bridges, prepare) {
                 // A tool that transforms in other processes, as Metro does, leaves its bridges in the build directory.
                 await linkGlue(target, allBridges ? getAllBridges() : [...bridges]);
             };
-            linking.set(target, run().finally(() => linking.delete(target)));
+            const lock = `${state.config.paths.build}/link-${target.path}.lock`;
+            linking.set(target, withDirLock(lock, run, { heldBy: 'another process is linking' }).finally(() => linking.delete(target)));
         }
         return linking.get(target);
     };

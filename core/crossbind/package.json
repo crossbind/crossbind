@@ -45,8 +45,11 @@
     },
     "dependencies": {
         "@crossbind/extension-conan": "workspace:*",
+        "@crossbind/extension-esbuild": "workspace:*",
         "@crossbind/extension-metro": "workspace:*",
+        "@crossbind/extension-next": "workspace:*",
         "@crossbind/extension-rollup": "workspace:*",
+        "@crossbind/extension-rsbuild": "workspace:*",
         "@crossbind/extension-vite": "workspace:*",
         "@crossbind/extension-webpack": "workspace:*",
         "@rollup/plugin-commonjs": "^29.0.3",

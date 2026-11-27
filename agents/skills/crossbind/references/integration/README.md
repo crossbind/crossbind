@@ -22,8 +22,8 @@ The detector inspects `package.json` deps + filesystem signatures (`vite.config.
 
 ```json
 {
-  "framework": "vite" | "webpack" | "rspack" | "rollup" | "react-native-cli"
-              | "react-native-expo" | "cloudflare-worker" | "nextjs"
+  "framework": "vite" | "webpack" | "rspack" | "rsbuild" | "rollup" | "esbuild" | "bun"
+              | "react-native-cli" | "react-native-expo" | "cloudflare-worker" | "nextjs"
               | "nodejs" | "vanilla" | "unknown",
   "confidence": "high" | "medium" | "low",
   "evidence": [...],
@@ -41,8 +41,10 @@ If `existingCrossbind.legacyPlugins` lists `@crossbind/plugin-*` packages, the p
 What does package.json deps + filesystem look like?
 │
 ├─ has "vite"                         → docs/playbooks/integration/vite.md
+├─ has "@rsbuild/core"                 → docs/playbooks/integration/rsbuild.md (check this before "@rspack/*")
 ├─ has "webpack" or "@rspack/*"        → docs/playbooks/integration/webpack-rspack.md
 ├─ has "rollup" (only)                 → docs/playbooks/integration/rollup.md
+├─ has "esbuild" (only), or Bun's types and lock → docs/playbooks/integration/esbuild-bun.md
 ├─ has "next"                          → docs/playbooks/integration/nextjs.md
 ├─ has "react-native" + no "expo"      → docs/playbooks/integration/react-native-cli.md
 ├─ has "expo"                          → docs/playbooks/integration/react-native-expo.md
@@ -158,7 +160,7 @@ The framework playbook lists what to check, such as `/crossbind.wasm` being serv
 
 ## Reference
 
-- Plugin sources: `plugins/{vite,webpack,rollup,react-native,metro}/index.js`
+- Integration sources: `extensions/{vite,rollup,webpack,rsbuild,esbuild,metro,next,react-native}/`
 - Reference integrations: `examples/web-*` and `examples/mobile-*`
 - Project inspector: `agents/skills/crossbind/scripts/inspect-project.mjs`
 - Per-framework playbooks: `docs/playbooks/integration/<framework>.md`

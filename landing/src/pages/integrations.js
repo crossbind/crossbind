@@ -33,10 +33,34 @@ export const INTEGRATION_GROUPS = [
                 href: guide('bundler-plugins', 'rspack'),
             },
             {
+                id: 'rsbuild',
+                name: 'Rsbuild',
+                summary: "crossbind() in Rsbuild's plugins, with its dev server's middleware and headers",
+                href: guide('bundler-plugins', 'rsbuild'),
+            },
+            {
                 id: 'rollup',
                 name: 'Rollup',
                 summary: 'crossbind() in a plain Rollup or Rolldown build',
                 href: guide('bundler-plugins', 'rollup'),
+            },
+            {
+                id: 'esbuild',
+                name: 'esbuild',
+                summary: "crossbind() in esbuild's plugins, the glue written beside the build",
+                href: guide('bundler-plugins', 'esbuild'),
+            },
+            {
+                id: 'bun',
+                name: 'Bun',
+                summary: "The same crossbind() in Bun.build's plugins",
+                href: guide('bundler-plugins', 'esbuild'),
+            },
+            {
+                id: 'nextjs',
+                name: 'Next.js',
+                summary: 'crossbind(nextConfig) around its config, under Turbopack or webpack',
+                href: guide('bundler-plugins', 'nextjs'),
             },
             {
                 id: 'metro',

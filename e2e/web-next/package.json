@@ -1,0 +1,54 @@
+{
+    "name": "@crossbind/e2e-web-next",
+    "version": "0.0.0",
+    "private": true,
+    "description": "crossbind Next.js Playground",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/e2e/web-next#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "MIT",
+    "scripts": {
+        "dev": "next dev -p 3110",
+        "dev:webpack": "cross-env NEXT_DIST_DIR=.next-webpack next dev --webpack -p 3111",
+        "build": "next build && cross-env NEXT_DIST_DIR=.next-webpack next build --webpack",
+        "start": "next start -p 3110",
+        "start:webpack": "cross-env NEXT_DIST_DIR=.next-webpack next start -p 3111",
+        "e2e:dev": "playwright test --config playwright.dev.config.cjs",
+        "e2e:prod": "playwright test --config playwright.prod.config.cjs"
+    },
+    "dependencies": {
+        "next": "^16.4.6",
+        "react": "^19.3.1",
+        "react-dom": "^19.3.1",
+        "@crossbind/embind-rust-demo": "workspace:^",
+        "@crossbind/conformance-rust": "workspace:^",
+        "@crossbind/conformance": "workspace:^",
+        "@crossbind/example-lib-prebuilt-matrix": "workspace:^",
+        "@crossbind/port-curl-wasm": "workspace:^",
+        "@crossbind/port-expat-wasm": "workspace:^",
+        "@crossbind/port-gdal-wasm": "workspace:^",
+        "@crossbind/port-geos-wasm": "workspace:^",
+        "@crossbind/port-geotiff-wasm": "workspace:^",
+        "@crossbind/port-iconv-wasm": "workspace:^",
+        "@crossbind/port-openssl-wasm": "workspace:^",
+        "@crossbind/port-proj-wasm": "workspace:^",
+        "@crossbind/port-spatialite-wasm": "workspace:^",
+        "@crossbind/port-sqlite3-wasm": "workspace:^",
+        "@crossbind/port-tiff-wasm": "workspace:^",
+        "@crossbind/port-webp-wasm": "workspace:^",
+        "@crossbind/port-zlib-wasm": "workspace:^"
+    },
+    "devDependencies": {
+        "@playwright/test": "^1.63.0",
+        "cross-env": "^10.1.0",
+        "crossbind": "workspace:^"
+    },
+    "keywords": [
+        "crossbind-sample",
+        "webassembly",
+        "bind",
+        "c++",
+        "react",
+        "nextjs",
+        "turbopack"
+    ]
+}

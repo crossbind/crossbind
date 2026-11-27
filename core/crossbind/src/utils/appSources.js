@@ -6,6 +6,11 @@ const SOURCE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs',
 // Skip root outputs, while allowing source folders named e.g. src/build or src/android.
 const ROOT_OUTPUTS = new Set(['dist', 'build', 'ios', 'android', 'Pods', 'target']);
 const IMPORT = /\b(?:from|import\s*\(?|require\s*\()\s*(['"])([^'"\n]+)\1/g;
+// A comment marker inside a literal, or after a backslash as in a regex literal, is text. A comment, and an import or
+// export of types alone, load no module, as a framework's config naming its type does.
+const LITERAL_OR_COMMENT = /"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`|(?<!\\)\/\*[\s\S]*?\*\/|(?<!\\)\/\/[^\n]*/g;
+const TYPES_ONLY = /\b(?:import|export)\s+type\s+(?:\{[^}]*\}|\*(?:\s+as\s+[\w$]+)?|[\w$]+)\s*from\s*(['"])[^'"\n]+\1/g;
+const loadingText = (text) => text.replace(LITERAL_OR_COMMENT, (match) => (match.startsWith('/') ? ' ' : match)).replace(TYPES_ONLY, ' ');
 const packageName = (specifier) => specifier.startsWith('@') ? specifier.split('/').slice(0, 2).join('/') : specifier.split('/')[0];
 
 function sourceFile(file) {
@@ -81,7 +86,7 @@ export default function appSourceFiles(projectDir) {
     for (let i = 0; i < files.length; i += 1) {
         const importer = files[i];
         const require = createRequire(importer);
-        const text = fs.readFileSync(importer, 'utf8');
+        const text = loadingText(fs.readFileSync(importer, 'utf8'));
         for (const [, , specifier] of text.matchAll(IMPORT)) {
             const relative = specifier.startsWith('.');
             if (!relative && ownFiles.has(importer) && !Object.hasOwn(dependencies, packageName(specifier))) continue;

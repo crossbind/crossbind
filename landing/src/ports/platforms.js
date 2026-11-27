@@ -97,7 +97,7 @@ function browserBlocks(port, { headerImport }) {
         { type: 'code', file: 'shell', code: install([wasm.package]) },
         { type: 'code', file: 'crossbind.config.js', code: configCode(port, [wasm]) },
         ...(headerImport ? [{ type: 'code', file: 'main.js', code: headerCode(headerImport) }] : []),
-        { type: 'p', text: `crossbind itself comes with your bundler plugin; [Browser](${guideHref('browser')}) has Vite, Webpack, Rspack and Rollup.` },
+        { type: 'p', text: `crossbind itself comes with your bundler plugin; [Bundler plugins](${guideHref('bundler-plugins')}) has Vite, Webpack, Rspack, Rsbuild, Rollup, esbuild, Bun and Next.js.` },
     ];
 }
 

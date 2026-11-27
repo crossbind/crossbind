@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import vm from 'node:vm';
+import upath from 'upath';
 import { describe, test, expect, vi, afterAll, afterEach, beforeEach } from 'vitest';
 
 const { env } = vi.hoisted(() => ({ env: {} }));
@@ -235,6 +236,22 @@ describe('the browser boot', () => {
             const m = await proxy.initNative();
 
             expect(fileURLToPath(globalThis.crossbindLoadedFrom)).toBe(path.join(app, 'crossbind.js'));
+            expect(m.config.path).toBe(appUrl);
+        } finally {
+            delete globalThis.__webpack_public_path__;
+        }
+    });
+
+    // An integration that serves the glue at a base of its own, as one for a framework whose webpack public path serves
+    // only its chunks would.
+    test('loads crossbind.js from a base the glue is served at, whatever webpack\'s public path', async () => {
+        globalThis.__webpack_public_path__ = `${pathToFileURL(upath.join(dir, 'site', 'chunks-only')).href}/`;
+        try {
+            const proxy = await loadModule(`proxy-base-${apps}`, getCrossbindScript(TARGET, '/nonexistent/bridge', { base: appUrl, atBase: true }));
+
+            const m = await proxy.initNative();
+
+            expect(upath.toUnix(fileURLToPath(globalThis.crossbindLoadedFrom))).toBe(upath.join(app, 'crossbind.js'));
             expect(m.config.path).toBe(appUrl);
         } finally {
             delete globalThis.__webpack_public_path__;

@@ -4,12 +4,12 @@ import {
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import upath from 'upath';
 
-// crossbind() on Rollup and on webpack, which each pick crossbind's own integration for, on the integration api with the
-// builds under it stood in for: a page that imports a header bundles the header's module, and the glue lands beside the
-// page. A header the plugin left alone would stop either tool, which cannot parse C.
+// crossbind() on Rollup, webpack, esbuild and Rsbuild, which each pick crossbind's own integration for, on the integration
+// api with the builds under it stood in for: a page that imports a header bundles the header's module, and the glue lands
+// beside the page. A header the plugin left alone would stop any of them, which cannot parse C.
 const holder = { config: {} };
 const HEADER_MODULE = "export const one = () => 'one from the header';";
 const EXTENSIONS = upath.normalize(fileURLToPath(new URL('../../../extensions', import.meta.url)));
@@ -99,6 +99,47 @@ describe('crossbind() on the tools it speaks to', () => {
         await new Promise((resolve) => { compiler.close(resolve); });
 
         expect(stats.toJson({ all: false, errors: true }).errors).toEqual([]);
+        expect(read('dist/main.js')).toContain('one from the header');
+        expect(read('dist/crossbind.js')).toBe('glue release');
+        expect(read('dist/crossbind.wasm')).toBe('wasm release');
+        expect(buildDependencies).toHaveBeenCalledWith({ targetParams: expect.objectContaining({ buildType: ['release'] }) });
+        expect(buildWasm).toHaveBeenCalledTimes(1);
+    });
+
+    test("esbuild bundles the header's module and writes the glue beside the page", async () => {
+        const esbuild = createRequire(`${EXTENSIONS}/esbuild/package.json`)('esbuild');
+        const result = await esbuild.build({
+            entryPoints: [`${work}/src/main.js`],
+            bundle: true,
+            format: 'esm',
+            outdir: `${work}/dist`,
+            plugins: [crossbind()],
+            logLevel: 'silent',
+        });
+
+        expect(result.errors).toEqual([]);
+        expect(read('dist/main.js')).toContain('one from the header');
+        expect(read('dist/crossbind.js')).toBe('glue release');
+        expect(read('dist/crossbind.wasm')).toBe('wasm release');
+        expect(buildDependencies).toHaveBeenCalledWith({ targetParams: expect.objectContaining({ buildType: ['release'] }) });
+        expect(buildWasm).toHaveBeenCalledTimes(1);
+    });
+
+    test("Rsbuild bundles the header's module through Rspack and copies the glue beside the page", async () => {
+        const core = createRequire(`${EXTENSIONS}/rsbuild/package.json`).resolve('@rsbuild/core');
+        const { createRsbuild } = await import(pathToFileURL(core).href);
+        const rsbuild = await createRsbuild({
+            cwd: work,
+            rsbuildConfig: {
+                logLevel: 'error',
+                source: { entry: { main: './src/main.js' } },
+                output: { distPath: { root: 'dist', js: '.' }, filenameHash: false, minify: false },
+                tools: { htmlPlugin: false },
+                plugins: [crossbind()],
+            },
+        });
+        await rsbuild.build();
+
         expect(read('dist/main.js')).toContain('one from the header');
         expect(read('dist/crossbind.js')).toBe('glue release');
         expect(read('dist/crossbind.wasm')).toBe('wasm release');

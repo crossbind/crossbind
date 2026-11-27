@@ -32,7 +32,7 @@ crossbind/
 │   ├── cloud/                        ← crossbind cloud on api.crossbind.dev: the playground compiler, the accounts `crossbind login` signs in to, a runner per user and image
 │   ├── learn/                        ← the tutorial and the playground that crossbind.dev and the crossbind app share
 │   └── typescript-config/            ← shared tsconfig
-├── extensions/                       ← extensions: the app's, which app-host has as dependencies, clipboard, the package source conan and the integrations behind crossbind() (vite, rollup, webpack, metro), which crossbind has, and react-native with its iOS pod (react-native-ios), which a React Native app adds
+├── extensions/                       ← extensions: the app's, which app-host has as dependencies, clipboard, the package source conan and the integrations behind crossbind() (vite, rollup, webpack, rsbuild, esbuild, metro, next), which crossbind has, and react-native with its iOS pod (react-native-ios), which a React Native app adds
 ├── ports/                            ← native libraries built for crossbind's targets
 │   ├── README.md                     ← Bin & License Contract (K1-K4 rules, bin map + provenance schemas)
 │   └── <name>/
@@ -266,6 +266,9 @@ api `src/integration/api.js` gives through `src/integration/apiHandle.js`.
 | `extensions/rollup` | `src/plugin.js` | Rollup and Rolldown: transform for `.h`, watch native paths, link and emit the glue on `generateBundle`; Vite's plugin runs it inside |
 | `extensions/vite` | `src/plugin.js` | One plugin of Rollup's part, the web build's dev/preview servers with COOP/COEP and HMR, an app's dev session and a preview |
 | `extensions/webpack` | `src/plugin.js`, `src/loader.cjs` | Webpack/Rspack: the loader's rule, request rewrites, dev-server middleware + COOP/COEP |
+| `extensions/rsbuild` | `src/plugin.js` | Rsbuild: claims its `apply` and `setup`, runs webpack's plugin on each web environment's Rspack, gives Rsbuild's server the glue's middleware (`server.setup`), COOP/COEP and a reload after a native change |
+| `extensions/esbuild` | `src/plugin.js` | esbuild and Bun: `setup(build)`'s `onResolve`/`onLoad` for headers, `cargo:` and package headers, `prepare` on start, the link and the glue beside the output on end |
+| `extensions/next` | `src/wrap.js`, `src/loader.cjs` | `crossbind(nextConfig)`: Turbopack's rules and aliases, webpack's rule and request rewrites, under `next dev` the glue through a rewrite to crossbind's own server, the release link after `next build` compiles |
 | `extensions/metro` | `src/wrap.js`, `src/transformer.cjs` | `crossbind(config)` around Metro's: resolver, transformer (in Metro's workers, through the api's `workerModule`), Expo web's dev middleware and the glue of its export, from Expo's serializer |
 | `extensions/react-native` | `crossbind.extension.js`, `src/expo.cjs`, `script/build_{android,ios,js}.js`, `cpp/CMakeLists.txt` | RN integration: Gradle CMake hook, podspec hook, and what `"plugins": ["crossbind"]` changes in an Expo app's native projects |
 | `extensions/react-native-ios` | `ios/` | The iOS pod of the JSI module, no extension of its own |

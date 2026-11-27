@@ -1689,7 +1689,7 @@ crossbind gives every tool one thing: `crossbind()` in its plugin list, or `cros
 tool that has none.
 
 ```js
-// vite.config.js, and the same line in Rollup's, webpack's and Rspack's plugin lists
+// vite.config.js, and the same line in Rollup's, webpack's, Rspack's, Rsbuild's, esbuild's and Bun's plugin lists
 import crossbind from 'crossbind';
 
 export default { plugins: [crossbind()] };
@@ -1702,27 +1702,35 @@ const crossbind = require('crossbind');
 module.exports = crossbind(getDefaultConfig(__dirname));
 ```
 
+```js
+// next.config.mjs, under Turbopack or webpack
+import crossbind from 'crossbind';
+
+export default crossbind(nextConfig);
+```
+
 At the first use the tool makes of what `crossbind()` gave it, crossbind asks the project's integrations in turn
 whether that use is their tool's, and the one that says yes makes the plugin the tool gets. crossbind names no tool
 itself: what tells Vite from webpack is each integration's. The integrations `crossbind.config.js` lists are asked
-first, then crossbind's own: `vite`, `rollup` (Rollup and Rolldown), `webpack` (webpack and Rspack) and `metro`, which
-`crossbind` has as its dependencies; one listed under the name of one of crossbind's own takes its place. A tool loads
+first, then crossbind's own: `vite`, `rollup` (Rollup and Rolldown), `webpack` (webpack and Rspack), `rsbuild`,
+`esbuild` (esbuild and Bun), `metro` and `next`, which `crossbind` has as its dependencies; one listed under the name of
+one of crossbind's own takes its place. A tool loads
 its config without waiting, so crossbind reads `crossbind.config.js` and the integrations' packages with `require`:
 none of them waits at its top level.
 
 ```js
-// crossbind.extension.js of the extension for a tool whose plugins have a setup(build) method, which it calls first
-import farmPlugin from './src/plugin.js';
+// crossbind.extension.js of the extension for a tool whose plugins have a register(host) method, which it calls first
+import packPlugin from './src/plugin.js';
 
-export default function farm() {
+export default function pack() {
     return {
-        name: 'farm',
+        name: 'pack',
         contract: 5,
         root: import.meta.dirname,
         integration: {
-            calls: ['setup'],
-            claims: ({ key, args }) => key === 'setup' && typeof args?.[0]?.onResolve === 'function',
-            plugin: (api) => farmPlugin(api),
+            calls: ['register'],
+            claims: ({ key, args }) => key === 'register' && typeof args?.[0]?.addLoader === 'function',
+            plugin: (api) => packPlugin(api),
         },
     };
 }
@@ -1732,11 +1740,14 @@ An integration gives one of two pairs:
 
 - `claims({ key, args })` and `plugin(api)`, for a tool with a plugin list. `key` is what the tool read first of the
   object `crossbind()` gave it, and `args` what it called that with, or nothing for a read. `calls` names the methods a
-  tool calls first, which the object has before an integration takes it, as `apply` is Vite's and webpack's; Rollup
-  reads its `options` hook, which needs none. `plugin` gives one object, the tool's plugin, which answers the use that
-  chose it and every one after: the tool gets its hooks as they are, filters included.
+  tool calls first, which the object has before an integration takes it, as `apply` is Vite's, webpack's and
+  Rsbuild's, and `setup` esbuild's, Bun's and Rsbuild's; Rollup reads its `options` hook, which needs none. Until then
+  the object lists its `name` alone, as a tool may refuse a plugin with a key it does not know, as esbuild does.
+  `plugin` gives one object, the tool's plugin, which answers the use that chose it and every one after: the tool gets
+  its hooks as they are, filters included.
 - `wraps(config)` and `wrap(api, config)`, for a tool that takes its config wrapped. `wrap` gives the config the tool
-  takes, or a Promise of it where the tool waits for one, as Metro and Expo do.
+  takes, or a Promise of it where the tool waits for one, as Metro and Expo do, or a function of its phase, as Next
+  takes.
 
 A use no integration says yes to stops the tool, naming the project's integrations.
 
@@ -1759,12 +1770,14 @@ imports to make an api of its own, as its default export does, which Metro's tra
 - `kindOf(file)`: `rust`, `header`, `module`, `source` or null. `resolve(source, target)`: the file an import of a
   dependency's header, a `cargo:` crate or a package source's header names, or null. `pageApi()`: the file
   `crossbind/app` is.
-- `prepare(target)`: builds the dependencies, before any transform. `transform(file, target, { base, liveExports })`:
-  the module of a header, an interface or a Rust file, or null. `bindImports(code, file, target)`: binds again the
-  headers a source imports, for a tool that keeps a header's module as the imports change.
-- `link(target, { prepare, allBridges })`: links the glue, one link at a time per target. `outputs(target)`: its files,
-  each `{ name, path, type, optional }`. `writeOutputs(target, dir)` copies them, and `serve(target, { link, isolate })`
-  is a `(req, res, next)` middleware that serves them under any base.
+- `prepare(target)`: builds the dependencies, before any transform. `transform(file, target, { base, liveExports,
+  atBase })`: the module of a header, an interface or a Rust file, or null. The module loads the glue from `base`, where
+  the page's files are served, which a bundler's public path takes the place of at run time unless `atBase` says the
+  integration serves them at `base` itself, as Next's does. `bindImports(code, file, target)`: binds again the headers a
+  source imports, for a tool that keeps a header's module as the imports change.
+- `link(target, { prepare, allBridges })`: links the glue, one link at a time per target, the tool's processes taking
+  turns. `outputs(target)`: its files, each `{ name, path, type, optional }`. `writeOutputs(target, dir)` copies them,
+  and `serve(target, { link, isolate })` is a `(req, res, next)` middleware that serves them under any base.
 - `appSources()`, `nativeDirs()`, `nativeFiles()`, `rustPackages()`: what a watcher watches, and the Rust packages a
   resolver maps to their crate roots. `changed(file)`: what a change means, null when nothing of crossbind's, else
   the headers to bind again. `licenses(bundle, { root })`: the asset of the page's licenses, or null.
