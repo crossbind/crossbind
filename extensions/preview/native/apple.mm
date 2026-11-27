@@ -1,7 +1,8 @@
 // Apple's own for the preview extension: the keychain keeps the app's token, CommonCrypto makes HMAC-SHA256 and SHA-256,
-// ASWebAuthenticationSession shows the page that approves a sign-in, never the default browser; a project's question is
-// a sheet of its window on macOS and an alert on iOS; and what shows that a preview is one is a pill in a window of the
-// extension's own above the page on iOS, the window's title and a Preview menu in the menu bar on macOS.
+// ASWebAuthenticationSession shows the page that approves a sign-in, never the default browser; a project's question,
+// and Clear this project's data…'s, is a sheet of its window on macOS and an alert on iOS; and what shows that a preview
+// is one is a pill in a window of the extension's own above the page on iOS, the window's title and a Preview menu in
+// the menu bar on macOS.
 #include "preview.h"
 
 #include <cstdlib>
@@ -127,6 +128,10 @@
     UIAlertController *menu = [UIAlertController alertControllerWithTitle:self.project message:self.line preferredStyle:UIAlertControllerStyleActionSheet];
     [menu addAction:[UIAlertAction actionWithTitle:@"Reload" style:UIAlertActionStyleDefault handler:^(UIAlertAction *) { preview::reloadPreview(); }]];
     [menu addAction:[UIAlertAction actionWithTitle:@"Permissions…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *) { [self openPermissions]; }]];
+    NSString *origin = self.origin;
+    [menu addAction:[UIAlertAction actionWithTitle:@"Clear this project's data…"
+                                             style:UIAlertActionStyleDefault
+                                           handler:^(UIAlertAction *) { preview::askToClear(origin.UTF8String ?: ""); }]];
     [menu addAction:[UIAlertAction actionWithTitle:@"Close preview" style:UIAlertActionStyleDefault handler:^(UIAlertAction *) { preview::closePreview(); }]];
     [menu addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
     menu.popoverPresentationController.sourceView = pill;
@@ -172,6 +177,22 @@
 
 @end
 #else
+// Escape of a sheet whose Cancel is its default button: a button takes one key, and Return is the default's, so the
+// sheet's keys reach this view for Escape, which presses Cancel.
+@interface CBPreviewEscape : NSView
+@property(nonatomic, weak) NSButton *cancel;
+@end
+
+@implementation CBPreviewEscape
+
+- (BOOL)performKeyEquivalent:(NSEvent *)event {
+    if (event.type != NSEventTypeKeyDown || ![event.charactersIgnoringModifiers isEqualToString:@"\x1b"]) return NO;
+    [self.cancel performClick:nil];
+    return YES;
+}
+
+@end
+
 // The Preview menu's actions, and the origin of the preview its Permissions changes.
 @interface CBPreviewMenuTarget : NSObject
 @property(nonatomic, copy) NSString *origin;
@@ -185,6 +206,10 @@
 
 - (void)closePreview:(id)sender {
     preview::closePreview();
+}
+
+- (void)clear:(id)sender {
+    preview::askToClear(self.origin.UTF8String ?: "");
 }
 
 // A kind's check mark turned the other way: the answer kept, and the page reloaded so that the change holds for it.
@@ -453,13 +478,18 @@ struct Presented {
     bool isClosed = false;
 };
 
-}  // namespace
+// A button of a question's alert: its title, its style and the answer it gives.
+struct Button {
+    NSString *title;
+    UIAlertActionStyle style;
+    bool answer;
+};
 
 // An alert over whatever the window shows on top, a page's own alert among it, from the pill's window where the
-// preview's window has one: Don't Allow its preferred action, which a keyboard's Return presses, and neither of the
-// cancel style, which Escape would press. It closes once it shows, as a dismissal during its presentation does not take.
-std::function<void()> showConsent(uint64_t window, const std::string &message, const std::string &detail,
-    std::function<void(std::optional<bool> isAllowed)> done) {
+// preview's window has one, its first button its preferred action, which a keyboard's Return presses. It closes once it
+// shows, as a dismissal during its presentation does not take.
+std::function<void()> showAlert(uint64_t window, const std::string &message, const std::string &detail, const std::vector<Button> &buttons,
+    std::function<void(std::optional<bool> answer)> done) {
     const std::optional<crossbind::Window> open = crossbind::windowOf(window);
     // A request that names no window is asked over the app's oldest.
     const std::vector<crossbind::Window> windows = crossbind::openWindows();
@@ -475,18 +505,15 @@ std::function<void()> showConsent(uint64_t window, const std::string &message, c
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:stringOf(message)
                                                                    message:stringOf(detail)
                                                             preferredStyle:UIAlertControllerStyleAlert];
-    UIAlertAction *dontAllow = [UIAlertAction actionWithTitle:@"Don't Allow"
-                                                        style:UIAlertActionStyleDefault
-                                                      handler:^(UIAlertAction *) {
-                                                          if (!state->isClosed) done(false);
-                                                      }];
-    [alert addAction:dontAllow];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Allow"
-                                              style:UIAlertActionStyleDefault
-                                            handler:^(UIAlertAction *) {
-                                                if (!state->isClosed) done(true);
-                                            }]];
-    alert.preferredAction = dontAllow;
+    for (const Button &button : buttons) {
+        const bool answer = button.answer;
+        [alert addAction:[UIAlertAction actionWithTitle:button.title
+                                                  style:button.style
+                                                handler:^(UIAlertAction *) {
+                                                    if (!state->isClosed) done(answer);
+                                                }]];
+    }
+    alert.preferredAction = alert.actions.firstObject;
     __weak UIAlertController *shown = alert;
     [top presentViewController:alert
                       animated:YES
@@ -500,6 +527,20 @@ std::function<void()> showConsent(uint64_t window, const std::string &message, c
             if (state->isShown) [shown.presentingViewController dismissViewControllerAnimated:NO completion:nil];
         });
     };
+}
+
+}  // namespace
+
+// Don't Allow its preferred action, and neither of the cancel style, which Escape would press.
+std::function<void()> showConsent(uint64_t window, const std::string &message, const std::string &detail,
+    std::function<void(std::optional<bool> isAllowed)> done) {
+    return showAlert(window, message, detail, {{@"Don't Allow", UIAlertActionStyleDefault, false}, {@"Allow", UIAlertActionStyleDefault, true}}, std::move(done));
+}
+
+// Cancel its preferred action, of the cancel style, which Escape presses; Clear destructive.
+std::function<void()> showClearQuestion(uint64_t window, const std::string &message, const std::string &detail,
+    std::function<void(std::optional<bool> isCleared)> done) {
+    return showAlert(window, message, detail, {{@"Cancel", UIAlertActionStyleCancel, false}, {@"Clear", UIAlertActionStyleDestructive, true}}, std::move(done));
 }
 #else
 namespace {
@@ -553,7 +594,8 @@ NSMenu *permissionsOf(const Shown &shown) {
     return menu;
 }
 
-// Reload, the project's line, which does nothing, Permissions and Close preview, before the Window menu.
+// Reload, the project's line, which does nothing, Permissions, Clear this project's data… and Close preview, before the
+// Window menu.
 void showMenu(const Shown &shown) {
     if (!previewItem) {
         menuTarget = [CBPreviewMenuTarget new];
@@ -563,6 +605,7 @@ void showMenu(const Shown &shown) {
         lineItem = [menu addItemWithTitle:@"" action:nil keyEquivalent:@""];
         lineItem.enabled = NO;
         permissionsItem = [menu addItemWithTitle:@"Permissions" action:nil keyEquivalent:@""];
+        [menu addItemWithTitle:@"Clear this project's data…" action:@selector(clear:) keyEquivalent:@""].target = menuTarget;
         [menu addItemWithTitle:@"Close preview" action:@selector(closePreview:) keyEquivalent:@""].target = menuTarget;
         previewItem = [[NSMenuItem alloc] initWithTitle:@"Preview" action:nil keyEquivalent:@""];
         previewItem.submenu = menu;
@@ -654,11 +697,13 @@ void giveWebFullScreenBack(const crossbind::Window &open) {
     if (found != marked.end()) setWebFullScreen((__bridge WKWebView *)open.webView(), found->second.isWebFullScreen);
 }
 
-// A sheet of the window, which leaves the menu bar and the app's other windows working: Don't Allow its first button,
-// which Return presses, and Escape none, as NSAlert gives Escape to a button named Cancel alone. A sheet that ends by
-// neither button, as when another's code ends it, answers as one that could not be shown.
-std::function<void()> showConsent(uint64_t window, const std::string &message, const std::string &detail,
-    std::function<void(std::optional<bool> isAllowed)> done) {
+namespace {
+
+// A sheet of the window, which leaves the menu bar and the app's other windows working, of two buttons: the first, whose
+// answer is false, Return presses, and Escape too where it is the question's Cancel. A sheet that ends by neither button,
+// as when another's code ends it, answers as one that could not be shown.
+std::function<void()> showSheet(uint64_t window, const std::string &message, const std::string &detail, NSString *first, NSString *second,
+    bool isCancel, std::function<void(std::optional<bool> answer)> done) {
     const std::optional<crossbind::Window> open = crossbind::windowOf(window);
     NSWindow *parent = (__bridge NSWindow *)(open ? open->native() : crossbind::appWindow());
     if (!parent) {
@@ -668,8 +713,14 @@ std::function<void()> showConsent(uint64_t window, const std::string &message, c
     NSAlert *alert = [NSAlert new];
     alert.messageText = stringOf(message);
     alert.informativeText = stringOf(detail);
-    [alert addButtonWithTitle:@"Don't Allow"].keyEquivalent = @"\r";
-    [alert addButtonWithTitle:@"Allow"].keyEquivalent = @"";
+    NSButton *byDefault = [alert addButtonWithTitle:first];
+    byDefault.keyEquivalent = @"\r";
+    [alert addButtonWithTitle:second].keyEquivalent = @"";
+    if (isCancel) {
+        CBPreviewEscape *escape = [[CBPreviewEscape alloc] initWithFrame:NSZeroRect];
+        escape.cancel = byDefault;
+        alert.accessoryView = escape;
+    }
     auto isClosed = std::make_shared<bool>(false);
     [alert beginSheetModalForWindow:parent
                   completionHandler:^(NSModalResponse response) {
@@ -689,6 +740,18 @@ std::function<void()> showConsent(uint64_t window, const std::string &message, c
         });
     };
 }
+
+}  // namespace
+
+std::function<void()> showConsent(uint64_t window, const std::string &message, const std::string &detail,
+    std::function<void(std::optional<bool> isAllowed)> done) {
+    return showSheet(window, message, detail, @"Don't Allow", @"Allow", false, std::move(done));
+}
+
+std::function<void()> showClearQuestion(uint64_t window, const std::string &message, const std::string &detail,
+    std::function<void(std::optional<bool> isCleared)> done) {
+    return showSheet(window, message, detail, @"Cancel", @"Clear", true, std::move(done));
+}
 #endif
 
 void endIndicator(uint64_t window, std::function<void(bool isShowingProject)> done) {
@@ -704,6 +767,15 @@ void endIndicator(uint64_t window, std::function<void(bool isShowingProject)> do
 void reloadWindow(uint64_t window) {
     crossbind::onMainThread([window] {
         if (const std::optional<crossbind::Window> open = crossbind::windowOf(window)) [(__bridge WKWebView *)open->webView() reload];
+    });
+}
+
+void loadWindow(uint64_t window, const std::string &url) {
+    crossbind::onMainThread([window, url] {
+        const std::optional<crossbind::Window> open = window != 0 ? crossbind::windowOf(window) : std::nullopt;
+        WKWebView *web = (__bridge WKWebView *)(open ? open->webView() : crossbind::appWebView());
+        NSURL *address = [NSURL URLWithString:stringOf(url)];
+        if (web && address) [web loadRequest:[NSURLRequest requestWithURL:address]];
     });
 }
 

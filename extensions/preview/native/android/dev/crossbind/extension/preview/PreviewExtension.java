@@ -114,17 +114,25 @@ public final class PreviewExtension implements Extension {
                     host.activity().startActivity(intent);
                     call.resolve(null);
                 }
-                // The preview the native code serves from here on, and its end.
+                // The preview the native code serves from here on, and its end, which closes its questions unanswered.
                 case "serving" -> {
                     consents.serve(options.getString("url"), options.getString("name"), options.getString("project"));
                     call.resolve(null);
                 }
                 case "ended" -> {
                     consents.end();
+                    indicator.ended();
+                    call.resolve(null);
+                }
+                // The answers Settings lists and takes back, and those a clearing forgets.
+                case "consentsOf" -> call.resolve(consents.consentsOf(host, options.getJSONArray("origins")));
+                case "takeBack" -> call.resolve(consents.takeBack(host, options.getString("origin"), options.getString("kind")));
+                case "forget" -> {
+                    consents.forget(host, options.getString("origin"));
                     call.resolve(null);
                 }
                 // The indicator of the preview served, its words and its origin; its end; whether the WebView shows a
-                // page of its origin; its page reloaded; and what its user asks of it next.
+                // page of its origin; its page reloaded; a clearing's page loaded; and what its user asks of it next.
                 case "mark" -> {
                     indicator.mark(host, options.getString("project"), options.getString("line"), options.getString("origin"));
                     call.resolve(null);
@@ -136,6 +144,10 @@ public final class PreviewExtension implements Extension {
                 case "showsPreview" -> call.resolve(indicator.showsPreview(host));
                 case "reload" -> {
                     indicator.reload(host);
+                    call.resolve(null);
+                }
+                case "load" -> {
+                    indicator.load(host, options.getString("url"));
                     call.resolve(null);
                 }
                 case "next" -> indicator.next(call);

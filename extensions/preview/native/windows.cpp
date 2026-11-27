@@ -1,7 +1,8 @@
 // Windows' own for the preview extension: the Credential Manager keeps the app's token, CNG makes HMAC-SHA256, SHA-256
-// and random bytes, the default browser shows the page that approves a sign-in, a project's question is a task dialog of
-// its window, and what shows that a preview is one is the window's title and the preview's items at the top of its
-// system menu, which Alt+Space and a right click on the title bar open.
+// and random bytes, the default browser shows the page that approves a sign-in, a project's question, and Clear this
+// project's data…'s, is a task dialog of its window, what shows that a preview is one is the window's title and the
+// preview's items at the top of its system menu, which Alt+Space and a right click on the title bar open, and WebView2's
+// DevTools protocol removes what an origin keeps, which a project's service worker cannot answer for.
 #include "preview.h"
 
 #include <windows.h>
@@ -57,15 +58,17 @@ void answerDigest(const std::optional<std::string> &digest, const Digest &done) 
     else done(std::string("crossbind: Windows made no SHA-256"), {});
 }
 
-// The question's own buttons, numbered past the common ones, IDOK to IDCONTINUE.
+// The questions' own buttons, numbered past the common ones, IDOK to IDCONTINUE.
 constexpr int DONT_ALLOW_BUTTON = 100;
 constexpr int ALLOW_BUTTON = 101;
+constexpr int CLEAR_BUTTON = 102;
 
-// The question's task dialog once it shows, and whether it was closed unanswered.
+// A question's task dialog once it shows, whether it was closed unanswered, and the button that closes it so.
 struct Asked {
     std::mutex mutex;
     HWND dialog = nullptr;
     bool isClosed = false;
+    int closing = 0;
 };
 
 HRESULT CALLBACK onQuestion(HWND dialog, UINT notification, WPARAM, LPARAM, LONG_PTR data) {
@@ -73,11 +76,108 @@ HRESULT CALLBACK onQuestion(HWND dialog, UINT notification, WPARAM, LPARAM, LONG
     std::lock_guard<std::mutex> lock(asked->mutex);
     if (notification == TDN_CREATED) {
         asked->dialog = dialog;
-        if (asked->isClosed) PostMessageW(dialog, TDM_CLICK_BUTTON, DONT_ALLOW_BUTTON, 0);
+        if (asked->isClosed) PostMessageW(dialog, TDM_CLICK_BUTTON, asked->closing, 0);
     } else if (notification == TDN_DESTROYED) {
         asked->dialog = nullptr;
     }
     return S_OK;
+}
+
+// A task dialog of the window, modal to it alone and titled with the app's name, of these buttons and the system's
+// common ones, the default one taking Return and the first focus. Its modal loop runs in a task of the main thread, which
+// holds the answers of the window's pages until it closes, as a message dialog's does; it closes by a message of its own,
+// which passes that, as its closing button. done gets the button pressed, or none where it could not show.
+std::function<void()> askInDialog(uint64_t window, const std::string &message, const std::string &detail, std::vector<TASKDIALOG_BUTTON> buttons,
+    TASKDIALOG_COMMON_BUTTON_FLAGS common, int byDefault, int closing, std::function<void(std::optional<int> clicked)> done) {
+    auto asked = std::make_shared<Asked>();
+    asked->closing = closing;
+    crossbind::onMainThread([window, message, detail, buttons, common, byDefault, done, asked] {
+        const std::optional<crossbind::Window> open = crossbind::windowOf(window);
+        HWND parent = static_cast<HWND>(open ? open->native() : crossbind::appWindow());
+        if (!parent) {
+            done(std::nullopt);
+            return;
+        }
+        const std::wstring title = wide(crossbind::appName());
+        const std::wstring instruction = wide(message);
+        const std::wstring content = wide(detail);
+        TASKDIALOGCONFIG config{};
+        config.cbSize = sizeof config;
+        config.hwndParent = parent;
+        config.dwFlags = TDF_POSITION_RELATIVE_TO_WINDOW;
+        config.dwCommonButtons = common;
+        config.pszWindowTitle = title.c_str();
+        config.pszMainIcon = TD_INFORMATION_ICON;
+        config.pszMainInstruction = instruction.c_str();
+        config.pszContent = content.c_str();
+        config.cButtons = static_cast<UINT>(buttons.size());
+        config.pButtons = buttons.data();
+        config.nDefaultButton = byDefault;
+        config.pfCallback = onQuestion;
+        config.lpCallbackData = reinterpret_cast<LONG_PTR>(asked.get());
+        int clicked = 0;
+        const HRESULT shown = TaskDialogIndirect(&config, &clicked, nullptr, nullptr);
+        {
+            std::lock_guard<std::mutex> lock(asked->mutex);
+            if (asked->isClosed) return;
+        }
+        if (SUCCEEDED(shown)) {
+            done(clicked);
+            return;
+        }
+        std::fprintf(stderr, "crossbind: preview's question could not show: 0x%08lx\n", static_cast<unsigned long>(shown));
+        done(std::nullopt);
+    });
+    return [asked] {
+        std::lock_guard<std::mutex> lock(asked->mutex);
+        asked->isClosed = true;
+        if (asked->dialog) PostMessageW(asked->dialog, TDM_CLICK_BUTTON, asked->closing, 0);
+    };
+}
+
+// WebView2's answer to a call of its DevTools protocol, which done hears once.
+class DevToolsAnswer final : public ICoreWebView2CallDevToolsProtocolMethodCompletedHandler {
+public:
+    explicit DevToolsAnswer(Done done) : done_(std::move(done)) {}
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void **out) override {
+        if (!IsEqualIID(riid, IID_IUnknown) && !IsEqualIID(riid, IID_ICoreWebView2CallDevToolsProtocolMethodCompletedHandler)) {
+            *out = nullptr;
+            return E_NOINTERFACE;
+        }
+        *out = static_cast<ICoreWebView2CallDevToolsProtocolMethodCompletedHandler *>(this);
+        AddRef();
+        return S_OK;
+    }
+    ULONG STDMETHODCALLTYPE AddRef() override { return InterlockedIncrement(&references_); }
+    ULONG STDMETHODCALLTYPE Release() override {
+        const ULONG left = InterlockedDecrement(&references_);
+        if (left == 0) delete this;
+        return left;
+    }
+    HRESULT STDMETHODCALLTYPE Invoke(HRESULT error, LPCWSTR) override {
+        done_(SUCCEEDED(error) ? Failure() : Failure(failureOf(error)));
+        return S_OK;
+    }
+
+    static std::string failureOf(HRESULT error) {
+        char code[16];
+        std::snprintf(code, sizeof code, "0x%08lx", static_cast<unsigned long>(error));
+        return std::string("WebView2 answered ") + code;
+    }
+
+private:
+    Done done_;
+    LONG references_ = 1;
+};
+
+// The window's webview, the app's oldest for 0, on the main thread, which its caller releases; none where it has none.
+ICoreWebView2 *coreOf(uint64_t window) {
+    const std::optional<crossbind::Window> open = window != 0 ? crossbind::windowOf(window) : std::nullopt;
+    void *controller = open ? open->webView() : crossbind::appWebView();
+    ICoreWebView2 *core = nullptr;
+    if (!controller || FAILED(static_cast<ICoreWebView2Controller *>(controller)->get_CoreWebView2(&core))) return nullptr;
+    return core;
 }
 
 // The preview's items at the top of a window's system menu, by the commands WM_SYSCOMMAND carries, whose four low bits
@@ -90,12 +190,13 @@ constexpr UINT SEPARATOR_ITEM = 0x1F50;
 constexpr UINT PERMISSIONS_ITEM = 0x1F60;
 constexpr UINT PROJECT_ITEM = 0x1F70;
 constexpr UINT NOTHING_ITEM = 0x1F80;
+constexpr UINT CLEAR_ITEM = 0x1FC0;
 // Permissions' item of each kind.
 const std::pair<const char *, UINT> KIND_ITEMS[] = {{"camera", 0x1F90}, {"microphone", 0x1FA0}, {"location", 0x1FB0}};
 constexpr UINT_PTR SUBCLASS = 0x5F5;
 
 // What a window the indicator is up on had before it, its title, which it gets back once it comes down; and the origin of
-// the preview its menu was made for, which its Permissions change; on the main thread.
+// the preview its menu was made for, which its Permissions change and its Clear… clears; on the main thread.
 struct Marked {
     std::wstring title;
     std::string origin;
@@ -127,6 +228,10 @@ LRESULT CALLBACK onSystemCommand(HWND window, UINT message, WPARAM wParam, LPARA
             closePreview();
             return 0;
         }
+        if (command == CLEAR_ITEM) {
+            askToClear(origin);
+            return 0;
+        }
         // A kind's check mark turned the other way: the answer kept, and the page reloaded so that it holds for it.
         for (const auto &[kind, item] : KIND_ITEMS) {
             if (command != item) continue;
@@ -153,7 +258,7 @@ void insertItem(HMENU menu, UINT at, UINT command, const std::wstring &text, UIN
 
 // Deleting Permissions destroys its submenu with it.
 void dropItems(HMENU menu) {
-    for (const UINT command : {RELOAD_ITEM, NAME_ITEM, LINE_ITEM, PERMISSIONS_ITEM, CLOSE_ITEM, SEPARATOR_ITEM}) DeleteMenu(menu, command, MF_BYCOMMAND);
+    for (const UINT command : {RELOAD_ITEM, NAME_ITEM, LINE_ITEM, PERMISSIONS_ITEM, CLEAR_ITEM, CLOSE_ITEM, SEPARATOR_ITEM}) DeleteMenu(menu, command, MF_BYCOMMAND);
 }
 
 // Permissions: the project's name, then a check mark for each kind its user answered, on where Allow is kept; or that
@@ -171,8 +276,8 @@ HMENU permissionsOf(const Shown &shown) {
     return menu;
 }
 
-// Reload; the project's name over its line, which do nothing, as a menu draws one line an item; Permissions; Close
-// preview.
+// Reload; the project's name over its line, which do nothing, as a menu draws one line an item; Permissions; Clear this
+// project's data…; Close preview.
 void setItems(HWND window, const Shown &shown) {
     HMENU menu = GetSystemMenu(window, FALSE);
     if (!menu) return;
@@ -181,13 +286,14 @@ void setItems(HWND window, const Shown &shown) {
     insertItem(menu, 1, NAME_ITEM, menuText(shown.project), MFS_DISABLED);
     insertItem(menu, 2, LINE_ITEM, menuText(shown.line), MFS_DISABLED);
     insertItem(menu, 3, PERMISSIONS_ITEM, L"Permissions", MFS_ENABLED, permissionsOf(shown));
-    insertItem(menu, 4, CLOSE_ITEM, L"Close preview", MFS_ENABLED);
+    insertItem(menu, 4, CLEAR_ITEM, L"Clear this project's data\u2026", MFS_ENABLED);
+    insertItem(menu, 5, CLOSE_ITEM, L"Close preview", MFS_ENABLED);
     MENUITEMINFOW separator{};
     separator.cbSize = sizeof separator;
     separator.fMask = MIIM_ID | MIIM_FTYPE;
     separator.fType = MFT_SEPARATOR;
     separator.wID = SEPARATOR_ITEM;
-    InsertMenuItemW(menu, 5, TRUE, &separator);
+    InsertMenuItemW(menu, 6, TRUE, &separator);
 }
 
 }  // namespace
@@ -261,55 +367,18 @@ std::string systemVersion() {
 
 bool asksForLocalNetwork() { return false; }
 
-// A task dialog of the window, modal to it alone and titled with the app's name: Don't Allow its default button, which
-// Return and its first focus take; with no cancel of its own, Escape, Alt+F4 and its close button leave it up. Its modal
-// loop runs in a task of the main thread, which holds the answers of the window's pages until it closes, as a message
-// dialog's does; it closes by a message of its own, which passes that.
+// Don't Allow its default button; with no cancel of its own, Escape, Alt+F4 and its close button leave it up.
 std::function<void()> showConsent(uint64_t window, const std::string &message, const std::string &detail,
     std::function<void(std::optional<bool> isAllowed)> done) {
-    auto asked = std::make_shared<Asked>();
-    crossbind::onMainThread([window, message, detail, done, asked] {
-        const std::optional<crossbind::Window> open = crossbind::windowOf(window);
-        HWND parent = static_cast<HWND>(open ? open->native() : crossbind::appWindow());
-        if (!parent) {
-            done(std::nullopt);
-            return;
-        }
-        const std::wstring title = wide(crossbind::appName());
-        const std::wstring instruction = wide(message);
-        const std::wstring content = wide(detail);
-        const TASKDIALOG_BUTTON buttons[] = {{ALLOW_BUTTON, L"Allow"}, {DONT_ALLOW_BUTTON, L"Don't Allow"}};
-        TASKDIALOGCONFIG config{};
-        config.cbSize = sizeof config;
-        config.hwndParent = parent;
-        config.dwFlags = TDF_POSITION_RELATIVE_TO_WINDOW;
-        config.pszWindowTitle = title.c_str();
-        config.pszMainIcon = TD_INFORMATION_ICON;
-        config.pszMainInstruction = instruction.c_str();
-        config.pszContent = content.c_str();
-        config.cButtons = 2;
-        config.pButtons = buttons;
-        config.nDefaultButton = DONT_ALLOW_BUTTON;
-        config.pfCallback = onQuestion;
-        config.lpCallbackData = reinterpret_cast<LONG_PTR>(asked.get());
-        int clicked = 0;
-        const HRESULT shown = TaskDialogIndirect(&config, &clicked, nullptr, nullptr);
-        {
-            std::lock_guard<std::mutex> lock(asked->mutex);
-            if (asked->isClosed) return;
-        }
-        if (SUCCEEDED(shown)) {
-            done(clicked == ALLOW_BUTTON);
-            return;
-        }
-        std::fprintf(stderr, "crossbind: preview's question could not show: 0x%08lx\n", static_cast<unsigned long>(shown));
-        done(std::nullopt);
-    });
-    return [asked] {
-        std::lock_guard<std::mutex> lock(asked->mutex);
-        asked->isClosed = true;
-        if (asked->dialog) PostMessageW(asked->dialog, TDM_CLICK_BUTTON, DONT_ALLOW_BUTTON, 0);
-    };
+    return askInDialog(window, message, detail, {{ALLOW_BUTTON, L"Allow"}, {DONT_ALLOW_BUTTON, L"Don't Allow"}}, 0, DONT_ALLOW_BUTTON, DONT_ALLOW_BUTTON,
+        [done](std::optional<int> clicked) { done(clicked ? std::optional<bool>(*clicked == ALLOW_BUTTON) : std::nullopt); });
+}
+
+// The system's Cancel its default button, which Escape, Alt+F4 and its close button press as well.
+std::function<void()> showClearQuestion(uint64_t window, const std::string &message, const std::string &detail,
+    std::function<void(std::optional<bool> isCleared)> done) {
+    return askInDialog(window, message, detail, {{CLEAR_BUTTON, L"Clear"}}, TDCBF_CANCEL_BUTTON, IDCANCEL, IDCANCEL,
+        [done](std::optional<int> clicked) { done(clicked ? std::optional<bool>(*clicked == CLEAR_BUTTON) : std::nullopt); });
 }
 
 void showIndicator(uint64_t window, const Shown &shown, std::function<void()> done) {
@@ -360,6 +429,34 @@ void reloadWindow(uint64_t window) {
         if (!open || FAILED(static_cast<ICoreWebView2Controller *>(open->webView())->get_CoreWebView2(&core)) || !core) return;
         core->Reload();
         core->Release();
+    });
+}
+
+void loadWindow(uint64_t window, const std::string &url) {
+    crossbind::onMainThread([window, url] {
+        ICoreWebView2 *core = coreOf(window);
+        if (!core) return;
+        core->Navigate(wide(url).c_str());
+        core->Release();
+    });
+}
+
+// Each kind of what the origin keeps, its service workers among them, which the profile all the app's webviews share
+// keeps for it.
+void removeOriginData(uint64_t window, const std::string &url, Done done) {
+    crossbind::onMainThread([window, url, done] {
+        ICoreWebView2 *core = coreOf(window);
+        if (!core) {
+            done(std::string("there is no webview to remove it with"));
+            return;
+        }
+        const std::string origin = url.substr(0, url.size() - 1);
+        const std::string parameters = Value(Value::Object{{"origin", origin}, {"storageTypes", "all"}}).json();
+        auto *answered = new DevToolsAnswer(done);
+        const HRESULT asked = core->CallDevToolsProtocolMethod(L"Storage.clearDataForOrigin", wide(parameters).c_str(), answered);
+        answered->Release();
+        core->Release();
+        if (FAILED(asked)) done(DevToolsAnswer::failureOf(asked));
     });
 }
 

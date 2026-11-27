@@ -1,7 +1,8 @@
 // Linux's own for the preview extension: the Secret Service keeps the app's token, through libsecret, and where no
 // keyring runs the extension keeps it for the run alone; GLib makes HMAC-SHA256 and SHA-256; the default browser shows
-// the page that approves a sign-in; a project's question is a dialog of its window; and what shows that a preview is one
-// is the window's title and a bar above the page, with the project's name and the preview's menu.
+// the page that approves a sign-in; a project's question, and Clear this project's data…'s, is a dialog of its window;
+// and what shows that a preview is one is the window's title and a bar above the page, with the project's name and the
+// preview's menu.
 #include "preview.h"
 
 #include <gtk/gtk.h>
@@ -33,6 +34,7 @@ std::string wordsOf(GError *error) {
 
 constexpr int DONT_ALLOW_RESPONSE = 0;
 constexpr int ALLOW_RESPONSE = 1;
+constexpr int CLEAR_RESPONSE = 2;
 
 // The question's dialog while it is up, and its answer's: on the main thread.
 struct Asked {
@@ -48,12 +50,19 @@ void onQuestion(GtkDialog *dialog, gint response, gpointer data) {
     asked->done(response == ALLOW_RESPONSE);
 }
 
+// Any response but Clear's is Cancel's: Escape's and the window manager's close among them.
+void onClearQuestion(GtkDialog *dialog, gint response, gpointer data) {
+    const std::shared_ptr<Asked> asked = *static_cast<std::shared_ptr<Asked> *>(data);
+    gtk_widget_destroy(GTK_WIDGET(dialog));
+    asked->done(response == CLEAR_RESPONSE);
+}
+
 void onQuestionGone(GtkWidget *, gpointer data) { (*static_cast<std::shared_ptr<Asked> *>(data))->dialog = nullptr; }
 
 void forget(gpointer data, GClosure *) { delete static_cast<std::shared_ptr<Asked> *>(data); }
 
 // What a window the indicator is up on had before it, which it gets back once it comes down, the bar it shows, and the
-// origin of the preview its menu was made for, which its Permissions change; on the main thread.
+// origin of the preview its menu was made for, which its Permissions change and its Clear… clears; on the main thread.
 struct Marked {
     std::string title;
     gboolean isWebFullScreen = TRUE;
@@ -74,6 +83,8 @@ std::string originOf(gpointer window) {
 void onReload(GtkMenuItem *, gpointer) { reloadPreview(); }
 
 void onClose(GtkMenuItem *, gpointer) { closePreview(); }
+
+void onClear(GtkMenuItem *, gpointer window) { askToClear(originOf(window)); }
 
 // A kind of a window's Permissions.
 struct KindOf {
@@ -112,9 +123,9 @@ void fillPermissions(GtkWidget *menu, uint64_t window, const Shown &shown) {
     gtk_widget_show_all(menu);
 }
 
-// The project's name and a menu button: Reload, the project's name over its line, which does nothing, Permissions and
-// Close preview. Each label is text, its underscores and its marks as they are.
-Marked barOf(GtkWindow *window, WebKitWebView *web) {
+// The project's name and a menu button: Reload, the project's name over its line, which does nothing, Permissions, Clear
+// this project's data… and Close preview. Each label is text, its underscores and its marks as they are.
+Marked barOf(uint64_t id, GtkWindow *window, WebKitWebView *web) {
     Marked made;
     const char *title = gtk_window_get_title(window);
     made.title = title ? title : "";
@@ -133,9 +144,11 @@ Marked barOf(GtkWindow *window, WebKitWebView *web) {
     GtkWidget *permissions = gtk_menu_item_new_with_label("Permissions");
     made.permissions = gtk_menu_new();
     gtk_menu_item_set_submenu(GTK_MENU_ITEM(permissions), made.permissions);
+    GtkWidget *clear = gtk_menu_item_new_with_label("Clear this project's data\xE2\x80\xA6");
+    g_signal_connect(clear, "activate", G_CALLBACK(onClear), GSIZE_TO_POINTER(id));
     GtkWidget *close = gtk_menu_item_new_with_label("Close preview");
     g_signal_connect(close, "activate", G_CALLBACK(onClose), nullptr);
-    for (GtkWidget *item : {reload, made.line, permissions, close}) gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+    for (GtkWidget *item : {reload, made.line, permissions, clear, close}) gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
     gtk_widget_show_all(menu);
     GtkWidget *button = gtk_menu_button_new();
     gtk_button_set_label(GTK_BUTTON(button), "Preview");
@@ -270,6 +283,37 @@ std::function<void()> showConsent(uint64_t window, const std::string &message, c
     };
 }
 
+// A dialog of the window, modal to it, titled with the app's name: Cancel its default response, which Return takes, and
+// its first focus, and Escape and the window manager's close Cancel's as well.
+std::function<void()> showClearQuestion(uint64_t window, const std::string &message, const std::string &detail,
+    std::function<void(std::optional<bool> isCleared)> done) {
+    const std::optional<crossbind::Window> open = crossbind::windowOf(window);
+    GtkWindow *parent = static_cast<GtkWindow *>(open ? open->native() : crossbind::appWindow());
+    if (!parent) {
+        done(std::nullopt);
+        return nullptr;
+    }
+    GtkWidget *dialog = gtk_message_dialog_new(parent, static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT), GTK_MESSAGE_QUESTION,
+        GTK_BUTTONS_NONE, "%s", message.c_str());
+    gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(dialog), "%s", detail.c_str());
+    gtk_window_set_title(GTK_WINDOW(dialog), crossbind::appName().c_str());
+    GtkWidget *cancel = gtk_dialog_add_button(GTK_DIALOG(dialog), "Cancel", GTK_RESPONSE_CANCEL);
+    GtkWidget *clear = gtk_dialog_add_button(GTK_DIALOG(dialog), "Clear", CLEAR_RESPONSE);
+    gtk_button_set_use_underline(GTK_BUTTON(cancel), FALSE);
+    gtk_button_set_use_underline(GTK_BUTTON(clear), FALSE);
+    gtk_dialog_set_default_response(GTK_DIALOG(dialog), GTK_RESPONSE_CANCEL);
+    const auto asked = std::make_shared<Asked>(Asked{std::move(done), dialog});
+    g_signal_connect_data(dialog, "response", G_CALLBACK(onClearQuestion), new std::shared_ptr<Asked>(asked), forget, GConnectFlags(0));
+    g_signal_connect_data(dialog, "destroy", G_CALLBACK(onQuestionGone), new std::shared_ptr<Asked>(asked), forget, GConnectFlags(0));
+    gtk_widget_show_all(dialog);
+    gtk_widget_grab_focus(cancel);
+    return [asked] {
+        crossbind::onMainThread([asked] {
+            if (asked->dialog) gtk_widget_destroy(asked->dialog);
+        });
+    };
+}
+
 // The window's title says it shows a preview, and the bar is above the page, in the window's own box; the web view's
 // full screen is off, as a window that filled the screen would show no title.
 void showIndicator(uint64_t window, const Shown &shown, std::function<void()> done) {
@@ -279,7 +323,7 @@ void showIndicator(uint64_t window, const Shown &shown, std::function<void()> do
             GtkWindow *native = static_cast<GtkWindow *>(open->native());
             WebKitWebView *web = WEBKIT_WEB_VIEW(open->webView());
             if (!marked.count(window)) {
-                marked[window] = barOf(native, web);
+                marked[window] = barOf(window, native, web);
                 gtk_container_add(GTK_CONTAINER(gtk_widget_get_parent(GTK_WIDGET(web))), marked[window].bar);
                 gtk_widget_show_all(marked[window].bar);
             }
@@ -323,6 +367,14 @@ void endIndicator(uint64_t window, std::function<void(bool isShowingProject)> do
 void reloadWindow(uint64_t window) {
     crossbind::onMainThread([window] {
         if (const std::optional<crossbind::Window> open = crossbind::windowOf(window)) webkit_web_view_reload(WEBKIT_WEB_VIEW(open->webView()));
+    });
+}
+
+void loadWindow(uint64_t window, const std::string &url) {
+    crossbind::onMainThread([window, url] {
+        const std::optional<crossbind::Window> open = window != 0 ? crossbind::windowOf(window) : std::nullopt;
+        void *web = open ? open->webView() : crossbind::appWebView();
+        if (web) webkit_web_view_load_uri(WEBKIT_WEB_VIEW(web), url.c_str());
     });
 }
 

@@ -1,7 +1,7 @@
 // Android's own for the preview extension, which its Java does, as the NDK gives no crypto of the system's: a key of the
 // Android Keystore seals the app's token, javax.crypto makes HMAC-SHA256 and SHA-256, a Custom Tab shows the page that
-// approves a sign-in, and a pill above the WebView shows that a preview is one, with its menu and Back
-// (Indicator.java).
+// approves a sign-in, and a pill above the WebView shows that a preview is one, with its menu, Clear this project's
+// data…'s question and Back (Indicator.java).
 #include "preview.h"
 
 #include <sys/system_properties.h>
@@ -92,7 +92,12 @@ void reloadWindow(uint64_t) {
     inJava("reload", {}, [](Failure, Value) {});
 }
 
-// The pill's menu and Back ask for Reload and Close preview one at a time; the Java answers the call it holds with each.
+void loadWindow(uint64_t, const std::string &url) {
+    inJava("load", {{"url", url}}, [](Failure, Value) {});
+}
+
+// The pill's menu and Back ask for Reload, Close preview and, once its question's Clear was pressed, the clearing of the
+// preview of an origin, one at a time; the Java answers the call it holds with each.
 void listenToMenu() {
     if (isListening.exchange(true)) return;
     inJava("next", {}, [](Failure failure, Value asked) {
@@ -100,8 +105,10 @@ void listenToMenu() {
         if (failure) return;
         listenToMenu();
         const std::string action = asked.isString() ? asked.asString() : "";
+        const std::string CLEAR = "clear ";
         if (action == "reload") reloadPreview();
         if (action == "close") closePreview();
+        if (action.rfind(CLEAR, 0) == 0) clearPreview(action.substr(CLEAR.size()));
     });
 }
 

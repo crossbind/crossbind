@@ -29,6 +29,25 @@ export interface CheckedSession {
 
 export type SignInMessage = { code: string; page: string; expiresIn: number } | { number: true };
 
+export type ConsentKind = 'camera' | 'microphone' | 'location';
+
+/** A project this device opened, as the note of the projects opened keeps it, with the kinds its user answered. */
+export interface NotedProject {
+    /** The name of the project's origin. */
+    id: string;
+    name: string;
+    account: string;
+    consents: Partial<Record<ConsentKind, boolean>>;
+}
+
+/** A clearing that ended, with what stays where something does. */
+export interface ClearedProject {
+    id: string;
+    name: string;
+    account: string;
+    message?: string;
+}
+
 export declare const preview: {
     account(): Promise<{ account: Account | null; cloud: string; keyring: boolean }>;
     signIn(options?: { onMessage?: (message: SignInMessage) => void; signal?: AbortSignal }): Promise<{ account: Account; keyring: boolean }>;
@@ -42,6 +61,10 @@ export declare const preview: {
     close(): Promise<void>;
     compile(project: { files: Record<string, string>; packages: string[] }): Promise<{ status: number; [member: string]: unknown }>;
     removeSnapshot(session: string): Promise<void>;
+    projects(): Promise<{ projects: NotedProject[] }>;
+    takeBack(id: string, kind: ConsentKind): Promise<void>;
+    clearData(id: string): Promise<void>;
     links(): Promise<Array<{ session: string } | { message: string }>>;
     ended(): Promise<Array<{ message?: string }>>;
+    cleared(): Promise<ClearedProject[]>;
 };

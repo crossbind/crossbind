@@ -18,11 +18,14 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.BiConsumer;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -47,8 +50,10 @@ final class Consents {
     // The requests that wait for the question up, in the order they came.
     private final List<PagePermission> waiting = new ArrayList<>();
     private AlertDialog question;
-    // The answers the store could not keep, which hold for the app's run: by the origin's name and the kind.
+    // The answers the store could not keep, which hold for the app's run: by the origin's name and the kind; and the
+    // origins whose answers the store could not forget, which have none for the run but those kept after.
     private final Map<String, Map<String, Boolean>> held = new HashMap<>();
+    private final Set<String> forgotten = new HashSet<>();
 
     Consents(BiConsumer<ExtensionHost, PagePermission> allowed) {
         this.allowed = allowed;
@@ -77,22 +82,70 @@ final class Consents {
     // The kinds its user answered, kept or held for the run, in the order camera, microphone, location, each with
     // whether it is allowed: what the menu's Permissions shows.
     Map<String, Boolean> answers(ExtensionHost host) {
+        return name == null ? new LinkedHashMap<>() : answersOf(read(storeOf(host)), name);
+    }
+
+    private Map<String, Boolean> answersOf(Object store, String origin) {
         Map<String, Boolean> answers = new LinkedHashMap<>();
-        if (name == null) return answers;
-        Object store = read(storeOf(host));
         for (String kind : ASKED) {
-            Boolean answer = keptOf(store, kind);
+            Boolean answer = keptOf(store, origin, kind);
             if (answer != null) answers.put(kind, answer);
         }
         return answers;
+    }
+
+    // The answers of each of these origins' names, as Settings' "Projects' data" lists them.
+    JSONObject consentsOf(ExtensionHost host, JSONArray origins) throws JSONException {
+        Object store = read(storeOf(host));
+        JSONObject answers = new JSONObject();
+        for (int at = 0; at < origins.length(); at += 1) {
+            String origin = origins.getString(at);
+            answers.put(origin, new JSONObject(answersOf(store, origin)));
+        }
+        return answers;
+    }
+
+    // An Allow of this origin's name and kind made Don't Allow, as the menu's control turned off makes it, and nothing
+    // else: whether one was, and whether the origin is the preview served, whose waiting requests are decided again.
+    JSONObject takeBack(ExtensionHost host, String origin, String kind) throws JSONException {
+        boolean isTaken = Boolean.TRUE.equals(keptOf(read(storeOf(host)), origin, kind));
+        boolean isServed = origin.equals(name);
+        if (isTaken) {
+            keep(host, origin, List.of(kind), false);
+            if (isServed) settle(host);
+        }
+        return new JSONObject().put("taken", isTaken).put("served", isServed);
+    }
+
+    // The origin's answers forgotten, kept and held for the run, as its data is cleared; where the store cannot take it,
+    // forgotten for the run, and the log says so.
+    void forget(ExtensionHost host, String origin) {
+        held.remove(origin);
+        File file = storeOf(host);
+        Object store = read(file);
+        if (!(store instanceof Map<?, ?> was) || !was.containsKey(origin)) {
+            forgotten.remove(origin);
+            return;
+        }
+        try {
+            JSONObject entries = new JSONObject();
+            for (Map.Entry<?, ?> member : was.entrySet()) {
+                if (!origin.equals(member.getKey())) entries.put((String) member.getKey(), JSONObject.wrap(member.getValue()));
+            }
+            write(file, entries.toString());
+            forgotten.remove(origin);
+        } catch (IOException | JSONException error) {
+            forgotten.add(origin);
+            Log.w(TAG, "crossbind: preview could not forget a project's answers in its consents.json, which are forgotten for this run: " + error);
+        }
     }
 
     // A control's change at the menu's Permissions: the answer of a kind its user answered before, kept as its
     // question's is, for the preview of this origin while it is the one served; what waits is decided again. Whether it
     // was kept. The one place beside the question that gives an answer, called by a native control alone.
     boolean change(ExtensionHost host, String origin, String kind, boolean isAllowed) {
-        if (url == null || !url.equals(origin) || keptOf(read(storeOf(host)), kind) == null) return false;
-        keep(host, List.of(kind), isAllowed);
+        if (url == null || !url.equals(origin) || keptOf(read(storeOf(host)), name, kind) == null) return false;
+        keep(host, name, List.of(kind), isAllowed);
         settle(host);
         return true;
     }
@@ -127,7 +180,7 @@ final class Consents {
         if (question != null || waiting.isEmpty()) return;
         List<String> kinds = new ArrayList<>();
         for (String kind : waiting.get(0).kinds()) {
-            if (keptOf(store, kind) == null && !kinds.contains(kind)) kinds.add(kind);
+            if (keptOf(store, name, kind) == null && !kinds.contains(kind)) kinds.add(kind);
         }
         show(host, kinds);
     }
@@ -154,7 +207,7 @@ final class Consents {
     private void answered(ExtensionHost host, AlertDialog dialog, List<String> kinds, boolean isAllowed) {
         if (dialog != question || name == null) return;
         question = null;
-        keep(host, kinds, isAllowed);
+        keep(host, name, kinds, isAllowed);
         settle(host);
     }
 
@@ -168,11 +221,13 @@ final class Consents {
         return "Allow “" + project + "” to use " + named + "?";
     }
 
-    // The answer kept of a kind of the preview's origin: one the store could not keep, else the store's own.
-    private Boolean keptOf(Object store, String kind) {
-        Map<String, Boolean> run = held.get(name);
+    // The answer kept of a kind of an origin: one the store could not keep, else the store's own but for an origin
+    // forgotten.
+    private Boolean keptOf(Object store, String origin, String kind) {
+        Map<String, Boolean> run = held.get(origin);
         if (run != null && run.containsKey(kind)) return run.get(kind);
-        if (!(store instanceof Map<?, ?> entries) || !(entries.get(name) instanceof Map<?, ?> kinds)) return null;
+        if (forgotten.contains(origin)) return null;
+        if (!(store instanceof Map<?, ?> entries) || !(entries.get(origin) instanceof Map<?, ?> kinds)) return null;
         return kinds.get(kind) instanceof Boolean answer ? answer : null;
     }
 
@@ -180,16 +235,17 @@ final class Consents {
     private Boolean keptFor(Object store, List<String> kinds) {
         boolean isOpen = false;
         for (String kind : kinds) {
-            Boolean answer = keptOf(store, kind);
+            Boolean answer = keptOf(store, name, kind);
             if (Boolean.FALSE.equals(answer)) return false;
             if (answer == null) isOpen = true;
         }
         return isOpen ? null : true;
     }
 
-    // Keeps an answer for these kinds of the preview's origin, the store's other entries as they were, in place of one
-    // held for the run; one the store cannot take holds for the app's run, and the log says so.
-    private void keep(ExtensionHost host, List<String> kinds, boolean isAllowed) {
+    // Keeps an answer for these kinds of an origin, the store's other entries as they were, in place of one held for the
+    // run; one the store cannot take holds for the app's run, and the log says so. A forgotten origin's answers before it
+    // stay forgotten.
+    private void keep(ExtensionHost host, String origin, List<String> kinds, boolean isAllowed) {
         File file = storeOf(host);
         Object store = read(file);
         try {
@@ -197,21 +253,22 @@ final class Consents {
             JSONObject entry = new JSONObject();
             if (store instanceof Map<?, ?> was) {
                 for (Map.Entry<?, ?> member : was.entrySet()) {
-                    if (!name.equals(member.getKey())) entries.put((String) member.getKey(), JSONObject.wrap(member.getValue()));
+                    if (!origin.equals(member.getKey())) entries.put((String) member.getKey(), JSONObject.wrap(member.getValue()));
                 }
-                if (was.get(name) instanceof Map<?, ?> kept) {
+                if (was.get(origin) instanceof Map<?, ?> kept && !forgotten.contains(origin)) {
                     for (Map.Entry<?, ?> answer : kept.entrySet()) {
                         if (answer.getValue() instanceof Boolean && !kinds.contains(answer.getKey())) entry.put((String) answer.getKey(), answer.getValue());
                     }
                 }
             }
             for (String kind : kinds) entry.put(kind, isAllowed);
-            entries.put(name, entry);
+            entries.put(origin, entry);
             write(file, entries.toString());
-            Map<String, Boolean> run = held.get(name);
+            Map<String, Boolean> run = held.get(origin);
             if (run != null) run.keySet().removeAll(kinds);
+            forgotten.remove(origin);
         } catch (IOException | JSONException error) {
-            Map<String, Boolean> run = held.computeIfAbsent(name, (origin) -> new HashMap<>());
+            Map<String, Boolean> run = held.computeIfAbsent(origin, (each) -> new HashMap<>());
             for (String kind : kinds) run.put(kind, isAllowed);
             Log.w(TAG, "crossbind: preview could not keep an answer in its consents.json, which holds for this run: " + error);
         }

@@ -43,7 +43,7 @@ export default function preview({ cloud = 'production', snapshots } = {}) {
         app: {
             urlSchemes: ['dev.crossbind.app'],
             links: ['crossbind.dev/open'],
-            sources: ['native/preview.cpp', 'native/cloud.cpp', 'native/opener.cpp', 'native/indicator.cpp', 'native/requests.cpp', 'native/consents.cpp', 'native/values.cpp'],
+            sources: ['native/preview.cpp', 'native/cloud.cpp', 'native/opener.cpp', 'native/clearing.cpp', 'native/indicator.cpp', 'native/requests.cpp', 'native/consents.cpp', 'native/values.cpp'],
             macos: apple,
             ios: apple,
             windows: { sources: ['native/windows.cpp'], libraries: ['advapi32', 'bcrypt', 'comctl32'] },

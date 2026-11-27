@@ -372,6 +372,10 @@ bool isSessionId(const std::string &text) {
     return bytes && bytes->size() == SESSION_ID_BYTES;
 }
 
+bool isOriginName(const std::string &text) {
+    return text.size() == ORIGIN_NAME_DIGITS && std::all_of(text.begin(), text.end(), isHexDigit);
+}
+
 bool isKey(const std::string &text) {
     const std::optional<std::string> bytes = text.size() == 43 ? fromBase64url(text) : std::nullopt;
     return bytes && bytes->size() == KEY_BYTES;

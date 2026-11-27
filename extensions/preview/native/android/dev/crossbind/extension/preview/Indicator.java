@@ -2,6 +2,7 @@ package dev.crossbind.extension.preview;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.graphics.Color;
 import android.graphics.Insets;
 import android.graphics.drawable.GradientDrawable;
@@ -27,8 +28,8 @@ import java.util.Map;
 
 // What shows that a preview is one on Android: a pill above the WebView, inside the system bars, which opens the
 // preview's menu; and Back, which within the project's own history goes back and at its first entry closes the
-// preview. What its user asks for, Reload or Close preview, answers the native code's call it holds; Permissions
-// changes the answers Consents keeps. On the UI thread.
+// preview. What its user asks for, Reload, Close preview or the clearing its question's Clear asks for, answers the
+// native code's call it holds; Permissions changes the answers Consents keeps. On the UI thread.
 final class Indicator {
     private static final int PILL_DP = 28;
     private static final int MARK_DP = 16;
@@ -39,6 +40,9 @@ final class Indicator {
     private LinearLayout pill;
     private AlertDialog menu;
     private AlertDialog permissions;
+    private AlertDialog clearQuestion;
+    // Whether the WebView shows the clearing's page, which Back leaves to it.
+    private boolean isClearing;
     private OnBackInvokedCallback back;
     private Activity shownOn;
     private String project = "";
@@ -65,6 +69,8 @@ final class Indicator {
 
     // Permissions closes with it, and reloads no page.
     void unmark() {
+        ended();
+        isClearing = false;
         if (menu != null) menu.dismiss();
         menu = null;
         if (permissions != null) {
@@ -90,6 +96,20 @@ final class Indicator {
     void reload(ExtensionHost host) {
         WebView view = host.webView();
         if (view != null) view.reload();
+    }
+
+    // The preview's end closes Clear this project's data…'s question, and nothing is cleared.
+    void ended() {
+        AlertDialog shown = clearQuestion;
+        clearQuestion = null;
+        if (shown != null) shown.dismiss();
+    }
+
+    // The clearing's page, where the preview's mark is up until the app's page comes, with Back held.
+    void load(ExtensionHost host, String url) {
+        if (pill != null) isClearing = true;
+        WebView view = host.webView();
+        if (view != null) view.loadUrl(url);
     }
 
     void next(Call call) {
@@ -139,7 +159,8 @@ final class Indicator {
         activity.getOnBackInvokedDispatcher().registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_OVERLAY, back);
     }
 
-    // The project's name over its line, which does nothing, then Reload, Permissions… and Close preview.
+    // The project's name over its line, which does nothing, then Reload, Permissions…, Clear this project's data… and
+    // Close preview.
     private void openMenu(Activity activity) {
         if (menu != null && menu.isShowing()) return;
         LinearLayout title = new LinearLayout(activity);
@@ -155,8 +176,9 @@ final class Indicator {
         title.addView(below);
         menu = new AlertDialog.Builder(activity)
                 .setCustomTitle(title)
-                .setItems(new CharSequence[] {"Reload", "Permissions…", "Close preview"}, (dialog, which) -> {
+                .setItems(new CharSequence[] {"Reload", "Permissions…", "Clear this project's data…", "Close preview"}, (dialog, which) -> {
                     if (which == 1) openPermissions(activity);
+                    else if (which == 2) askToClear(activity);
                     else ask(which == 0 ? "reload" : "close");
                 })
                 .setNegativeButton("Cancel", null)
@@ -193,10 +215,36 @@ final class Indicator {
         permissions.show();
     }
 
+    // Clear this project's data…'s question, of the preview it was asked for: Cancel its first focus, and Back, Escape and
+    // a touch outside Cancel's; Clear asks for that preview's clearing.
+    private void askToClear(Activity activity) {
+        if (clearQuestion != null && clearQuestion.isShowing()) return;
+        String asked = origin;
+        AlertDialog[] shown = new AlertDialog[1];
+        shown[0] = new AlertDialog.Builder(activity)
+                .setTitle("Remove what “" + project + "” keeps on this device: its storage and its permissions?")
+                .setMessage("Its sources are untouched.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Clear", (dialog, button) -> {
+                    if (shown[0] == clearQuestion) ask("clear " + asked);
+                })
+                .setCancelable(true)
+                .create();
+        shown[0].setCanceledOnTouchOutside(true);
+        shown[0].setOnShowListener((dialog) -> shown[0].getButton(DialogInterface.BUTTON_NEGATIVE).requestFocus());
+        shown[0].setOnDismissListener((dialog) -> {
+            if (clearQuestion == shown[0]) clearQuestion = null;
+        });
+        clearQuestion = shown[0];
+        shown[0].show();
+    }
+
     // The WebView's own goBack(), as a built app's Back is, where the history entry before this one is the project's: it
     // skips each entry a page made without its user's activation, as far as an older page of the project's or the app's,
-    // whose page ends the preview, and no page holds it. Else the preview closes.
+    // whose page ends the preview, and no page holds it. Else the preview closes; and while the clearing's page shows,
+    // nothing.
     private void goBack(ExtensionHost host) {
+        if (isClearing) return;
         WebView view = host.webView();
         WebBackForwardList history = view == null ? null : view.copyBackForwardList();
         int current = history == null ? -1 : history.getCurrentIndex();

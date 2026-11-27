@@ -2,7 +2,8 @@
 // loads (its protocol, its source's proof made with its key, then the account and the session the proof covers), and
 // once its page's own Open, served as an origin of the account's and the project's, whose handler is the proxy of the
 // session's source, with the indicator up on its window. A snapshot's session is read again where its host refuses
-// the proxy's token, as after its key was made anew, at the preview's Reload and as the app comes to the front.
+// the proxy's token, as after its key was made anew, at the preview's Reload and as the app comes to the front. The
+// preview's menu clears its project's data after its own question, which the preview's end closes.
 #include "preview.h"
 
 #include <algorithm>
@@ -19,7 +20,6 @@ using crossbind::Call;
 using crossbind::Request;
 
 constexpr std::size_t CHALLENGE_BYTES = 32;
-constexpr std::size_t ORIGIN_NAME_DIGITS = 32;
 constexpr std::size_t MAX_SESSION_ANSWER = 64 * 1024;
 // iOS and macOS hold a first connection to the local network back while their user is asked: tried every second.
 constexpr auto LOCAL_NETWORK_RETRY = std::chrono::seconds(1);
@@ -34,6 +34,10 @@ const std::string DOT = " \xC2\xB7 ";
 // How long the menu's line says a snapshot's key was renewed.
 constexpr auto RENEWED_SHOWN = std::chrono::minutes(1);
 const std::string CHECK_FIRST = "crossbind opens the preview it checked last: check it first.";
+const std::string CLEAR_DETAIL = "Its sources are untouched.";
+// The quotes around the project's name, in UTF-8.
+const std::string OPENING = "\xE2\x80\x9C";
+const std::string CLOSING = "\xE2\x80\x9D";
 const std::string NAMELESS = "crossbind cloud lists this preview with a name crossbind shows on no dialog: give the project a name of letters, digits and ._@/- (general.name in crossbind.config.js), and run crossbind app preview again.";
 const Request::Headers TEXT{{"Content-Type", "text/plain; charset=utf-8"}};
 const std::vector<std::string> PASSED{"content-type", "content-range", "accept-ranges", "cache-control", "etag", "last-modified"};
@@ -390,12 +394,16 @@ private:
 
 std::mutex openerMutex;
 std::optional<Checked> checked;
-// The preview open, at most one: its origin, its proxy and the window its indicator went up on as it opened; and the
-// number the last one served took.
+// The preview open, at most one: its origin, its proxy, its project as the note has it and the window its indicator went
+// up on as it opened; and the number the last one served took.
 std::optional<crossbind::Origin> openOrigin;
 std::shared_ptr<Proxy> openProxy;
+Noted openProject;
 uint64_t openWindow = 0;
 uint64_t previews = 0;
+// Clear this project's data…'s question, while it is up: the preview it was asked for, and what closes it.
+uint64_t askedToClear = 0;
+std::function<void()> closeClearQuestion;
 
 bool isOpenProxy(const Proxy *proxy) {
     std::lock_guard<std::mutex> lock(openerMutex);
@@ -482,7 +490,18 @@ void check(Call call) {
     });
 }
 
+// The origin's requests: under the prefix the clearing's alone, and the proxy's while no clearing of the origin runs.
+void answerOrigin(const std::string &name, const std::shared_ptr<Proxy> &proxy, Request request) {
+    if (isClearingPath(request.path())) return answerClearing(name, std::move(request));
+    if (isClearing(name)) return request.respond(404);
+    proxy->answer(std::move(request));
+}
+
 void serve(const Call &call, const Checked &found) {
+    if (isClearingAny()) {
+        call.reject(clearingWords());
+        return;
+    }
     endPreview();
     uint64_t number = 0;
     {
@@ -490,15 +509,19 @@ void serve(const Call &call, const Checked &found) {
         number = ++previews;
     }
     auto proxy = std::make_shared<Proxy>(number, found.session, found.account, found.source, found.gateToken);
+    const bool isSnapshot = found.session.source == "snapshot";
+    const Noted project{found.originName, found.session.projectName, found.account.name, isSnapshot ? std::vector<std::string>{found.session.id} : std::vector<std::string>{}};
     try {
         const crossbind::Origin origin = crossbind::serveOrigin(
-            found.originName, "project", [proxy](Request request) { proxy->answer(std::move(request)); }, found.session.projectName);
+            found.originName, "project", [proxy, name = found.originName](Request request) { answerOrigin(name, proxy, std::move(request)); }, found.session.projectName);
         {
             std::lock_guard<std::mutex> lock(openerMutex);
             openOrigin = origin;
             openProxy = proxy;
+            openProject = project;
         }
-        if (found.session.source == "snapshot") noteOpened(found.session.id, found.session.version);
+        noteProject(project.origin, project.project, project.account, isSnapshot ? found.session.id : "");
+        if (isSnapshot) noteOpened(found.session.id, found.session.version);
         // The page goes to the origin once its requests' holder knows the preview they are of, and the indicator is up
         // on the page's window.
         Shown shown{found.session.projectName, proxy->line(), origin.url()};
@@ -546,6 +569,7 @@ void open(Call call) {
 
 bool endPreview(const std::string &words, const std::string &session) {
     std::optional<crossbind::Origin> ending;
+    std::function<void()> closeClear;
     uint64_t number = 0;
     {
         std::lock_guard<std::mutex> lock(openerMutex);
@@ -554,9 +578,12 @@ bool endPreview(const std::string &words, const std::string &session) {
         number = openProxy ? openProxy->number() : 0;
         openProxy.reset();
         openWindow = 0;
+        askedToClear = 0;
+        closeClear.swap(closeClearQuestion);
     }
-    // Its question closes unanswered, and what it asked for is denied, before the origin ends; its indicator comes down
-    // with each window's next page that is no project's.
+    // Its questions close unanswered, and what the consent's asked for is denied, before the origin ends; its indicator
+    // comes down with each window's next page that is no project's.
+    if (closeClear) closeClear();
     endConsents();
     ending->end();
     unmarkPreview(number);
@@ -579,6 +606,69 @@ void reloadPreview() {
     if (!proxy) return;
     if (proxy->isSnapshot()) proxy->reload(window);
     else reloadWindow(window);
+}
+
+void reloadPreviewOf(const std::string &name) {
+    bool isOpen = false;
+    {
+        std::lock_guard<std::mutex> lock(openerMutex);
+        isOpen = openOrigin && openProject.origin == name;
+    }
+    if (isOpen) reloadPreview();
+}
+
+#if !defined(__ANDROID__)
+// On the main thread, as each platform's menu calls it.
+void askToClear(const std::string &url) {
+    uint64_t number = 0;
+    uint64_t window = 0;
+    std::string project;
+    {
+        std::lock_guard<std::mutex> lock(openerMutex);
+        if (!openOrigin || openOrigin->url() != url || !openProxy || askedToClear != 0 || isClearingAny()) return;
+        number = openProxy->number();
+        askedToClear = number;
+        window = openWindow;
+        project = openProject.project;
+    }
+    const std::string message = "Remove what " + OPENING + project + CLOSING + " keeps on this device: its storage and its permissions?";
+    std::function<void()> close = showClearQuestion(window, message, CLEAR_DETAIL, [number, url](std::optional<bool> isCleared) {
+        {
+            std::lock_guard<std::mutex> lock(openerMutex);
+            if (askedToClear != number) return;
+            askedToClear = 0;
+            closeClearQuestion = nullptr;
+        }
+        if (isCleared.value_or(false)) clearPreview(url);
+    });
+    {
+        std::lock_guard<std::mutex> lock(openerMutex);
+        if (askedToClear == number) {
+            closeClearQuestion = std::move(close);
+            return;
+        }
+    }
+    // The preview ended, or the question was answered, as it came up.
+    if (close) close();
+}
+#endif
+
+// The clearing takes the origin first, so that the proxy serves nothing from then on.
+void clearPreview(const std::string &url) {
+    uint64_t number = 0;
+    {
+        std::lock_guard<std::mutex> lock(openerMutex);
+        if (!openOrigin || openOrigin->url() != url || !openProxy) return;
+        if (!beginClearing(notedProject(openProject.origin).value_or(openProject), *openOrigin, openWindow, true)) return;
+        number = openProxy->number();
+        openOrigin.reset();
+        openProxy.reset();
+        openWindow = 0;
+        askedToClear = 0;
+        closeClearQuestion = nullptr;
+    }
+    endConsents();
+    unmarkPreview(number);
 }
 
 void readPreviewAgain() {
