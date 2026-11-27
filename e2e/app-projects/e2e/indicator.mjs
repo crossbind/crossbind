@@ -35,6 +35,8 @@ const GONE = "This snapshot is no longer on your account's list.";
 const DIALOG = "crossbind e2e: a project's own dialog, up at the preview's menu";
 const SECOND_NAME = 'e2e second project';
 const ENDED_AS_OPENED = 'crossbind: the preview ended as it opened.';
+// Where a preview's end gives the web view back its own full screen, which its hook reads.
+const GIVES_FULL_SCREEN_BACK = ['macos', 'linux'];
 
 function expect(isHeld, problem) {
     if (!isHeld) throw new Error(problem);
@@ -760,14 +762,14 @@ export async function checkIndicator(run) {
         const state = await indicators.read('app');
         expect(isServed === state.up && await questions.read('app') === null, `a second project opened as the first one's end came left ${JSON.stringify({ isServed, state })}`);
         // The first one's end gave the web view its full screen back before the second's mark took it, in that order.
-        expect(!isServed || platform !== 'macos' || state.webTakesFullScreen === false, `the second project's web view took full screen: ${JSON.stringify(state)}`);
+        expect(!isServed || !GIVES_FULL_SCREEN_BACK.includes(platform) || state.webTakesFullScreen === false, `the second project's web view took full screen: ${JSON.stringify(state)}`);
         out.secondAsFirstEnds = isServed ? 'the second open, its indicator up' : 'none, its indicator down';
         if (isServed) await step('app', { do: 'close' });
         await down('the indicator after the second project');
         // Close preview pressed as the app's own code opens another session, both armed at once, the first opened by the
         // app's own code too: the window shows the app's page throughout, and no page starts after the two to tidy what
         // they leave, which is the order their platform's calls ran in. A second served has its indicator up, and on
-        // macOS its web view takes no full screen. Each open is read once it ended.
+        // macOS and Linux its web view takes no full screen. Each open is read once it ended.
         const markedOpened = opened(marked.session, "the session the app's own code opened");
         await step('app', { do: 'openPreview', session: marked.session.id });
         out.opens.marked = await markedOpened;
@@ -780,7 +782,7 @@ export async function checkIndicator(run) {
         await sleep(SETTLED_MS);
         const isSecond = await served(second.origin);
         const after = await indicators.read('app');
-        expect(isSecond === after.up && (!isSecond || platform !== 'macos' || after.webTakesFullScreen === false),
+        expect(isSecond === after.up && (!isSecond || !GIVES_FULL_SCREEN_BACK.includes(platform) || after.webTakesFullScreen === false),
             `Close preview as the app's own code opened a second session left ${JSON.stringify({ isSecond, after })}`);
         out.closeAsAppOpens = isSecond ? 'the second open, its indicator up' : 'none, its indicator down';
         if (isSecond) await step('app', { do: 'close' });
