@@ -217,6 +217,32 @@ void indicatorUp(Call call) {
     crossbind::onMainThread([call] { call.resolve(indicatorState()); });
 }
 
+namespace {
+
+// How often, and how many times, a press looks whether the menu it waits for came up whole.
+constexpr int64_t UP_POLL_MS = 50;
+constexpr int UP_TRIES = 100;
+
+// The menus a press waits for, which no other press takes; on the main thread.
+NSHashTable<UIAlertController *> *waitedFor;
+
+UIAlertController *menuOf(UIViewController *shown) {
+    const bool isMenu = [shown isKindOfClass:UIAlertController.class] && ((UIAlertController *)shown).preferredStyle == UIAlertControllerStyleActionSheet;
+    return isMenu ? (UIAlertController *)shown : nil;
+}
+
+// then gets whether the menu came up whole and is not going away, once it is no longer coming up: no presentation of
+// the pill's window tells its end to another.
+void onceUp(UIAlertController *menu, int tries, void (^then)(bool isUp)) {
+    if (!menu.isBeingPresented || tries <= 0) {
+        then(!menu.isBeingPresented && !menu.isBeingDismissed && menu.presentingViewController != nil);
+        return;
+    }
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, UP_POLL_MS * static_cast<int64_t>(NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{ onceUp(menu, tries - 1, then); });
+}
+
+}  // namespace
+
 void pressIndicator(Call call) {
     const std::string item = call.options()["item"].asString();
     const double ms = call.options()["ms"].asNumber(0);
@@ -225,22 +251,30 @@ void pressIndicator(Call call) {
         UIWindow *window = pillWindow();
         UIButton *pill = window ? pillOf(window) : nil;
         if (!pill) return done("crossbind e2e: no pill is up");
-        // The pill's menu where it shows already; else a tap at the pill's middle, which reaches the pill alone where
-        // nothing the pill's window presents covers it.
-        const bool isOpen = [topOf(window) isKindOfClass:UIAlertController.class] && ((UIAlertController *)topOf(window)).preferredStyle == UIAlertControllerStyleActionSheet;
-        if (!isOpen) {
+        if (!waitedFor) waitedFor = [NSHashTable weakObjectsHashTable];
+        // A menu up already is pressed as its user presses an open one: once it came up whole, while it is not going
+        // away, and where no other press waits for it. Else a tap at the pill's middle, which reaches the pill alone where
+        // nothing the pill's window presents covers it, and the menu that tap opened, once it came up whole.
+        UIAlertController *menu = menuOf(topOf(window));
+        if (menu && (menu.isBeingPresented || menu.isBeingDismissed || [waitedFor containsObject:menu])) {
+            return done("crossbind e2e: the pill's menu is coming up or going away, or another press waits for it");
+        }
+        if (!menu) {
             const CGPoint middle = [pill convertPoint:CGPointMake(CGRectGetMidX(pill.bounds), CGRectGetMidY(pill.bounds)) toView:window];
             UIView *hit = [window hitTest:middle withEvent:nil];
             if (![hit isDescendantOfView:pill]) return done("crossbind e2e: the pill is covered by " + textOf(NSStringFromClass(hit.class)));
             [pill sendActionsForControlEvents:UIControlEventTouchUpInside];
+            if (item == "menu") return done(std::nullopt);
+            menu = menuOf(topOf(window));
+            if (!menu) return done("crossbind e2e: the pill opened no menu");
+        } else if (item == "menu") {
+            return done(std::nullopt);
         }
-        if (item == "menu") return done(std::nullopt);
-        // The menu shows once its presentation ends.
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (isOpen ? 0 : 600) * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
-            UIViewController *top = topOf(window);
-            if (![top isKindOfClass:UIAlertController.class]) return done("crossbind e2e: the pill opened no menu");
-            const std::optional<std::string> failure = pressAction((UIAlertController *)top, item, [] {});
-            done(failure);
+        [waitedFor addObject:menu];
+        onceUp(menu, UP_TRIES, ^(bool isUp) {
+            [waitedFor removeObject:menu];
+            if (!isUp) return done("crossbind e2e: the pill's menu went away before its press");
+            done(pressAction(menu, item, [] {}));
         });
     };
     if (ms > 0) {
