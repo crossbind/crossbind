@@ -193,6 +193,8 @@ async function checkPackagedUpdates() {
 const LAUNCH_TIMEOUT_MS = 30000;
 // Longer than e2e/run.mjs's steps may take together, so a failure of its own says what went wrong.
 const FULL_SCREEN_TIMEOUT_MS = 150000;
+// Longer than e2e/run.mjs's wait for the window's answer, so a failure of its own says what went wrong.
+const END_SESSION_TIMEOUT_MS = 60000;
 
 // e2e/run.mjs reads the clipboard, shows the page's element full screen, as only a user's click could, gives the
 // window's screen a new scale, checks the window still covers it, and leaves full screen: the page waits for both changes.
@@ -222,13 +224,13 @@ function checkScaledFullScreen() {
     });
 }
 
-// The next event of this name, which comes within LAUNCH_TIMEOUT_MS.
-function nextEvent(name) {
+// The next event of this name, which comes within LAUNCH_TIMEOUT_MS unless the caller allows more.
+function nextEvent(name, timeoutMs = LAUNCH_TIMEOUT_MS) {
     let stop;
     let timer;
     return new Promise((resolve, reject) => {
         stop = events.on(name, resolve);
-        timer = setTimeout(() => reject(new Error(`no event ${name} reached the page`)), LAUNCH_TIMEOUT_MS);
+        timer = setTimeout(() => reject(new Error(`no event ${name} reached the page`)), timeoutMs);
     }).finally(() => {
         stop?.();
         clearTimeout(timer);
@@ -386,7 +388,7 @@ async function checkOpenFile() {
 // e2e/run.mjs asks a Windows app's window whether its user's session may end, as Windows does as its user signs out:
 // the probe refuses, which the window answers.
 async function checkEndSession() {
-    const asked = nextEvent('probe.quit-request');
+    const asked = nextEvent('probe.quit-request', END_SESSION_TIMEOUT_MS);
     console.log('END SESSION');
     await asked;
 }

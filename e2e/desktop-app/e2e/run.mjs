@@ -42,6 +42,9 @@ const PAGE_GETS = /^PAGE GETS .*$/gm;
 const WEBSOCKET_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 // Below the page's wait for the launch or the link, so a launch that stays or an adb that hangs says so.
 const ASKED_TIMEOUT_MS = 20000;
+// PowerShell compiles a script's C# in a process of its own, which ran past 20 s on a busy windows-11-arm runner while
+// the app ran: the window's answer to the end of its user's session, below the page's wait for it.
+const END_SESSION_TIMEOUT_MS = 50000;
 // How long PowerShell's first compile may take, before the app opens.
 const WARM_TIMEOUT_MS = 120000;
 // WebView2's DevTools, through which the run does on Windows what only a user's click could.
@@ -827,7 +830,7 @@ function askEndSession() {
     if (isSessionAsked || !executable || process.platform !== 'win32' || !END_SESSION.test(out)) return;
     isSessionAsked = true;
     try {
-        const answer = execFileSync('powershell', ['-NoProfile', '-Command', END_SESSION_SCRIPT.replace('APP_PID', String(app.pid))], { encoding: 'utf8', timeout: ASKED_TIMEOUT_MS }).trim();
+        const answer = execFileSync('powershell', ['-NoProfile', '-Command', END_SESSION_SCRIPT.replace('APP_PID', String(app.pid))], { encoding: 'utf8', timeout: END_SESSION_TIMEOUT_MS }).trim();
         if (answer !== '0') finish(`the window let its user's session end, which the probe refused: it answered ${answer}`);
     } catch (error) {
         finish(`the window could not be asked whether the session may end: ${error.message}`);
