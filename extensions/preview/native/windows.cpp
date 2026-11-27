@@ -94,10 +94,13 @@ constexpr UINT NOTHING_ITEM = 0x1F80;
 const std::pair<const char *, UINT> KIND_ITEMS[] = {{"camera", 0x1F90}, {"microphone", 0x1FA0}, {"location", 0x1FB0}};
 constexpr UINT_PTR SUBCLASS = 0x5F5;
 
-// The title a window the indicator is up on had, which it gets back once it comes down, and the origin of the preview
-// its Permissions changes; on the main thread.
-std::map<uint64_t, std::wstring> marked;
-std::string menuOrigin;
+// What a window the indicator is up on had before it, its title, which it gets back once it comes down; and the origin of
+// the preview its menu was made for, which its Permissions change; on the main thread.
+struct Marked {
+    std::wstring title;
+    std::string origin;
+};
+std::map<uint64_t, Marked> marked;
 
 // A menu item's text as text: an & of its own draws as itself, and a tab, which would start the item's shortcut, as a
 // space.
@@ -110,9 +113,12 @@ std::wstring menuText(const std::string &text) {
     return out;
 }
 
-LRESULT CALLBACK onSystemCommand(HWND window, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR, DWORD_PTR) {
+// The subclass's data is the id of the window it was made for.
+LRESULT CALLBACK onSystemCommand(HWND window, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR, DWORD_PTR id) {
     if (message == WM_SYSCOMMAND) {
         const UINT command = static_cast<UINT>(wParam & 0xFFF0);
+        const auto found = marked.find(static_cast<uint64_t>(id));
+        const std::string origin = found == marked.end() ? std::string() : found->second.origin;
         if (command == RELOAD_ITEM) {
             reloadPreview();
             return 0;
@@ -125,7 +131,7 @@ LRESULT CALLBACK onSystemCommand(HWND window, UINT message, WPARAM wParam, LPARA
         for (const auto &[kind, item] : KIND_ITEMS) {
             if (command != item) continue;
             const bool isOn = (GetMenuState(GetSystemMenu(window, FALSE), item, MF_BYCOMMAND) & MF_CHECKED) == 0;
-            if (changeConsent(menuOrigin, kind, isOn)) reloadPreview();
+            if (changeConsent(origin, kind, isOn)) reloadPreview();
             return 0;
         }
     }
@@ -315,11 +321,11 @@ void showIndicator(uint64_t window, const Shown &shown, std::function<void()> do
                 const int length = GetWindowTextLengthW(native);
                 std::wstring title(static_cast<std::size_t>(length) + 1, L'\0');
                 title.resize(static_cast<std::size_t>(GetWindowTextW(native, title.data(), length + 1)));
-                marked[window] = title;
-                SetWindowSubclass(native, onSystemCommand, SUBCLASS, 0);
+                marked[window].title = title;
+                SetWindowSubclass(native, onSystemCommand, SUBCLASS, static_cast<DWORD_PTR>(window));
             }
             SetWindowTextW(native, wide(shown.project + " \xE2\x80\x93 crossbind preview").c_str());
-            menuOrigin = shown.origin;
+            marked[window].origin = shown.origin;
             setItems(native, shown);
         }
         done();
@@ -332,7 +338,7 @@ void hideIndicator(uint64_t window) {
         if (found == marked.end()) return;
         if (const std::optional<crossbind::Window> open = crossbind::windowOf(window)) {
             HWND native = static_cast<HWND>(open->native());
-            SetWindowTextW(native, found->second.c_str());
+            SetWindowTextW(native, found->second.title.c_str());
             if (HMENU menu = GetSystemMenu(native, FALSE)) dropItems(menu);
             RemoveWindowSubclass(native, onSystemCommand, SUBCLASS);
         }

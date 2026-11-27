@@ -52,8 +52,8 @@ void onQuestionGone(GtkWidget *, gpointer data) { (*static_cast<std::shared_ptr<
 
 void forget(gpointer data, GClosure *) { delete static_cast<std::shared_ptr<Asked> *>(data); }
 
-// What a window the indicator is up on had before it, which it gets back once it comes down, and the bar it shows; on
-// the main thread.
+// What a window the indicator is up on had before it, which it gets back once it comes down, the bar it shows, and the
+// origin of the preview its menu was made for, which its Permissions change; on the main thread.
 struct Marked {
     std::string title;
     gboolean isWebFullScreen = TRUE;
@@ -61,25 +61,37 @@ struct Marked {
     GtkWidget *name = nullptr;
     GtkWidget *line = nullptr;
     GtkWidget *permissions = nullptr;
+    std::string origin;
 };
 std::map<uint64_t, Marked> marked;
-// The origin of the preview Permissions changes.
-std::string menuOrigin;
+
+// The origin a window's menu was made for, by the window's id an item carries.
+std::string originOf(gpointer window) {
+    const auto found = marked.find(static_cast<uint64_t>(GPOINTER_TO_SIZE(window)));
+    return found == marked.end() ? std::string() : found->second.origin;
+}
 
 void onReload(GtkMenuItem *, gpointer) { reloadPreview(); }
 
 void onClose(GtkMenuItem *, gpointer) { closePreview(); }
 
+// A kind of a window's Permissions.
+struct KindOf {
+    uint64_t window;
+    std::string kind;
+};
+
 // A kind's check mark turned: the answer kept, and the page reloaded so that it holds for it.
-void onChanged(GtkCheckMenuItem *item, gpointer kind) {
-    if (changeConsent(menuOrigin, *static_cast<std::string *>(kind), gtk_check_menu_item_get_active(item))) reloadPreview();
+void onChanged(GtkCheckMenuItem *item, gpointer data) {
+    const auto *of = static_cast<KindOf *>(data);
+    if (changeConsent(originOf(GSIZE_TO_POINTER(of->window)), of->kind, gtk_check_menu_item_get_active(item))) reloadPreview();
 }
 
-void forgetKind(gpointer kind, GClosure *) { delete static_cast<std::string *>(kind); }
+void forgetKind(gpointer data, GClosure *) { delete static_cast<KindOf *>(data); }
 
 // Permissions: the project's name, then a check mark for each kind its user answered, on where Allow is kept; or that
 // nothing was asked yet. Made anew, each mark set before it is heard, as GTK's own setting of one activates it.
-void fillPermissions(GtkWidget *menu, const Shown &shown) {
+void fillPermissions(GtkWidget *menu, uint64_t window, const Shown &shown) {
     GList *children = gtk_container_get_children(GTK_CONTAINER(menu));
     for (GList *each = children; each; each = each->next) gtk_widget_destroy(GTK_WIDGET(each->data));
     g_list_free(children);
@@ -94,7 +106,7 @@ void fillPermissions(GtkWidget *menu, const Shown &shown) {
     for (const auto &[kind, isAllowed] : shown.answers) {
         GtkWidget *item = gtk_check_menu_item_new_with_label(controlWordOf(kind).c_str());
         gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(item), isAllowed);
-        g_signal_connect_data(item, "toggled", G_CALLBACK(onChanged), new std::string(kind), forgetKind, GConnectFlags(0));
+        g_signal_connect_data(item, "toggled", G_CALLBACK(onChanged), new KindOf{window, kind}, forgetKind, GConnectFlags(0));
         gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
     }
     gtk_widget_show_all(menu);
@@ -276,8 +288,8 @@ void showIndicator(uint64_t window, const Shown &shown, std::function<void()> do
             const Marked &state = marked[window];
             gtk_label_set_text(GTK_LABEL(state.name), shown.project.c_str());
             gtk_label_set_text(GTK_LABEL(gtk_bin_get_child(GTK_BIN(state.line))), (shown.project + "\n" + shown.line).c_str());
-            menuOrigin = shown.origin;
-            fillPermissions(state.permissions, shown);
+            marked[window].origin = shown.origin;
+            fillPermissions(state.permissions, window, shown);
             gtk_window_set_title(native, (shown.project + " \xE2\x80\x93 crossbind preview").c_str());
         }
         done();
