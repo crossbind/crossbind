@@ -274,6 +274,8 @@ void pressIndicator(Call call) {
         onceUp(menu, UP_TRIES, ^(bool isUp) {
             [waitedFor removeObject:menu];
             if (!isUp) return done("crossbind e2e: the pill's menu went away before its press");
+            // A menu left in a pill's window that its preview's end hid is no user's to press.
+            if (pillWindow() != window) return done("crossbind e2e: the pill's menu is in a window no longer shown");
             done(pressAction(menu, item, [] {}));
         });
     };
