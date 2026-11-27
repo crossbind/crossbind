@@ -253,7 +253,7 @@ export async function standInCloud({ apiPort, snapshotsPort }) {
         const text = await bodyOf(asked);
         const isArchive = asked.method === 'PUT' && SNAPSHOT_PATH.test(asked.url);
         calls.push({
-            host: 'api', call: `${asked.method} ${asked.url}`, authorization: asked.headers.authorization, body: isArchive || text.length === 0 ? undefined : JSON.parse(text.toString('utf8')),
+            host: 'api', call: `${asked.method} ${asked.url}`, authorization: asked.headers.authorization, body: isArchive || text.length === 0 ? undefined : JSON.parse(text.toString('utf8')), at: Date.now(),
         });
         answerApi(asked, answer, isArchive ? text : text.toString('utf8'));
     });
@@ -364,7 +364,7 @@ export async function standInSource(address, { key, answer, files = {} }) {
     const server = createServer(async (request, response) => {
         await bodyOf(request);
         const url = new URL(request.url, 'http://source');
-        asked.push({ path: url.pathname, gate: request.headers['x-crossbind-preview'] });
+        asked.push({ path: url.pathname, gate: request.headers['x-crossbind-preview'], at: Date.now() });
         if (url.pathname === '/__crossbind/session') {
             const answered = await answer(url.searchParams.get('challenge'));
             if (answered === null) return response.writeHead(404, { 'content-type': 'text/plain' }).end('not a preview');

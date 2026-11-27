@@ -51,6 +51,14 @@ Value outcomeOf(const Answer &answer) {
     return answer.failure ? Value(Value::Object{{"error", *answer.failure}}) : Value(Value::Object{{"value", answer.value}});
 }
 
+// How long a call took since, and why it failed where it did.
+Value timedOutcomeOf(const Answer &answer, std::chrono::steady_clock::time_point since) {
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - since).count();
+    Value::Object timed{{"ms", static_cast<double>(ms)}};
+    if (answer.failure) timed.emplace_back("error", *answer.failure);
+    return timed;
+}
+
 // The main thread held from once it is until released, ten seconds at most; Android's UI thread is the Java's.
 class MainHold {
 public:
@@ -200,16 +208,26 @@ void crossbind_extension_e2e_hooks(crossbind::Registry &registry) {
     registry.function("e2e-hooks.fillScreen", PAGES, fillScreen);
     registry.function("e2e-hooks.cycleActive", PAGES, cycleActive);
 #endif
-    // A session checked and opened by the app's own code, as no page asks it, whatever its window shows meanwhile.
-    registry.function("e2e-hooks.openPreview", PAGES, [](Call call) {
+    // A session checked and opened by the app's own code, as no page asks it, whatever its window shows meanwhile. What
+    // the check and the open answered and how long each took are noted at the endpoint once it ended, with when the check
+    // began by the system's clock, which the run places the stand-in cloud's and the source's requests by.
+    registry.function("e2e-hooks.openPreview", PAGES, [endpoint](Call call) {
         const Value session = Value::Object{{"session", call.options()["session"]}};
         const auto ms = std::chrono::milliseconds(static_cast<long>(call.options()["ms"].asNumber(0)));
         call.resolve();
-        std::thread([session, ms] {
+        std::thread([endpoint, session, ms] {
             std::this_thread::sleep_for(ms);
-            crossbind::invoke("preview.check", session, [session](std::optional<std::string> failure, Value) {
-                if (!failure) crossbind::invoke("preview.open", session, [](std::optional<std::string>, Value) {});
-            });
+            const auto at = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+            const auto checking = std::chrono::steady_clock::now();
+            const Answer checked = invoked("preview.check", session).get();
+            Value opened;
+            if (!checked.failure) {
+                const auto opening = std::chrono::steady_clock::now();
+                opened = timedOutcomeOf(invoked("preview.open", session).get(), opening);
+            }
+            const std::string noted = Value(Value::Object{{"event", "opened"}, {"session", session["session"]}, {"at", static_cast<double>(at)},
+                {"check", timedOutcomeOf(checked, checking)}, {"open", opened}}).json();
+            crossbind::fetch("POST", endpoint + "/report?role=app", {{"Content-Type", "application/json"}}, noted, [](std::optional<std::string>, crossbind::FetchResponse) {});
         }).detach();
     });
     // A step's presses, of the preview's menu, of a question's button or a script run as its user's click, and a session

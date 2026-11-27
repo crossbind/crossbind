@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 // has one, and the report of each. A page that went with its ask held, as a closed app's, takes no step. What the pages
 // report besides their steps' answers are notes: each load, and the links and ends the extension held. Every report is
 // kept, so that the run can read all that a page got.
-const STEP_MS = 60000;
+export const STEP_MS = 60000;
 const HOLD_MS = 30000;
 // Longer than a device keeps an idle connection for its next request, Android's five minutes: one the server closed
 // first is reused there, and a report POSTed on it is lost ("unexpected end of stream").

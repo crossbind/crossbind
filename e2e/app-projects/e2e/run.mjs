@@ -349,6 +349,20 @@ async function listedSource(address, what, answer, files) {
     return { session, source };
 }
 
+// When, in ms from a moment of the system's clock on, the stand-in cloud read a listed session and its source heard its
+// check: an open's check asks the one, then the other.
+function heardOf(session, from) {
+    const after = (records, test) => {
+        const found = records.find((each) => each.at >= from && test(each));
+        return found ? found.at - from : null;
+    };
+    const source = sources.find((each) => session.addresses.includes(each.address));
+    return {
+        cloud: after(cloud.calls, (call) => call.call === `GET /v1/sessions/${session.id}`),
+        source: source ? after(source.asked, (asked) => asked.path === '/__crossbind/session') : null,
+    };
+}
+
 // The check's answer of a preview of the session's own key, but for what is overridden.
 const asPreview = (overrides = {}, fields = {}) => (session, challenge) => sessionAnswer({
     key: session.key,
@@ -1058,6 +1072,7 @@ async function flow() {
         stepsSnapshot,
         second: { session: second.session, origin: originName(ACCOUNTS.main, second.session.project.id) },
         cloud,
+        heardOf,
         signIn: () => signIn(ACCOUNTS.main, NUMBER),
         inPage,
         adb: adbPath,

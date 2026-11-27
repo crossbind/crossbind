@@ -5,6 +5,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { STEP_MS } from './endpoint.mjs';
 import { questionsOn, storeOn } from './questions.mjs';
 
 // What shows that a preview is one, and what leaves it, as e2e/run.mjs checks it on each platform: the indicator read as
@@ -212,7 +213,7 @@ export const itemsOn = (platform) => ['Reload', ['macos', 'windows', 'linux'].in
 
 export async function checkIndicator(run) {
     const {
-        platform, endpoint, app, openSession, stepsProject, stepsSnapshot, second, cloud, appTitle, accountName, signedOutWords,
+        platform, endpoint, app, openSession, stepsProject, stepsSnapshot, second, cloud, heardOf, appTitle, accountName, signedOutWords,
     } = run;
     const isDesktop = ['macos', 'windows', 'linux'].includes(platform);
     const isApple = platform === 'macos' || platform === 'ios';
@@ -254,6 +255,10 @@ export async function checkIndicator(run) {
     }
     const readingsOf = (session) => cloud.calls.filter((call) => call.host === 'api' && call.call === `GET /v1/sessions/${session.id}`).length;
     const served = async (origin) => step('app', { do: 'served', origin }).catch(() => null);
+    // An open by the app's own code, once the hook noted its end: what its check and its open answered, how long each
+    // took, and when the stand-in cloud and the session's source heard the check.
+    const opened = (session, what) => endpoint.waitForNote((note) => note.event === 'opened' && note.session === session.id, STEP_MS, what)
+        .then(({ at, check, open }) => ({ check, open, heard: heardOf(session, at) }));
 
     // None before a preview.
     expect(isDown(await indicators.read('app')), 'the indicator was up before a preview');
@@ -730,12 +735,14 @@ export async function checkIndicator(run) {
             () => indicators.presses('project', [{ item: 'Close preview', ms: PRESS_MS }, { item: 'Close preview', ms: PRESS_MS + 30 }]));
         expect(twice.length <= 1, `Close preview twice held ${JSON.stringify(twice)}`);
         out.closeTwice = twice.length;
-        // A second project opened as the first one's end is on its way.
+        // A second project opened as the first one's end is on its way, read once that open ended.
         await openSession(marked.session, marked.origin);
         from = endpoint.notes.length;
         const back = appLoaded("the app's page as a second project opened");
+        const secondOpened = opened(second.session, "the second project's open as the first one's end came");
         await indicators.presses('project', [{ item: 'Close preview', ms: PRESS_MS }], { open: second.session.id, openMs: PRESS_MS });
         await back;
+        out.opens = { secondAsFirstEnds: await secondOpened };
         await sleep(SETTLED_MS);
         const isServed = await served(second.origin);
         const state = await indicators.read('app');
@@ -748,11 +755,16 @@ export async function checkIndicator(run) {
         // Close preview pressed as the app's own code opens another session, both armed at once, the first opened by the
         // app's own code too: the window shows the app's page throughout, and no page starts after the two to tidy what
         // they leave, which is the order their platform's calls ran in. A second served has its indicator up, and on
-        // macOS its web view takes no full screen.
+        // macOS its web view takes no full screen. Each open is read once it ended.
+        const markedOpened = opened(marked.session, "the session the app's own code opened");
         await step('app', { do: 'openPreview', session: marked.session.id });
-        await until(() => served(marked.origin), (isOpen) => isOpen === true, "the session the app's own code opened");
+        out.opens.marked = await markedOpened;
+        const isMarked = await served(marked.origin);
+        expect(isMarked === true, `the session the app's own code opened: ${JSON.stringify({ ...out.opens.marked, isMarked })}`);
+        const lastOpened = opened(second.session, "the second session's open as Close preview came");
         await step('app', { do: 'openPreview', session: second.session.id, ms: PRESS_MS });
         await indicators.press('app', 'Close preview', PRESS_MS, true);
+        out.opens.closeAsAppOpens = await lastOpened;
         await sleep(SETTLED_MS);
         const isSecond = await served(second.origin);
         const after = await indicators.read('app');
