@@ -69,13 +69,28 @@ describe('crossbind()', () => {
 
     test("is crossbind's own object until a use chooses, and lists the chosen plugin's keys after, which a tool may copy", () => {
         const plugin = crossbind();
-        expect(Object.keys(plugin)).toEqual(['name', 'start']);
+        expect(Object.keys(plugin)).toEqual(['name']);
+        expect('start' in plugin).toBe(true);
         expect(plugin.name).toBe('crossbind');
         plugin.start({ tool: 'alpha' });
         expect(Object.keys(plugin)).toEqual(['name', 'api', 'start', 'hook']);
         const copy = Object.assign({}, plugin);
         expect(copy.hook()).toBe('alpha hook');
         expect('hook' in plugin).toBe(true);
+    });
+
+    test('shows a tool that refuses the keys it does not know only its name, and takes its first call all the same', () => {
+        const omega = {
+            name: 'omega',
+            integration: { calls: ['begin'], claims: ({ key }) => key === 'begin', plugin: () => ({ name: 'omega-plugin', begin: () => 'omega began' }) },
+        };
+        const plugin = createCrossbind(() => [omega, alpha])();
+        const strictTool = (candidate, known) => {
+            for (const key in candidate) if (!known.includes(key)) throw new Error(`Invalid option on plugin: ${key}`);
+            return candidate.start({ tool: 'alpha' });
+        };
+        expect(strictTool(plugin, ['name', 'start'])).toBe('alpha started for alpha');
+        expect(plugin.name).toBe('alpha-plugin');
     });
 
     test("stops a call no integration claims, naming the project's integrations", () => {

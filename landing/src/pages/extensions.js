@@ -94,7 +94,10 @@ export const EXTENSION_GROUPS = [
             row('vite', "crossbind() in Vite's plugin list, for a web build, an app's and a preview"),
             row('rollup', "crossbind() in Rollup's and Rolldown's plugin lists"),
             row('webpack', "crossbind() in webpack's and Rspack's plugin lists, its loader and its dev server's middleware included"),
+            row('rsbuild', "crossbind() in Rsbuild's plugin list, its dev server's middleware and headers included"),
+            row('esbuild', "crossbind() in esbuild's and Bun's plugin lists, for a web build"),
             row('metro', "crossbind(config) around Metro's config, for React Native and Expo, the web's export included"),
+            row('next', 'crossbind(nextConfig) around a Next.js config, under Turbopack or webpack'),
             row('react-native', 'React Native and Expo apps: their native module, their builds and "plugins": ["crossbind"] in Expo\'s config', {
                 isAdded: true,
             }),

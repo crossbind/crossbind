@@ -47,6 +47,21 @@ test('detects Vite, pnpm, native sources and existing crossbind packages', (t) =
     assert.equal(result.constraints.coopCoepRequiredForMt, true);
 });
 
+test('detects Rsbuild before Rspack, and esbuild and Bun after Vite, each with its playbook', (t) => {
+    const cases = [
+        [{ '@rsbuild/core': '^2.3.4', '@rspack/core': '^2.3.4' }, { 'rsbuild.config.mjs': 'export default {}\n' }, 'rsbuild', 'high', 'integration/rsbuild.md'],
+        [{ esbuild: '^0.28.2' }, {}, 'esbuild', 'medium', 'integration/esbuild-bun.md'],
+        [{ '@types/bun': '^1.4.5' }, { 'bun.lock': '' }, 'bun', 'high', 'integration/esbuild-bun.md'],
+        [{ vite: '^8.3.8', '@types/bun': '^1.4.5' }, { 'bun.lock': '', 'vite.config.js': 'export default {}\n' }, 'vite', 'high', 'integration/vite.md'],
+    ];
+    for (const [devDependencies, files, framework, confidence, reference] of cases) {
+        const root = fixture({ pkg: { devDependencies }, files });
+        t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+        const result = inspectProject(root);
+        assert.deepEqual([result.framework, result.confidence, result.recommendedReference], [framework, confidence, reference]);
+    }
+});
+
 test('detects Expo before React Native CLI', (t) => {
     const root = fixture({
         pkg: { dependencies: { expo: '^55', 'react-native': '^0.84' } },

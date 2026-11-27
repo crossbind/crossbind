@@ -86,7 +86,7 @@ Each `plugins/*` adapts crossbind's outputs to one bundler, through one api, `in
 - Pipe `/crossbind.js`, `/crossbind.wasm`, `/crossbind.data.txt` requests to dev-server middleware.
 - Set COOP/COEP headers when multithread is in use.
 
-`crossbind()` (`src/integration/crossbind.js`) hands the tool the plugin of the integration that claims the tool's first use, and names no tool itself: `extensions/rollup` is the inner kernel, which `extensions/vite` runs inside its own plugin; `extensions/webpack` is parallel; `extensions/react-native` + `extensions/metro` handle RN, and `extensions/metro` alone builds the wasm for Expo's web platform.
+`crossbind()` (`src/integration/crossbind.js`) hands the tool the plugin of the integration that claims the tool's first use, and names no tool itself: `extensions/rollup` is the inner kernel, which `extensions/vite` runs inside its own plugin; `extensions/webpack` is parallel, and `extensions/rsbuild` runs its plugin on Rsbuild's Rspack; `extensions/esbuild` takes esbuild's and Bun's `setup(build)`; `extensions/next` wraps a Next config, under Turbopack or webpack; `extensions/react-native` + `extensions/metro` handle RN, and `extensions/metro` alone builds the wasm for Expo's web platform.
 
 ### Apps
 

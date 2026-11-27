@@ -170,15 +170,16 @@ export default function integrationApi() {
         // Before any transform: a header's bridge reads the include roots of every dependency, and a cargo dependency built
         // for another target only is there but lacks this one until the build makes it.
         prepare,
-        transform(file, target, { base = '/', liveExports = false } = {}) {
+        // `atBase`: the integration serves the glue at `base` itself, which a bundler's public path then does not replace.
+        transform(file, target, { base = '/', liveExports = false, atBase = false } = {}) {
             const kind = kindOf(file);
             // A Rust surface needs no bridge file: its native bridge is the package's generated companion crate, or the
             // app's own, and this emits only the JS proxy module.
-            if (kind === 'rust') return getRustJsScript(target, file, { base });
+            if (kind === 'rust') return getRustJsScript(target, file, { base, atBase });
             if (kind !== 'header' && kind !== 'module') return null;
             const bridge = createBridgeFile(file, target);
             bridges.add(bridge);
-            return getCrossbindScript(target, bridge, { base, liveExports });
+            return getCrossbindScript(target, bridge, { base, liveExports, atBase });
         },
         // A tool that keeps a header's module while the app's imports change binds the headers a source imports again.
         bindImports: (code, file, target) => bindHeaderImports(code, file, target),

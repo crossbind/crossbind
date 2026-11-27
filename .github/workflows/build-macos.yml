@@ -20,10 +20,13 @@ on:
             - main
         paths:
             - core/crossbind/**
+            - extensions/esbuild/**
             - extensions/metro/**
+            - extensions/next/**
             - extensions/react-native/**
             - extensions/react-native-ios/**
             - extensions/rollup/**
+            - extensions/rsbuild/**
             - extensions/vite/**
             - extensions/webpack/**
             - examples/lib-*/**

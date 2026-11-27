@@ -1,0 +1,41 @@
+{
+    "name": "@crossbind/extension-rsbuild",
+    "version": "2.0.0-beta.82",
+    "description": "crossbind extension: crossbind() in Rsbuild's plugin list, its dev server's middleware and headers included.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/rsbuild#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "MIT",
+    "type": "module",
+    "exports": {
+        "./crossbind.extension.js": "./crossbind.extension.js"
+    },
+    "files": [
+        "crossbind.extension.js",
+        "src"
+    ],
+    "crossbind": {
+        "extension": "./crossbind.extension.js"
+    },
+    "dependencies": {
+        "@crossbind/core-embind-rust": "workspace:^",
+        "@crossbind/extension-webpack": "workspace:^"
+    },
+    "peerDependencies": {
+        "@rsbuild/core": ">=2.0.0"
+    },
+    "peerDependenciesMeta": {
+        "@rsbuild/core": {
+            "optional": true
+        }
+    },
+    "devDependencies": {
+        "@rsbuild/core": "^2.3.4"
+    },
+    "keywords": [
+        "crossbind-extension",
+        "crossbind",
+        "integration",
+        "rsbuild",
+        "rspack"
+    ]
+}

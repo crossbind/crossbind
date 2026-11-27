@@ -83,10 +83,13 @@ export function createCrossbind(integrationsOf) {
             throw new Error(`crossbind: crossbind() was called (${String(key)}) by a tool none of this project's integrations (${namesOf(integrations)}) takes: list the extension for it in crossbind.config.js.`);
         };
         // The methods the integrations say their tools call first; a read no integration claims is undefined, as of a
-        // plain object.
+        // plain object. They are not listed, as each is another tool's but one, and a tool may refuse a plugin with a key
+        // it does not know.
         const target = { name: 'crossbind' };
         for (const key of new Set(integrations.flatMap(({ integration }) => integration.calls ?? []))) {
-            target[key] = (...args) => (choose({ key, args }) ?? unclaimed(key))[key](...args);
+            Object.defineProperty(target, key, {
+                value: (...args) => (choose({ key, args }) ?? unclaimed(key))[key](...args), writable: true, configurable: true,
+            });
         }
         return new Proxy(target, {
             get: (t, key) => (chosen ? chosen[key] : key in t ? t[key] : choose({ key })?.[key]),

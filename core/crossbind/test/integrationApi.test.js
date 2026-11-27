@@ -76,6 +76,7 @@ const web = (buildType) => ({
     runtime: 'st',
     buildType,
     runtimeEnv: 'browser',
+    path: `wasm-wasm32-st-${buildType}`,
     jsName: `${buildType}.js`,
     wasmName: `${buildType}.wasm`,
     dataTxtName: `${buildType}.data.txt`,
@@ -157,15 +158,15 @@ describe('what a native import becomes', () => {
         const api = integrationApi();
         expect(api.transform('/project/src/native.h', release, { base: '/app/', liveExports: true })).toBe('module of /project/src/native.h.bridge');
         expect(createBridgeFile).toHaveBeenCalledWith('/project/src/native.h', release);
-        expect(getCrossbindScript).toHaveBeenCalledWith(release, '/project/src/native.h.bridge', { base: '/app/', liveExports: true });
+        expect(getCrossbindScript).toHaveBeenCalledWith(release, '/project/src/native.h.bridge', { base: '/app/', liveExports: true, atBase: false });
         await api.link(release);
         expect(createLib).toHaveBeenCalledWith(release, 'Bridge', expect.objectContaining({ nativeGlob: [COMMON_BRIDGES, '/project/src/native.h.bridge'] }));
     });
 
     test('a Rust surface needs no bridge, and other files are none of crossbind', () => {
         const api = integrationApi();
-        expect(api.transform('/project/src/lib.rs', release, { base: '/app/' })).toBe('rust module of /project/src/lib.rs');
-        expect(getRustJsScript).toHaveBeenCalledWith(release, '/project/src/lib.rs', { base: '/app/' });
+        expect(api.transform('/project/src/lib.rs', release, { base: '/app/', atBase: true })).toBe('rust module of /project/src/lib.rs');
+        expect(getRustJsScript).toHaveBeenCalledWith(release, '/project/src/lib.rs', { base: '/app/', atBase: true });
         expect(createBridgeFile).not.toHaveBeenCalled();
         expect(api.transform('/project/src/main.js', release)).toBeNull();
     });
@@ -206,6 +207,22 @@ describe('the glue a tool links', () => {
         await first;
         await api.link(debug);
         expect(buildWasm).toHaveBeenCalledTimes(2);
+    });
+
+    // Each api has a linker of its own, as each of a tool's processes has: loaders that link, as Next's do under `next
+    // dev`, would otherwise write one target's outputs at once.
+    test('two processes link a target one after the other', async () => {
+        let active = 0;
+        let most = 0;
+        buildWasm.mockImplementation(async () => {
+            active += 1;
+            most = Math.max(most, active);
+            await new Promise((resolve) => { setTimeout(resolve, 100); });
+            active -= 1;
+        });
+        await Promise.all([integrationApi().link(debug), integrationApi().link(debug)]);
+        expect(buildWasm).toHaveBeenCalledTimes(2);
+        expect(most).toBe(1);
     });
 
     test("names a web target's files and an app's", () => {

@@ -8,13 +8,14 @@ import { parseCargoMarkerName } from '../utils/cargoImport.js';
 import { cratesOf } from '../utils/packageSourceImport.js';
 import { UNBOUND_MESSAGE } from '../assets/js-runtime/adapters/unboundMessage.js';
 
-// `base` is where the bundler serves the app from, as Vite's `base` names it; webpack's public path wins at run time.
-// Metro asks for `liveExports`: it keeps a header's module as it first transformed it while the app's imports change.
-export default function getCrossbindScript(target, bridgePath, { base = '/', liveExports: isLive = false } = {}) {
+// `base` is where the bundler serves the app from, as Vite's `base` names it; webpack's public path wins at run time,
+// unless `atBase` says the integration serves the glue at `base` itself. Metro asks for `liveExports`: it keeps a header's
+// module as it first transformed it while the app's imports change.
+export default function getCrossbindScript(target, bridgePath, { base = '/', liveExports: isLive = false, atBase = false } = {}) {
     if (!bridgePath) {
         throw new Error('getCrossbindScript needs the bridge file of the imported header');
     }
-    const script = buildScript(target, loadJson(`${bridgePath}.exports.json`), base);
+    const script = buildScript(target, loadJson(`${bridgePath}.exports.json`), base, atBase);
     return isLive ? `${script}${liveExportsScript()}` : script;
 }
 
@@ -46,8 +47,8 @@ function liveExportsScript() {
 // The Rust analog of a .h import: parse the crate surface and emit the same proxy module
 // (per-symbol lets assigned inside this module's initNative). Vectors come from the owning
 // cargo package's config; classes/enums come from the parsed source.
-export function getRustJsScript(target, rsFile, { base = '/' } = {}) {
-    return buildScript(target, getRustSymbols(rsFile), base);
+export function getRustJsScript(target, rsFile, { base = '/', atBase = false } = {}) {
+    return buildScript(target, getRustSymbols(rsFile), base, atBase);
 }
 
 // The names a Rust import exports. An app-local file or a cargo: crate gets its bridge crate here, the way a header
@@ -108,7 +109,7 @@ export function getRustSymbols(rsFile) {
     ];
 }
 
-function buildScript(target, symbols, base) {
+function buildScript(target, symbols, base, atBase = false) {
     if (!target) {
         throw new Error('The target is not available!');
     }
@@ -128,7 +129,7 @@ function buildScript(target, symbols, base) {
     }
 
     return `
-        ${getPlatformScript(env, base)}
+        ${getPlatformScript(env, base, atBase)}
 
         export let AllSymbols = {};
         ${symbolExportDefineString}
@@ -203,19 +204,23 @@ function getReactNativeScript(env) {
     `;
 }
 
+// The base the boot code loads the glue from: webpack's public path at run time, unless the integration serves the glue
+// at `base` itself.
+const bootBase = (base, atBase) => (atBase ? JSON.stringify(base) : `(typeof __webpack_public_path__ === 'string' ? __webpack_public_path__ : ${JSON.stringify(base)})`);
+
 // An app's page loads the runtime the app serves as crossbind.js, which asks the app's host for the module. The build's
 // env is the host's own, so the page passes on only what initNative() is given.
-function getAppScript(env, base) {
+function getAppScript(env, base, atBase) {
     return `
         function __crossbindBoot(config) {
-            const base = new URL((typeof __webpack_public_path__ === 'string' ? __webpack_public_path__ : ${JSON.stringify(base)}) || './', document.baseURI).href;
+            const base = new URL(${bootBase(base, atBase)} || './', document.baseURI).href;
             return import(/* webpackIgnore: true */ /* @vite-ignore */ base + 'crossbind.js')
                 .then(() => window.Crossbind.initNative(config));
         }
     `;
 }
 
-function getWebScript(env, base) {
+function getWebScript(env, base, atBase) {
     const params = `{
         path: base,
         ...config,
@@ -230,7 +235,7 @@ function getWebScript(env, base) {
 
     return `
         function __crossbindBoot(config) {
-            const base = new URL((typeof __webpack_public_path__ === 'string' ? __webpack_public_path__ : ${JSON.stringify(base)}) || './', document.baseURI).href;
+            const base = new URL(${bootBase(base, atBase)} || './', document.baseURI).href;
             return import(/* webpackIgnore: true */ /* @vite-ignore */ base + 'crossbind.js')
                 .then(n => window.Crossbind.initNative(${params}));
         }

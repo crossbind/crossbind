@@ -5,7 +5,7 @@ const INTEGRATIONS_URL = `${REPO_URL}/blob/main/docs/api/extensions.md#integrati
 export default {
     slug: 'bundler-plugins',
     title: 'Bundler plugins',
-    description: "One plugin for every tool, crossbind(): in Vite's, Webpack's, Rspack's and Rollup's plugin lists, around Metro's config, and how another tool joins.",
+    description: "One plugin for every tool, crossbind(): in the plugin lists of Vite, Webpack, Rspack, Rsbuild, Rollup, esbuild and Bun, around Metro's and Next.js's configs, and how another tool joins.",
     lede: "One plugin serves every tool: `crossbind()`. It turns each header and `.rs` file you import into a JavaScript module. For the web it also compiles the wasm while you develop and emits it with your bundle; in a React Native app, the app's Xcode and Gradle builds compile the native code.",
     blocks: [
         { type: 'h2', id: 'which', text: 'What each tool takes' },
@@ -17,13 +17,16 @@ export default {
                 ['[Vite](#vite)', '`plugins: [crossbind()]`', '[Browser](/guide/browser/) and [Apps](/guide/apps/)'],
                 ['[Webpack](#webpack)', '`plugins: [crossbind()]`', 'Browser'],
                 ['[Rspack](#rspack)', '`plugins: [crossbind()]`', 'Browser'],
+                ['[Rsbuild](#rsbuild)', '`plugins: [crossbind()]`', 'Browser'],
                 ['[Rollup](#rollup) and Rolldown', '`plugins: [crossbind()]`', 'Browser'],
+                ['[esbuild](#esbuild) and Bun', '`plugins: [crossbind()]`', 'Browser'],
                 ['[Metro](#metro)', 'around the config: `crossbind(getDefaultConfig(__dirname))`', "[React Native](/guide/react-native/), and Expo's web build"],
+                ['[Next.js](#nextjs)', 'around the config: `crossbind(nextConfig)`', 'Browser, under Turbopack or webpack'],
             ],
         },
         {
             type: 'p',
-            text: "The tool's first use of `crossbind()` decides which integration answers it: crossbind brings those of Vite, Rollup, Webpack and Metro, and [another tool](#own-plugin) joins through an extension. Each reads the project's `crossbind.config.js`, or `crossbind.config.mjs`, from the folder the tool runs in. A page with no bundler builds with the CLI instead: see [No bundler](/guide/browser/#no-bundler).",
+            text: "The tool's first use of `crossbind()` decides which integration answers it: crossbind brings those of Vite, Rollup, Webpack, Rsbuild, esbuild, Metro and Next.js, and [another tool](#own-plugin) joins through an extension. Each reads the project's `crossbind.config.js`, or `crossbind.config.mjs`, from the folder the tool runs in. A page with no bundler builds with the CLI instead: see [No bundler](/guide/browser/#no-bundler).",
         },
 
         { type: 'h2', id: 'vite', text: 'Vite' },
@@ -73,6 +76,23 @@ export default defineConfig({
 });`,
         },
 
+        { type: 'h2', id: 'rsbuild', text: 'Rsbuild' },
+        {
+            type: 'code',
+            file: 'rsbuild.config.mjs',
+            code: `import { defineConfig } from '@rsbuild/core';
+import { pluginReact } from '@rsbuild/plugin-react';
+import crossbind from 'crossbind';
+
+export default defineConfig({
+    plugins: [pluginReact(), crossbind()],
+});`,
+        },
+        {
+            type: 'p',
+            text: "It goes in Rsbuild's own `plugins`, not in `tools.rspack`: from there it builds the page on Rsbuild's Rspack, gives the dev and preview servers COOP/COEP, and the dev server the middleware that serves the compiled module.",
+        },
+
         { type: 'h2', id: 'rollup', text: 'Rollup' },
         {
             type: 'p',
@@ -94,10 +114,61 @@ export default {
             text: 'The bundle step writes `crossbind.js` and `crossbind.wasm` into the output directory. Plain Rollup has no base path, so the generated code loads them from the site root.',
         },
 
+        { type: 'h2', id: 'esbuild', text: 'esbuild and Bun' },
+        {
+            type: 'code',
+            file: 'build.mjs',
+            code: `import * as esbuild from 'esbuild';
+import crossbind from 'crossbind';
+
+await esbuild.build({
+    entryPoints: ['src/main.js'],
+    bundle: true,
+    format: 'esm',
+    outdir: 'dist',
+    plugins: [crossbind()],
+});`,
+        },
+        {
+            type: 'p',
+            text: 'Bun, from 1.2.22, takes the same plugin in `Bun.build`:',
+        },
+        {
+            type: 'code',
+            file: 'build.mjs',
+            code: `import crossbind from 'crossbind';
+
+await Bun.build({ entrypoints: ['./src/main.js'], outdir: './dist', plugins: [crossbind()] });`,
+        },
+        {
+            type: 'p',
+            text: "Each build writes `crossbind.js` and `crossbind.wasm` beside its output, and the page loads them from `publicPath`, or from the site root. esbuild's own server sends no headers, so a multithreaded page needs a server that does.",
+        },
+
         { type: 'h2', id: 'metro', text: 'Metro' },
         {
             type: 'p',
             text: "Metro has no plugin list, so `crossbind()` wraps its config, as the outermost wrapper. It is set up with the rest of a React Native app: see [React Native](/guide/react-native/#metro), and [Expo](/guide/react-native/#expo) for the web build it makes as well.",
+        },
+
+        { type: 'h2', id: 'nextjs', text: 'Next.js' },
+        {
+            type: 'p',
+            text: 'Next.js has no plugin list either, so `crossbind()` wraps its config, from Next 16, under Turbopack or webpack.',
+        },
+        {
+            type: 'code',
+            file: 'next.config.mjs',
+            code: `import crossbind from 'crossbind';
+
+/** @type {import('next').NextConfig} */
+const nextConfig = {};
+
+export default crossbind(nextConfig);`,
+        },
+        {
+            type: 'p',
+            text: "The C++ runs in the browser, so call it from a client component, `initNative()` in an effect. `next build` puts the compiled module under `/_next/static/crossbind/`, `next dev` serves it as the page asks, and a multithreaded page gets COOP/COEP on every route. Under Turbopack, `next dev` finds a new `cargo:` import or package header after a restart.",
         },
 
         { type: 'h2', id: 'own-plugin', text: 'Another bundler' },

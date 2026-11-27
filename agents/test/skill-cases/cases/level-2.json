@@ -596,24 +596,24 @@
         ],
         "facts": [
             {
-                "claim": "Adds `crossbind()` to `next.config`'s plugins through its `webpack(config)` callback",
+                "claim": "Wraps the Next config in `crossbind(nextConfig)` as `next.config`'s export",
                 "doc": "docs/playbooks/integration/nextjs.md",
-                "literal": "import crossbind from 'crossbind';"
+                "literal": "export default crossbind(nextConfig);"
             },
             {
-                "claim": "Registers the plugin for the client bundle alone, behind `!isServer`",
+                "claim": "Calls the C++ from a client component, as the module runs in the browser",
                 "doc": "docs/playbooks/integration/nextjs.md",
-                "literal": "if (!isServer) {"
+                "literal": "the component that calls it is a client component"
             },
             {
-                "claim": "Says the plugin does not run under Turbopack, so the dev server has to use webpack, or the artifacts be built ahead",
+                "claim": "Says it works under Turbopack, Next 16's default, and under webpack alike",
                 "doc": "docs/playbooks/integration/nextjs.md",
-                "literal": "does not run under Turbopack"
+                "literal": "under Turbopack, Next 16's default, and webpack (`--webpack`) alike"
             },
             {
-                "claim": "Starts the native module on the client, as inside `useEffect`, and not at the top of a module the server renders",
+                "claim": "Starts the native module on the client, inside an effect, and not at the top of a module the server renders",
                 "doc": "docs/playbooks/integration/nextjs.md",
-                "literal": "Init lazily inside a `useEffect` or async route handler."
+                "literal": "`initNative()` in an effect."
             }
         ],
         "split": "test"

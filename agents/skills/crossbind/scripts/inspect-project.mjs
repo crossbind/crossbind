@@ -40,6 +40,13 @@ const FRAMEWORK_RULES = [
         files: CLOUDFLARE_CONFIG_FILES,
         targets: ['edge'],
     },
+    // Rsbuild builds with Rspack, which its project may list too.
+    {
+        framework: 'rsbuild',
+        dependencies: ['@rsbuild/core'],
+        files: ['rsbuild.config.js', 'rsbuild.config.mjs', 'rsbuild.config.cjs', 'rsbuild.config.ts', 'rsbuild.config.mts'],
+        targets: ['browser'],
+    },
     {
         framework: 'rspack',
         dependencies: ['@rspack/core', '@rspack/cli'],
@@ -64,6 +71,20 @@ const FRAMEWORK_RULES = [
         files: ['rollup.config.js', 'rollup.config.mjs', 'rollup.config.cjs', 'rollup.config.ts'],
         targets: ['browser'],
     },
+    // esbuild has no config file of its own: its build is a script.
+    {
+        framework: 'esbuild',
+        dependencies: ['esbuild'],
+        files: [],
+        targets: ['browser'],
+    },
+    // Bun is no package a project installs; its types are.
+    {
+        framework: 'bun',
+        dependencies: ['@types/bun', 'bun-types'],
+        files: ['bunfig.toml', 'bun.lock', 'bun.lockb'],
+        targets: ['browser'],
+    },
 ];
 
 const REFERENCE_BY_FRAMEWORK = {
@@ -73,10 +94,13 @@ const REFERENCE_BY_FRAMEWORK = {
     nextjs: 'integration/nextjs.md',
     'cloudflare-worker': 'integration/cloudflare-worker.md',
     'cloudflare-vite': 'integration/README.md',
+    rsbuild: 'integration/rsbuild.md',
     rspack: 'integration/webpack-rspack.md',
     webpack: 'integration/webpack-rspack.md',
     vite: 'integration/vite.md',
     rollup: 'integration/rollup.md',
+    esbuild: 'integration/esbuild-bun.md',
+    bun: 'integration/esbuild-bun.md',
     nodejs: 'integration/nodejs.md',
     vanilla: 'integration/vanilla.md',
     unknown: 'integration/README.md',

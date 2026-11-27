@@ -1,0 +1,38 @@
+{
+    "name": "@crossbind/extension-next",
+    "version": "2.0.0-beta.82",
+    "description": "crossbind extension: crossbind(nextConfig) around a Next.js config, under Turbopack or webpack.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/next#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "MIT",
+    "type": "module",
+    "exports": {
+        "./crossbind.extension.js": "./crossbind.extension.js"
+    },
+    "files": [
+        "crossbind.extension.js",
+        "src"
+    ],
+    "crossbind": {
+        "extension": "./crossbind.extension.js"
+    },
+    "dependencies": {
+        "@crossbind/core-embind-rust": "workspace:^"
+    },
+    "peerDependencies": {
+        "next": ">=16.0.0"
+    },
+    "peerDependenciesMeta": {
+        "next": {
+            "optional": true
+        }
+    },
+    "keywords": [
+        "crossbind-extension",
+        "crossbind",
+        "integration",
+        "next",
+        "nextjs",
+        "turbopack"
+    ]
+}

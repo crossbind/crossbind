@@ -2,32 +2,31 @@
 
 # Integration — Next.js
 
-> Persona 2 sub-playbook. The user's project is a Next.js app. Detection: `next` in deps, `next.config.{js,mjs,ts}` at root.
-
-> No canonical Next.js example exists in this repo yet. This playbook synthesizes the Webpack and Vite playbooks; verify edge cases against `examples/web-react-rspack/` (the closest equivalent).
+> Persona 2 sub-playbook. The user's project is a Next.js app. Detection: `next` in deps, `next.config.{js,mjs,ts}` at
+> root.
 
 ## Goal
 
-Add crossbind to a Next.js app so:
+Wrap the Next config with `crossbind(nextConfig)` so:
 
-- Client-side bundle loads `crossbind.js` + `crossbind.wasm`.
-- Dev server (`next dev`) and production server (`next start`) serve COOP/COEP headers when multithread is in use.
-- App Router and Pages Router both work.
-- The wasm is fetched at the right URL (Next's static asset path).
+- Header and `.rs` imports become modules under Turbopack, Next 16's default, and webpack (`--webpack`) alike.
+- `next build` puts `crossbind.js` and `crossbind.wasm` under `/_next/static/crossbind/`, which `next start` serves.
+- `next dev` serves the debug glue, linked again after a C++ change.
+- A multithreaded page gets COOP/COEP on every route, in dev and on `next start`.
 
 ## When to use
 
-- `next` in deps (any version 13+).
-- `next.config.{js,mjs,cjs,ts}` at root.
-- Either App Router (`app/` directory) or Pages Router (`pages/` directory).
+- Next.js 16 or later, App Router or Pages Router.
+- The C++ runs in the browser: the component that calls it is a client component.
 
 ## Files involved
 
-- `package.json`: add `crossbind`, optional `@crossbind/port-<name>`.
-- `next.config.{js,mjs,ts}`: Add `crossbind()` to the plugins in the `webpack(config)` callback; add `headers()` for COOP/COEP.
-- `crossbind.config.{js,mjs}` *(new at root)*: Project-level crossbind config.
-- `src/native/` *(if user wraps own C++)*: `.h` + `.cpp` source.
-- `public/`: Next serves `crossbind.js` / `crossbind.wasm` from `public/` if you copy them there post-build (alternative: webpack plugin's middleware).
+| File | Role |
+|------|------|
+| `package.json` | + `crossbind` (devDependency), optional `@crossbind/port-<name>` |
+| `next.config.{js,mjs,ts}` | `export default crossbind(nextConfig)` |
+| `crossbind.config.js` *(new at root)* | Project-level crossbind config |
+| `src/native/` *(only if the user wraps own C++)* | `.h` + `.cpp` source |
 
 ## Commands
 
@@ -35,106 +34,74 @@ Add crossbind to a Next.js app so:
 pnpm add -D crossbind@beta
 pnpm add @crossbind/port-<name>@beta     # optional
 
-# Dev
-pnpm dev      # next dev
-
-# Production
-pnpm build && pnpm start    # next build && next start
+pnpm next dev                      # Turbopack; --webpack for webpack
+pnpm next build && pnpm next start
 ```
 
 ## Reference config
 
-`next.config.mjs`:
-
 ```js
+// next.config.mjs
 import crossbind from 'crossbind';
 
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-    webpack(config, { isServer }) {
-        if (!isServer) {
-            // crossbind targets the client bundle; skip on server-side builds. The plugin adds the loader's rule.
-            config.plugins.push(crossbind());
-        }
-        return config;
-    },
-    async headers() {
-        return [
-            {
-                source: '/:path*',
-                headers: [
-                    { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
-                    { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' },
-                ],
-            },
-        ];
-    },
-};
+const nextConfig = {};
 
-export default nextConfig;
+export default crossbind(nextConfig);
 ```
 
-`crossbind.config.mjs`:
+A CommonJS config takes it the same way, `module.exports = crossbind(nextConfig)`, and a config that is a function stays
+one: `crossbind((phase) => ({ ... }))`.
 
-```js
-export default {
-    general: { name: 'my-next-app' },
-    target: { runtime: 'mt' },   // omit for single-thread default
-    paths: { config: import.meta.url },
-};
+```jsx
+// app/page.jsx
+'use client';
+
+import { useEffect, useState } from 'react';
+import { initNative, Native } from '../src/native/native.h';
+
+export default function Page() {
+    const [result, setResult] = useState('');
+    useEffect(() => {
+        initNative().then(() => setResult(Native.sample()));
+    }, []);
+    return <p>{result}</p>;
+}
 ```
 
-## Turbopack
-
-Next 14+ ships Turbopack (`next dev --turbo`, default in Next 15+). **`crossbind()` does not run under Turbopack**, which runs no webpack plugin and has a plugin system of its own that crossbind doesn't yet target.
-
-Workarounds while Turbopack support is pending:
-
-1. Force webpack for dev: drop `--turbo`, run `next dev` (uses webpack).
-2. Or build the crossbind artifacts ahead of time and serve them statically:
-   ```bash
-   pnpm crossbind build -p wasm -a wasm32 -e browser -b release
-   cp dist/<name>.browser.* public/
-   ```
-   Then `import` the loader from `/crossbind.js` in your component. This skips the bundler integration entirely; you lose HMR for native source changes.
-
-Track Turbopack support: open an issue against this repo if blocking.
+Beside the app's own keys, the wrapper adds Turbopack's `rules` and `resolveAlias`, the `webpack` hook, under `next dev`
+a `rewrites` entry for `/_crossbind/:file`, the isolation `headers` for an `mt` build, and
+`compiler.runAfterProductionCompile`, which runs after the app's own.
 
 ## Multithread → COOP/COEP
 
-The `headers()` callback in `next.config` covers both `next dev` and `next start`. For static export (`next export` / `output: 'export'`), headers won't work — the user must configure their hosting layer (see `docs/playbooks/integration/vite.md` "Multithread → production headers" for per-host recipes).
-
-If `runtime: 'st'`, drop the `headers()` callback.
-
-## Server vs client
-
-crossbind targets the **browser bundle**. The `next.config.webpack` callback above gates plugin registration on `!isServer` so SSR/build-time Node bundles don't try to load the wasm.
-
-If the user wants crossbind on the server side too (Node SSR with WASM), that's a separate integration:
-
-- Build the Node target separately: `crossbind build -p wasm -e node`
-- Import it in API routes / server components using `dynamic()` and `await import('./dist/<name>.node.js')`
-- See `docs/playbooks/integration/nodejs.md` for the Node consumer side.
+The wrapper adds the two headers to every route when `crossbind.config.js` sets `target.runtime: 'mt'`, and `next dev`
+and `next start` send them. A static export (`output: 'export'`) has no server: the host must send them, see
+`docs/playbooks/integration/vite.md` "Multithread → production headers".
 
 ## Validation
 
-- [ ] `pnpm install` succeeds.
-- [ ] `pnpm dev` starts; client console shows the crossbind loader running, no 404s on `/crossbind.js`/`/crossbind.wasm`.
-- [ ] DevTools → Application → Headers shows `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` (for multithread).
-- [ ] `pnpm build && pnpm start` works end-to-end.
-- [ ] App calls into C++: `await initNative(); Module.fn(...)` returns expected result.
+- [ ] `pnpm next dev`: the page's C++ call returns, and the glue answers 200 at `/_crossbind/crossbind.js`.
+- [ ] `pnpm next build`: `.next/static/crossbind/` holds `crossbind.js` and `crossbind.wasm`.
+- [ ] `pnpm next start`: the same page works.
+- [ ] Both again with `--webpack`, if the project builds with webpack.
 
 ## Common pitfalls
 
-- **Forgetting `!isServer` guard.** Without it, the server-side build tries to bundle wasm and Next's RSC compiler complains.
-- **Using Turbopack.** Plugin doesn't run under Turbopack today. Disable `--turbo` or use the static-asset workaround.
-- **Static export (`output: 'export'`).** `headers()` doesn't apply; user must configure the host (Vercel, Netlify, S3, …).
-- **Mixing App Router + module-level `import` of the loader.** The loader fetches wasm at runtime; module-level top-level await may stall RSC. Init lazily inside a `useEffect` or async route handler.
-- **`next.config.ts` (TypeScript config).** Make sure `tsconfig.json` includes the right `module`/`moduleResolution` for ESM imports of `crossbind`.
-- **crossbind's dev server part does not apply.** Next manages its own dev server, which takes no webpack-dev-server options. Use Next's `headers()` callback for COOP/COEP and rely on Next's static asset serving for `/crossbind.wasm`.
+- **A server component calling C++.** Call it from a client component, `initNative()` in an effect.
+- **A new `cargo:` import or dependency header under `next dev` with Turbopack.** Turbopack takes them as the config
+  loads: restart `next dev`.
+- **The dev server opened by another host name than its own.** Next refuses its `/_next/*` resources to it (`127.0.0.1`
+  for a server on `localhost`): open the host it prints, or set `allowedDevOrigins`.
+- **Next 15 or older.** `crossbind(nextConfig)` needs Next 16: its build hook and its dev output folder.
+- **A C++ edit under `next dev`.** The glue links again as the page asks for it: reload the page.
+
+## Server vs client
+
+The Next integration builds the browser's wasm. A route handler or server component that needs C++ on the server uses a
+Node build instead: see `docs/playbooks/integration/nodejs.md`.
 
 ## Reference
 
-- No canonical Next.js example yet; the closest is `examples/web-react-rspack/` (a similar Webpack-based React setup).
-- Plugin: `extensions/webpack/src/plugin.js`.
-- Webpack/Rspack equivalent (with full devServer integration): `docs/playbooks/integration/webpack-rspack.md`.
+- Extension: `extensions/next/` (its README and AGENTS.md).
+- The e2e project: `e2e/web-next/`, Turbopack and webpack, dev and production.

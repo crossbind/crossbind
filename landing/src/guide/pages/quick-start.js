@@ -87,7 +87,7 @@ npm run dev`,
         { type: 'h2', id: 'existing-project', text: 'An existing project' },
         {
             type: 'p',
-            text: "Install crossbind and add `crossbind()` to your bundler's plugins. Vite is shown here; Webpack, Rspack and Rollup are on [Bundler plugins](/guide/bundler-plugins/), Metro on [React Native](/guide/react-native/#metro).",
+            text: "Install crossbind and add `crossbind()` to your bundler's plugins. Vite is shown here; Webpack, Rspack, Rsbuild, Rollup, esbuild, Bun and Next.js are on [Bundler plugins](/guide/bundler-plugins/), Metro on [React Native](/guide/react-native/#metro).",
         },
         { type: 'code', file: 'shell', code: installCommand(BRAND) },
         {
