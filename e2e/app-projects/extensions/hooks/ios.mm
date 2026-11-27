@@ -282,7 +282,12 @@ void pressIndicator(Call call) {
     if (ms > 0) {
         call.resolve();
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, static_cast<int64_t>(ms * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
-            press([](std::optional<std::string>) {});
+            // An armed press answers no step: what it refused is noted at the run's endpoint.
+            press([item](std::optional<std::string> failure) {
+                if (!failure) return;
+                const std::string noted = Value(Value::Object{{"event", "press"}, {"item", item}, {"failure", *failure}}).json();
+                crossbind::invoke("e2e-hooks.ask", Value::Object{{"path", "/report"}, {"body", noted}}, [](std::optional<std::string>, Value) {});
+            });
         });
         return;
     }
