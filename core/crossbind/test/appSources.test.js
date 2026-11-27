@@ -3,7 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 import upath from 'upath';
-import appSourceFiles, { isAppSource } from '../src/utils/appSources.js';
+import appSourceFiles, { appSourceImports, isAppSource } from '../src/utils/appSources.js';
 
 const project = path.join(path.sep, 'work', 'app');
 
@@ -116,6 +116,27 @@ describe('appSourceFiles', () => {
                 'node_modules/geo/index.js', 'node_modules/maps/index.js', 'node_modules/tiles/index.js',
                 'src/index.ts', 'src/trim.js', 'src/url.js',
             ]);
+        } finally { fs.rmSync(work, { recursive: true, force: true }); }
+    });
+
+    // A tool with no resolver crossbind can hook names each import ahead, so it takes the scan's imports, not a file's
+    // text: an import in a comment names nothing.
+    test("names what the app's sources import, once each, past comments and imports of types alone", () => {
+        const work = upath.normalize(fs.mkdtempSync(upath.join(os.tmpdir(), 'crossbind-app-imports-')));
+        try {
+            const sources = {
+                'package.json': JSON.stringify({ dependencies: { dep: '1' } }),
+                'src/main.ts': "import a from 'dep';\n// import { Gone } from 'cargo:gone';\n/* require('dep/old.h') */\nimport type { T } from 'types-only';\nconst util = require('./util.js');\nexport * from 'cargo:uuid';\n",
+                'src/util.js': "import 'dep/extra.h'; import a from 'dep';",
+                'node_modules/dep/package.json': JSON.stringify({ main: 'index.js' }),
+                'node_modules/dep/index.js': 'export { compress } from "zlib.h";',
+            };
+            for (const [relative, text] of Object.entries(sources)) {
+                const file = upath.join(work, relative);
+                fs.mkdirSync(upath.dirname(file), { recursive: true });
+                fs.writeFileSync(file, text);
+            }
+            expect(appSourceImports(work).sort()).toEqual(['./util.js', 'cargo:uuid', 'dep', 'dep/extra.h', 'zlib.h']);
         } finally { fs.rmSync(work, { recursive: true, force: true }); }
     });
 });

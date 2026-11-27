@@ -1781,8 +1781,10 @@ imports to make an api of its own, as its default export does, which Metro's tra
   turns. `outputs(target)`: its files, each `{ name, path, type, optional }`. `writeOutputs(target, dir)` copies them,
   and `serve(target, { link, isolate })` is a `(req, res, next)` middleware that serves them under any base.
 - `appSources()`, `nativeDirs()`, `nativeFiles()`, `rustPackages()`: what a watcher watches, and the Rust packages a
-  resolver maps to their crate roots. `changed(file)`: what a change means, null when nothing of crossbind's, else
-  the headers to bind again. `licenses(bundle, { root })`: the asset of the page's licenses, or null.
+  resolver maps to their crate roots. `appImports()`: what those sources import, each once, past comments and imports
+  of types alone, for a tool with no resolver to hook, which names each import ahead, as Next's Turbopack does.
+  `changed(file)`: what a change means, null when nothing of crossbind's, else the headers to bind again.
+  `licenses(bundle, { root })`: the asset of the page's licenses, or null.
 
 ## The api
 

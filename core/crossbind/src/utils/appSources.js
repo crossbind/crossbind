@@ -11,6 +11,7 @@ const IMPORT = /\b(?:from|import\s*\(?|require\s*\()\s*(['"])([^'"\n]+)\1/g;
 const LITERAL_OR_COMMENT = /"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`|(?<!\\)\/\*[\s\S]*?\*\/|(?<!\\)\/\/[^\n]*/g;
 const TYPES_ONLY = /\b(?:import|export)\s+type\s+(?:\{[^}]*\}|\*(?:\s+as\s+[\w$]+)?|[\w$]+)\s*from\s*(['"])[^'"\n]+\1/g;
 const loadingText = (text) => text.replace(LITERAL_OR_COMMENT, (match) => (match.startsWith('/') ? ' ' : match)).replace(TYPES_ONLY, ' ');
+const importsOf = (text) => [...loadingText(text).matchAll(IMPORT)].map(([, , specifier]) => specifier);
 const packageName = (specifier) => specifier.startsWith('@') ? specifier.split('/').slice(0, 2).join('/') : specifier.split('/')[0];
 
 function sourceFile(file) {
@@ -86,8 +87,7 @@ export default function appSourceFiles(projectDir) {
     for (let i = 0; i < files.length; i += 1) {
         const importer = files[i];
         const require = createRequire(importer);
-        const text = loadingText(fs.readFileSync(importer, 'utf8'));
-        for (const [, , specifier] of text.matchAll(IMPORT)) {
+        for (const specifier of importsOf(fs.readFileSync(importer, 'utf8'))) {
             const relative = specifier.startsWith('.');
             if (!relative && ownFiles.has(importer) && !Object.hasOwn(dependencies, packageName(specifier))) continue;
             const resolvedFiles = relative ? [] : dependencySources(specifier, importer);
@@ -104,6 +104,11 @@ export default function appSourceFiles(projectDir) {
         }
     }
     return files;
+}
+
+// What those sources import, each once, for a tool with no resolver crossbind can hook, which names each import ahead.
+export function appSourceImports(projectDir) {
+    return [...new Set(appSourceFiles(projectDir).flatMap((file) => importsOf(fs.readFileSync(file, 'utf8'))))];
 }
 
 // Whether a changed file is one of those sources.

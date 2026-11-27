@@ -10,7 +10,7 @@ import {
     appOutputName, appPlatform, buildProjectApp, emptyAppOutDir, publishApp,
 } from '../actions/buildApp.js';
 import isAppBuild from '../utils/appBuild.js';
-import appSourceFiles from '../utils/appSources.js';
+import appSourceFiles, { appSourceImports } from '../utils/appSources.js';
 import { findAppPageApi, resolveAppPageApi } from '../utils/resolveAppHost.js';
 import {
     PAGE_API_PATH, guardServer, previewGate, previewOf, previewSocketGate,
@@ -189,6 +189,8 @@ export default function integrationApi() {
         serve: (target, options) => serveOutputs(linker, target, options),
         // The names the app imports decide what a header binds, so a watcher transforms a header again after any of these.
         appSources: () => appSourceFiles(state.config.paths.project),
+        // What those sources import, past comments and imports of types alone, for a tool that names each import ahead.
+        appImports: () => appSourceImports(state.config.paths.project),
         nativeDirs: () => [...state.config.paths.native],
         nativeFiles: () => state.config.paths.native.filter((dir) => fs.existsSync(dir)).flatMap(filesUnder),
         rustPackages,
