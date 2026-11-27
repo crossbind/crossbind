@@ -9,6 +9,7 @@ import upath from 'upath';
 // `next dev`, as Next calls a config function with its phase.
 const { default: wrap } = await import('../../../extensions/next/src/wrap.js');
 const { default: nextExtension } = await import('../../../extensions/next/crossbind.extension.js');
+const { appSourceImports } = await import('../src/utils/appSources.js');
 
 const BUILD = 'phase-production-build';
 const DEV = 'phase-development-server';
@@ -41,9 +42,13 @@ function fakeApi({ runtime = 'st' } = {}) {
         workerModule: 'file:///crossbind/src/integration/api.js',
         ext: { header: ['h'], module: ['i'], source: ['cpp'] },
         rustPackages: () => [{ name: 'rusty', entry: upath.join(project, 'rusty', 'src', 'lib.rs') }],
-        appSources: () => [upath.join(project, 'app', 'page.jsx')],
+        appImports: () => appSourceImports(project),
         kindOf: (file) => (file.endsWith('.h') ? 'header' : null),
-        resolve: (request) => files[request] ?? null,
+        // As crossbind answers a `cargo:` import of a crate crossbind.config.js does not declare.
+        resolve: (request) => {
+            if (request === 'cargo:gone') throw new Error("crossbind: 'cargo:gone' is not declared - add 'gone' to packages.cargo in crossbind.config.");
+            return files[request] ?? null;
+        },
         isolationHeaders: ISOLATION,
         link: vi.fn(async () => {}),
         writeOutputs: vi.fn(),
@@ -111,6 +116,21 @@ describe('crossbind(nextConfig)', () => {
         await config.compiler.runAfterProductionCompile({ projectDir: project, distDir });
         expect(api.link).toHaveBeenCalledWith(release, { prepare: true, allBridges: true });
         expect(upath.normalize(api.writeOutputs.mock.calls[0][1])).toBe(upath.join(distDir, 'static', 'crossbind'));
+    });
+
+    test('names no file for an import in a comment, so one of a crate since taken out of the config stops nothing', async () => {
+        fs.appendFileSync(upath.join(project, 'app', 'page.jsx'), [
+            '',
+            "// import { Gone } from 'cargo:gone';",
+            "/* import { y } from 'dep/y.h'; */",
+        ].join('\n'));
+        const { api } = fakeApi();
+
+        const config = await wrap(api, {})(BUILD, {});
+
+        expect(config.turbopack.resolveAlias).toEqual({
+            'cargo:uuid': './.crossbind/rust-crates/uuid.rs', 'dep/x.h': './node_modules/dep/include/x.h', rusty: './rusty/src/lib.rs',
+        });
     });
 
     test("keeps the app's own rules, aliases, webpack hook, headers and after-compile step, and isolates a multithreaded page", async () => {

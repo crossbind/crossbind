@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import http from 'node:http';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -10,8 +9,6 @@ const DEV_SERVER = 'phase-development-server';
 const GLUE_DIR = ['static', 'crossbind'];
 // Where `next dev` asks for them, which a rewrite hands to crossbind's own server.
 const DEV_GLUE = '/_crossbind';
-// The specifier of each import and export a source makes.
-const IMPORTS = /(?:\bfrom\s*|\bimport\s*\(?\s*)['"]([^'"\n]+)['"]/g;
 
 const relativeTo = (root, file) => `./${path.relative(root, file).split(path.sep).join('/')}`;
 
@@ -23,11 +20,10 @@ function namedFiles(api, target) {
         ?? (request.startsWith('cargo:') || api.kindOf(request) === 'header' ? api.resolve(request, target) : null);
 }
 
-// Turbopack has no resolver crossbind can hook, so each such import becomes an alias, read from the app's sources as
-// Next loads the config.
+// Turbopack has no resolver crossbind can hook, so each such import the app's sources make becomes an alias as Next
+// loads the config.
 function aliasesOf(api, fileOf) {
-    const requests = new Set(api.appSources().flatMap((file) => [...fs.readFileSync(file, 'utf8').matchAll(IMPORTS)].map(([, request]) => request)));
-    return [...requests].flatMap((request) => {
+    return api.appImports().flatMap((request) => {
         if (request.startsWith('.') || request.startsWith('/')) return [];
         const file = fileOf(request);
         return file ? [[request, file]] : [];

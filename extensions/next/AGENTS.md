@@ -26,9 +26,9 @@
 - **Turbopack's loaders run in processes of their own**, with options that are plain JSON: the loader makes an api from
   `api.workerModule`, as Metro's transformer does. Turbopack waits 5 minutes for a loader's answer, so the loader only
   transforms; a slow first header in each process (the import scan) once made it time out.
-- **Turbopack has no resolver hook**: the aliases are read from the app's sources as Next loads the config, so a new
-  named import needs a restart under `next dev`. webpack reads `cargo:` and `conan:` as URL schemes before any alias,
-  which is why its hook replaces requests instead.
+- **Turbopack has no resolver hook**: the aliases are read from `api.appImports()` as Next loads the config, so a new
+  named import needs a restart under `next dev`, and an import in a comment names nothing. webpack reads `cargo:` and
+  `conan:` as URL schemes before any alias, which is why its hook replaces requests instead.
 - **The glue is at the module's base, not webpack's public path** (`transform(…, { atBase: true })`): Next serves only
   its chunks under `/_next/`, and the static files under `/_next/static`.
 - **Links run after transforms**: a loader that linked while other loader processes still wrote `cargo:` bridge crates
