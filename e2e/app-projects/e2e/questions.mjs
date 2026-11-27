@@ -348,11 +348,11 @@ export function questionsOn({
             adbShell('input', 'tap', ...centerOf(node));
         },
         // The keys and closes its user may try, each a way out the question must not take, where the run can send
-        // them: Escape's command on macOS, through the fixture's hook; Escape on Linux; Back and Escape on Android;
+        // them: Escape on macOS, through the fixture's hook; Escape on Linux; Back and Escape on Android;
         // Escape's command and the window's close on Windows. None on iOS.
         waysOut(role) {
             const ways = {
-                macos: { "Escape's command": () => byPage(role, { do: 'cancel' }) },
+                macos: { Escape: () => byPage(role, { do: 'cancel' }) },
                 linux: { Escape: () => keyToLinuxDialog(appTitle, 'Escape') },
                 android: { Back: () => adbShell('input', 'keyevent', 'KEYCODE_BACK'), Escape: () => adbShell('input', 'keyevent', 'KEYCODE_ESCAPE') },
                 windows: { "Escape's command": () => windows('escape'), 'the close': () => windows('close') },

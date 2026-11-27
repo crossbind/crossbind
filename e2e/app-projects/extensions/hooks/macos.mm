@@ -1,6 +1,6 @@
 // The sheet of the app's window, as its user reads it, and its buttons pressed as its user's click: the run's way to the
 // preview extension's question on macOS. A sheet takes keys only while its app is in front, which a run's app standing
-// behind another's is not, so the run reads the keys its buttons take and sends Escape's command itself.
+// behind another's is not, so the run reads the keys its buttons take and sends Escape's key through the app itself.
 #include "crossbind/extension.h"
 
 #import <AppKit/AppKit.h>
@@ -98,15 +98,25 @@ void endSheet(Call call) {
     });
 }
 
-// Escape's command, which AppKit sends along the responders of the sheet when none of its buttons takes Escape.
+// Escape, as the app takes its user's key: the event of its key pressed in the sheet, sent through the app.
 void cancelInQuestion(Call call) {
     crossbind::onMainThread([call] {
         NSWindow *sheet = sheetUp();
         if (!sheet) {
-            call.reject("crossbind e2e: no sheet is up for Escape's command");
+            call.reject("crossbind e2e: no sheet is up for Escape");
             return;
         }
-        [(sheet.firstResponder ?: sheet) tryToPerform:@selector(cancelOperation:) with:nil];
+        NSEvent *escape = [NSEvent keyEventWithType:NSEventTypeKeyDown
+                                           location:NSZeroPoint
+                                      modifierFlags:0
+                                          timestamp:NSProcessInfo.processInfo.systemUptime
+                                       windowNumber:sheet.windowNumber
+                                            context:nil
+                                         characters:@"\x1b"
+                        charactersIgnoringModifiers:@"\x1b"
+                                          isARepeat:NO
+                                            keyCode:53];
+        [NSApp sendEvent:escape];
         call.resolve();
     });
 }

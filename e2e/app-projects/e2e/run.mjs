@@ -13,6 +13,7 @@ import config from '../crossbind.config.mjs';
 import {
     ACCOUNTS, CLI_TOKEN, COMPILED, gateToken, newId, newKey, sessionAnswer, standInCloud, standInSource,
 } from './cloud.mjs';
+import { checkClearing } from './clearing.mjs';
 import { checkConsents } from './consents.mjs';
 import { checkIndicator } from './indicator.mjs';
 import { checkPermissions } from './permissions.mjs';
@@ -30,7 +31,7 @@ import {
 // preview's terminal, as phase 2's checks read them. With CROSSBIND_APP_PLATFORM=ios the app opens in the Simulator,
 // with android on the attached device.
 //   node e2e/run.mjs
-const RUN_TIMEOUT_MS = 900000;
+const RUN_TIMEOUT_MS = 1500000;
 const START_MS = 300000;
 const LOAD_MS = 180000;
 const HOT_MS = 5000;
@@ -443,18 +444,20 @@ const stepsFiles = () => ({
     'inline.mp4': readFileSync(join(repository, 'e2e', 'desktop-app', 'public', 'inline.mp4')),
 });
 
-// A project of this name, served by a server of the run's own, whose page takes the project's steps alone: at its
-// origin's name and URL.
-async function stepsProject(address, projectName) {
-    const files = Object.fromEntries(Object.entries(stepsFiles()).map(([path, body]) => [`/${path}`, body]));
-    const { session } = await listedSource(address, { project: { id: newId(), name: projectName } }, asPreview(), files);
+// A project of this name, served by a server of the run's own, whose page takes the project's steps alone, with these
+// files of its own beside them: at its origin's name and URL, with what its source was asked.
+async function stepsProject(address, projectName, extra = {}) {
+    const files = Object.fromEntries(Object.entries({ ...stepsFiles(), ...extra }).map(([path, body]) => [`/${path}`, body]));
+    const { session, source } = await listedSource(address, { project: { id: newId(), name: projectName } }, asPreview(), files);
     const origin = originName(ACCOUNTS.main, session.project.id);
-    return { session, origin, url: originUrl(origin) };
+    return {
+        session, origin, url: originUrl(origin), asked: source.asked,
+    };
 }
 
 // A snapshot of a project of this name, of the same steps page, which the stand-in's snapshot host serves.
-function stepsSnapshot(projectName) {
-    const session = cloud.snapshot(ACCOUNTS.main, { id: newId(), name: projectName }, stepsFiles());
+function stepsSnapshot(projectName, extra = {}) {
+    const session = cloud.snapshot(ACCOUNTS.main, { id: newId(), name: projectName }, { ...stepsFiles(), ...extra });
     const origin = originName(ACCOUNTS.main, session.project.id);
     return { session, origin, url: originUrl(origin) };
 }
@@ -1094,6 +1097,25 @@ async function flow() {
         appPid: () => opened.child.pid,
         appTitle: config.app.name,
     });
+    // What the preview's menu and the app's page clear of what a project keeps, and what Settings calls.
+    const clearing = await checkClearing({
+        platform: devicePlatform,
+        endpoint,
+        app,
+        openSession,
+        closePreview,
+        stepsProject: (projectName, extra) => stepsProject(address, projectName, extra),
+        stepsSnapshot,
+        cloud,
+        signIn: () => signIn(ACCOUNTS.main, NUMBER),
+        returnToFront,
+        device,
+        adb: adbPath,
+        applicationId: () => applicationIdOf(builtForDevice),
+        appPid: () => opened.child.pid,
+        appTitle: config.app.name,
+        accountName: ACCOUNTS.main.name,
+    });
     // A file input's picker closes as its page goes, where the host shows it.
     const pickers = await checkPickers({
         platform: devicePlatform,
@@ -1120,7 +1142,7 @@ async function flow() {
     const dependency = await checkOptimizedDependency(source, gateToken(dev.key));
     const secrets = checkSecrets();
     console.log(`PROJECTS CHECKS ${JSON.stringify({
-        platform: devicePlatform, keyring, stops, ownClipboard, first, consents, indicator, permissions, pickers, ranges, other, dependency, secrets,
+        platform: devicePlatform, keyring, stops, ownClipboard, first, consents, indicator, permissions, clearing, pickers, ranges, other, dependency, secrets,
     })}`);
     console.log(`TIMING a JavaScript edit to the page: ${first.js} ms`);
     console.log(`ok: ${devicePlatform} projects of e2e/app-projects`);

@@ -1,9 +1,10 @@
 import { createServer } from 'node:http';
 
 // The run's endpoint, which the fixture's hooks ask on the device's loopback: a page's next step, held until the run
-// has one, and the report of each. A page that went with its ask held, as a closed app's, takes no step. What the pages
-// report besides their steps' answers are notes: each load, and the links and ends the extension held. Every report is
-// kept, so that the run can read all that a page got.
+// has one, and the report of each, by the page's role, and of a desktop's second window as app2 and project2. A page
+// that went with its ask held, as a closed app's, takes no step. What the pages report besides their steps' answers are
+// notes: each load, and the links, the ends and the clearings the extension held. Every report is kept, so that the run
+// can read all that a page got.
 export const STEP_MS = 60000;
 const HOLD_MS = 30000;
 // Longer than a device keeps an idle connection for its next request, Android's five minutes: one the server closed
@@ -20,9 +21,16 @@ function bodyText(asked) {
 
 const hand = (answer, step) => answer.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(step));
 
+const ROLE = /^(app|project)\d*$/;
+
 export async function serveEndpoint(port) {
-    const queues = { app: [], project: [] };
-    const askers = { app: [], project: [] };
+    const queues = {};
+    const askers = {};
+    const queueOf = (role) => {
+        queues[role] ??= [];
+        askers[role] ??= [];
+        return queues[role];
+    };
     const answers = new Map();
     const notes = [];
     const reports = [];
@@ -30,7 +38,7 @@ export async function serveEndpoint(port) {
     let steps = 0;
 
     function nextStep(role, answer) {
-        const step = queues[role].shift();
+        const step = queueOf(role).shift();
         if (step) {
             hand(answer, step);
             return;
@@ -67,7 +75,7 @@ export async function serveEndpoint(port) {
 
     const server = createServer(async (asked, answer) => {
         const url = new URL(asked.url, 'http://run');
-        const role = url.searchParams.get('role') === 'project' ? 'project' : 'app';
+        const role = ROLE.test(url.searchParams.get('role') ?? '') ? url.searchParams.get('role') : 'app';
         if (url.pathname === '/next' && asked.method === 'GET') {
             nextStep(role, answer);
             return;
@@ -97,12 +105,13 @@ export async function serveEndpoint(port) {
                 done(body);
             });
         });
+        const queue = queueOf(role);
         const asker = askers[role].shift();
         if (asker) {
             clearTimeout(asker.timer);
             hand(asker.answer, given);
         } else {
-            queues[role].push(given);
+            queue.push(given);
         }
         return report;
     }

@@ -202,16 +202,16 @@ export function menuWords(platform, menu) {
     if (platform === 'android') return { name: menu?.texts[0], line: menu?.texts[1], items: menu?.items };
     const items = (menu ?? []).filter((item) => !item.separator);
     if (platform === 'windows') {
-        const [reload, name, line, permissions, close] = items;
-        return { name: name?.words, line: line?.words, items: [reload?.words, permissions?.words, close?.words] };
+        const [reload, name, line, permissions, clear, close] = items;
+        return { name: name?.words, line: line?.words, items: [reload?.words, permissions?.words, clear?.words, close?.words] };
     }
-    const [reload, both, permissions, close] = items;
+    const [reload, both, permissions, clear, close] = items;
     const [name, line] = (both?.words ?? '').split('\n');
-    return { name, line, items: [reload?.words, permissions?.words, close?.words] };
+    return { name, line, items: [reload?.words, permissions?.words, clear?.words, close?.words] };
 }
 
 // The menu's items, in 7.3's order: Permissions is a submenu on a desktop, and opens a surface of its own on a phone.
-export const itemsOn = (platform) => ['Reload', ['macos', 'windows', 'linux'].includes(platform) ? 'Permissions' : 'Permissions…', 'Close preview'];
+export const itemsOn = (platform) => ['Reload', ['macos', 'windows', 'linux'].includes(platform) ? 'Permissions' : 'Permissions…', "Clear this project's data…", 'Close preview'];
 
 export async function checkIndicator(run) {
     const {

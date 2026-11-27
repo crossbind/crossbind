@@ -1,7 +1,7 @@
 // The fixture's page, of the role app: it takes each step from e2e/run.mjs through the fixture's hooks, does it with the
-// preview extension's functions as the crossbind app's own page will, and reports what each answered, and the links and
-// the ends the extension holds for it as they come. A step that opens a preview goes to its origin once reported; the
-// page loads again as the preview ends.
+// preview extension's functions as the crossbind app's own page will, and reports what each answered, and the links, the
+// ends and the clearings the extension holds for it as they come. A step that opens a preview or goes to a page goes once
+// reported, and one that clears a project's data is reported as it is asked; the page loads again as the preview ends.
 import '/crossbind.js';
 import { events, invoke } from 'crossbind/app';
 import { preview } from '@crossbind/extension-preview';
@@ -10,6 +10,8 @@ import {
 } from '../../app-preview/src/project-steps.js';
 
 const DIALOG = "crossbind e2e: the app's own dialog, after a preview";
+// The first page of a served origin, the one URL a step sends the page to.
+const SERVED = /^(crossbind:\/\/[0-9a-f]{32}\/|http:\/\/[0-9a-f]{32}\.localhost\/)$/;
 
 const failure = (error) => `${error?.message ?? error}`;
 const outcome = (promise) => promise.then((value) => ({ value: value ?? null }), (error) => ({ error: failure(error) }));
@@ -86,6 +88,11 @@ const STEPS = {
     dialog,
     compile: ({ files, packages }) => preview.compile({ files, packages }),
     remove: ({ session }) => preview.removeSnapshot(session),
+    projects: () => preview.projects(),
+    takeBack: ({ project, kind }) => preview.takeBack(project, kind),
+    // A second window of the app's, on a desktop, whose page takes the steps of the roles app2 and project2; and this
+    // page's own window closed.
+    openWindow: () => invoke('windows.open', { path: '/index.html' }),
     handLink: ({ url }) => invoke('e2e-hooks.handLink', { url }),
     breakKey: () => invoke('e2e-hooks.breakKey'),
     allow: ({ path }) => invoke('e2e-hooks.allow', { path }),
@@ -115,7 +122,10 @@ async function run() {
     await globalThis.Crossbind.initNative();
     events.on('preview.link', (link) => ask('/report', { event: 'link', link }));
     events.on('preview.ended', (ended) => ask('/report', { event: 'ended', ended }));
-    await ask('/report', { loaded: location.origin, links: await preview.links(), ended: await preview.ended() });
+    events.on('preview.cleared', (cleared) => ask('/report', { event: 'cleared', cleared }));
+    await ask('/report', {
+        loaded: location.origin, links: await preview.links(), ended: await preview.ended(), cleared: await preview.cleared(),
+    });
     for (;;) {
         const step = await ask('/next');
         if (step.do === 'wait') continue;
@@ -123,6 +133,21 @@ async function run() {
         // The page takes no next step, as Back its user presses, on Android, may move it.
         if (step.do === 'stop') {
             await ask('/report', { id: step.id, value: 'stopped' });
+            return;
+        }
+        // The page goes as a project's clearing begins, or as it goes to a page or closes its window: the step reported
+        // first; a clearing refused noted, the page staying.
+        if (step.do === 'clearData') {
+            await ask('/report', { id: step.id, value: 'asked' });
+            const asked = await outcome(preview.clearData(step.project));
+            if (asked.error === undefined) return;
+            await ask('/report', { event: 'clearData', error: asked.error });
+            continue;
+        }
+        if (step.do === 'go' || step.do === 'closeWindow') {
+            await ask('/report', { id: step.id, value: 'going' });
+            if (step.do !== 'go') await invoke('windows.close');
+            else if (SERVED.test(step.url)) location.href = step.url;
             return;
         }
         const result = await outcome(STEPS[step.do](step));

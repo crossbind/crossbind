@@ -61,6 +61,67 @@ export async function storage({ run, marks, mark }) {
     return { origin: location.origin, seen };
 }
 
+// What a clearing removes: a mark in each of the origin's stores, and whether each took it, or why not.
+async function fill({ mark }) {
+    const name = `e2e-${mark}`;
+    const filled = {};
+    const tried = async (store, work) => {
+        filled[store] = await Promise.resolve().then(work).then(() => true, (error) => failure(error));
+    };
+    await tried('localStorage', () => localStorage.setItem(name, mark));
+    await tried('sessionStorage', () => sessionStorage.setItem(name, mark));
+    await tried('indexedDB', () => makeDatabase(name));
+    await tried('opfs', async () => (await navigator.storage.getDirectory()).getFileHandle(name, { create: true }));
+    await tried('caches', async () => (await caches.open(name)).put('/e2e-cached', new Response(mark)));
+    await tried('cookies', () => {
+        document.cookie = `${name}=${mark}; max-age=86400; path=/`;
+        if (!document.cookie.split(';').some((pair) => pair.trim().startsWith(`${name}=`))) throw new Error('no cookie kept');
+    });
+    return filled;
+}
+
+// Which of the marks each store holds, 'absent' where the origin has no such store, and the service workers
+// registered at the origin.
+async function stores({ marks }) {
+    const held = (look) => Promise.resolve().then(look).catch(() => 'absent');
+    const seen = {};
+    for (const mark of marks) {
+        const name = `e2e-${mark}`;
+        seen[mark] = {
+            localStorage: await held(() => localStorage.getItem(name) === mark),
+            sessionStorage: await held(() => sessionStorage.getItem(name) === mark),
+            indexedDB: await held(() => hasDatabase(name)),
+            opfs: await held(async () => (await navigator.storage.getDirectory()).getFileHandle(name).then(() => true, () => false)),
+            caches: await held(() => caches.has(name)),
+            cookies: document.cookie.split(';').some((pair) => pair.trim().startsWith(`${name}=`)),
+        };
+    }
+    const workers = await held(async () => (await navigator.serviceWorker.getRegistrations()).length);
+    return { origin: location.origin, seen, workers };
+}
+
+// A service worker of the project's that answers every path, its cache filled: whether it registered and took the
+// page, or why not.
+async function worker() {
+    if (!navigator.serviceWorker) return 'no navigator.serviceWorker';
+    try {
+        await navigator.serviceWorker.register('/e2e-worker.js', { scope: '/' });
+        await Promise.race([navigator.serviceWorker.ready, sleep(STAYED_MS * 3).then(() => Promise.reject(new Error('not ready')))]);
+        return 'registered';
+    } catch (error) {
+        return failure(error);
+    }
+}
+
+// A database a worker of the page's opens and holds, closing it on no one's word: what it said once it held it.
+function holdDatabase() {
+    globalThis.e2eHolder = new Worker('/e2e-database-worker.js');
+    return new Promise((resolve) => {
+        globalThis.e2eHolder.onmessage = (event) => resolve(event.data);
+        globalThis.e2eHolder.onerror = (event) => resolve(`failed: ${event.message}`);
+    });
+}
+
 // A message dialog asked: 'shown' where its call waits for its user, else what it answered at once.
 export async function shownDialog(invoke, message, signal) {
     const shown = outcome(invoke('dialog.message', { message }, signal ? { signal } : {}));
@@ -237,6 +298,10 @@ export async function runSteps(invoke, api) {
         picked: (step) => picked(step, invoke),
         throughModule: (step) => throughModule(step, api),
         storage,
+        fill,
+        stores,
+        worker,
+        holdDatabase,
         range,
         fetched,
         request: (step) => request(step, invoke, (body) => ask('/report', body)),
@@ -273,6 +338,8 @@ export async function runSteps(invoke, api) {
         gesture: ({ script }) => invoke('e2e-hooks.gesture', { script }),
         fillScreen: () => invoke('e2e-hooks.fillScreen'),
         cycleActive: () => invoke('e2e-hooks.cycleActive'),
+        signOut: () => invoke('e2e-hooks.signOut'),
+        tryOpen: ({ session }) => invoke('e2e-hooks.tryOpen', { session }),
         title: async ({ text }) => {
             document.title = text;
             return document.title;
