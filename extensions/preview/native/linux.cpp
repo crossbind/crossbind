@@ -373,6 +373,8 @@ void reloadWindow(uint64_t window) {
 void loadWindow(uint64_t window, const std::string &url) {
     crossbind::onMainThread([window, url] {
         const std::optional<crossbind::Window> open = window != 0 ? crossbind::windowOf(window) : std::nullopt;
+        // A window that is gone loads nothing, and the clearing ends by its time.
+        if (window != 0 && !open) return;
         void *web = open ? open->webView() : crossbind::appWebView();
         if (web) webkit_web_view_load_uri(WEBKIT_WEB_VIEW(web), url.c_str());
     });

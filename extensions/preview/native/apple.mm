@@ -773,6 +773,8 @@ void reloadWindow(uint64_t window) {
 void loadWindow(uint64_t window, const std::string &url) {
     crossbind::onMainThread([window, url] {
         const std::optional<crossbind::Window> open = window != 0 ? crossbind::windowOf(window) : std::nullopt;
+        // A window that is gone loads nothing, and the clearing ends by its time.
+        if (window != 0 && !open) return;
         WKWebView *web = (__bridge WKWebView *)(open ? open->webView() : crossbind::appWebView());
         NSURL *address = [NSURL URLWithString:stringOf(url)];
         if (web && address) [web loadRequest:[NSURLRequest requestWithURL:address]];

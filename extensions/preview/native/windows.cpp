@@ -434,6 +434,8 @@ void reloadWindow(uint64_t window) {
 
 void loadWindow(uint64_t window, const std::string &url) {
     crossbind::onMainThread([window, url] {
+        // A window that is gone loads nothing, and the clearing ends by its time.
+        if (window != 0 && !crossbind::windowOf(window)) return;
         ICoreWebView2 *core = coreOf(window);
         if (!core) return;
         core->Navigate(wide(url).c_str());
