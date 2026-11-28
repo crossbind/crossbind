@@ -69,6 +69,12 @@ gets what the host's own give it: the devices `app.permissions` lists, the clipb
 the paths of the files dropped on it. A project's page gets no path of a drop: its page's own `drop` event keeps the
 dropped files. A page of no role gets nothing.
 
+A preview runs no service worker. On macOS, iOS and Linux the web view refuses one at `crossbind://`, and Android's
+registration fails by itself; on Windows the extension answers the request for a worker's script, which says what it is
+(`Service-Worker: script`), with 404, and asks its source nothing, so `navigator.serviceWorker.register()` rejects there
+too. The same file asked as a script or a fetch is served as any other.
+A project tries its worker with `crossbind app dev`, or as a built app.
+
 A project's page asks its user before it uses the camera, the microphone or the location, each of them one the app's
 `app.permissions` lists, at the app's own question: "Allow “made-up-app” to use the camera? It is a preview of your
 project. You can change this in the preview's menu.", with Don't Allow, its default, and Allow. The name is the

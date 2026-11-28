@@ -490,8 +490,15 @@ void check(Call call) {
     });
 }
 
-// The origin's requests: under the prefix the clearing's alone, and the proxy's while no clearing of the origin runs.
+// A preview registers no service worker: the request for a worker's script, which says what it is with
+// Service-Worker: script, is answered 404, its source asked nothing; the same file asked as a script or a fetch is the
+// project's as any other.
+bool isWorkerScript(const Request &request) { return request.header("Service-Worker") == "script"; }
+
+// The origin's requests: a worker's script refused, under the prefix the clearing's alone, and the proxy's while no
+// clearing of the origin runs.
 void answerOrigin(const std::string &name, const std::shared_ptr<Proxy> &proxy, Request request) {
+    if (isWorkerScript(request)) return request.respond(404);
     if (isClearingPath(request.path())) return answerClearing(name, std::move(request));
     if (isClearing(name)) return request.respond(404);
     proxy->answer(std::move(request));
