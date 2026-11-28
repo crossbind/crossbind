@@ -189,7 +189,8 @@ export async function checkClearing(run) {
     await closePreview();
     await openSession(snapshot.session, snapshot.origin);
     report.filled = await step('project', { do: 'fill', mark: 'cleared' });
-    report.worker = await step('project', { do: 'worker' });
+    // The spike: no worker of the project's on Windows.
+    report.worker = platform === 'windows' ? 'not registered on Windows: the spike' : await step('project', { do: 'worker' });
     await answerCamera(SNAPSHOT, 'Allow');
     const before = await stores(['cleared']);
     report.workers = before.workers;
