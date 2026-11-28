@@ -1938,7 +1938,9 @@ The host's core does what every extension stands on, and no extension takes its 
   ([known issues](../known-issues.md)).
   On Android and Windows every `http://<label>.localhost/` on port 80 is the host's, in every app, served or not, which
   keeps an ended origin's requests from the machine's port 80: a page that asks a local server of such a name gets the
-  host's 404, and one of another port, as `http://<label>.localhost:5173/`, goes to the network.
+  host's 404, and one of another port, as `http://<label>.localhost:5173/`, goes to the network. On Windows a service
+  worker's check for an update of its script is the exception, which WebView2 does not hand the host
+  ([known issues](../known-issues.md)).
 - **Routes** answer whole, with a body or a file, as WebView2 reads a response only once all of it is there, and take
   GET and HEAD alone, as Android's WebView gives no request's body: a stream goes as a call's messages, and what the
   page sends as a call's options.
