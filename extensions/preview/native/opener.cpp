@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cstdio>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -492,6 +493,11 @@ void check(Call call) {
 
 // The origin's requests: under the prefix the clearing's alone, and the proxy's while no clearing of the origin runs.
 void answerOrigin(const std::string &name, const std::shared_ptr<Proxy> &proxy, Request request) {
+    // The spike: what a request for a worker's script carries.
+    if (request.path().find("worker") != std::string::npos || !request.header("Service-Worker").empty() || request.header("Sec-Fetch-Dest") == "serviceworker") {
+        std::fprintf(stderr, "SPIKE request %s %s Service-Worker=\"%s\" Sec-Fetch-Dest=\"%s\" Sec-Fetch-Mode=\"%s\"\n", request.method().c_str(), request.path().c_str(),
+            request.header("Service-Worker").c_str(), request.header("Sec-Fetch-Dest").c_str(), request.header("Sec-Fetch-Mode").c_str());
+    }
     if (isClearingPath(request.path())) return answerClearing(name, std::move(request));
     if (isClearing(name)) return request.respond(404);
     proxy->answer(std::move(request));

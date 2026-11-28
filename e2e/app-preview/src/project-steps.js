@@ -107,6 +107,10 @@ async function worker() {
     try {
         await navigator.serviceWorker.register('/e2e-worker.js', { scope: '/' });
         await Promise.race([navigator.serviceWorker.ready, sleep(STAYED_MS * 3).then(() => Promise.reject(new Error('not ready')))]);
+        // The spike: an update's check of the script, and the words of a registration whose script answers 404.
+        const updated = await outcome((await navigator.serviceWorker.getRegistration('/')).update().then(() => 'updated'));
+        const missing = await outcome(navigator.serviceWorker.register('/e2e-missing-worker.js', { scope: '/e2e-missing/' }));
+        console.log(`SPIKE update ${JSON.stringify(updated)} missing ${JSON.stringify(missing)}`);
         return 'registered';
     } catch (error) {
         return failure(error);
@@ -138,6 +142,17 @@ async function range({ path, asked }) {
 async function fetched({ path }) {
     const answer = await fetch(path, { cache: 'no-store' });
     return { status: answer.status, text: await answer.text() };
+}
+
+// A file of the project's loaded as the page's classic script: whether it loaded.
+function script({ path }) {
+    return new Promise((resolve) => {
+        const element = document.createElement('script');
+        element.src = path;
+        element.onload = () => resolve('loaded');
+        element.onerror = () => resolve('failed');
+        document.head.append(element);
+    });
 }
 
 // What each of these functions answers the page that calls it itself, past its crossbind/app, with options none of them
@@ -304,6 +319,7 @@ export async function runSteps(invoke, api) {
         holdDatabase,
         range,
         fetched,
+        script,
         request: (step) => request(step, invoke, (body) => ask('/report', body)),
         question: () => invoke('e2e-hooks.question'),
         press: ({ button, words, ms }) => invoke('e2e-hooks.press', { button, words, ms }),
