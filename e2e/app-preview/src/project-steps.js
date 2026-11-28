@@ -140,6 +140,17 @@ async function fetched({ path }) {
     return { status: answer.status, text: await answer.text() };
 }
 
+// A file of the project's loaded as the page's classic script: whether it loaded.
+function script({ path }) {
+    return new Promise((resolve) => {
+        const element = document.createElement('script');
+        element.src = path;
+        element.onload = () => resolve('loaded');
+        element.onerror = () => resolve('failed');
+        document.head.append(element);
+    });
+}
+
 // What each of these functions answers the page that calls it itself, past its crossbind/app, with options none of them
 // takes, so that one that runs fails as it reads them; on a phone after the page put a text of its own on the clipboard,
 // which a read of it gives back without the system asking its user.
@@ -304,6 +315,7 @@ export async function runSteps(invoke, api) {
         holdDatabase,
         range,
         fetched,
+        script,
         request: (step) => request(step, invoke, (body) => ask('/report', body)),
         question: () => invoke('e2e-hooks.question'),
         press: ({ button, words, ms }) => invoke('e2e-hooks.press', { button, words, ms }),

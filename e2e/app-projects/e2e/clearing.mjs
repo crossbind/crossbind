@@ -39,6 +39,16 @@ const HELD = 'e2e held project';
 const DELETED = 'e2e project of the account deleted';
 // The origin of an entry of another account's, written into the note.
 const OTHER_ORIGIN = '0123456789abcdef0123456789abcdef';
+// How each platform refuses a project's service worker: WebKit at crossbind://, Android's WebView as it fetches the
+// script, and Windows at the extension's 404 for a worker's script.
+const AT_OWN_SCHEME = /^TypeError: serviceWorker\.register\(\) must be called with a script URL whose protocol is either HTTP or HTTPS$/;
+const WORKER_REFUSALS = {
+    macos: AT_OWN_SCHEME,
+    linux: AT_OWN_SCHEME,
+    ios: /^no navigator\.serviceWorker$/,
+    android: /^TypeError: Failed to register a ServiceWorker for scope .*: An unknown error occurred when fetching the script\.$/,
+    windows: /^TypeError: Failed to register a ServiceWorker for scope .*: A bad HTTP response code \(404\) was received when fetching the script\.$/,
+};
 
 // A service worker of the project's that answers every path, the steps page's own files through and any other with a page
 // of its own, its cache filled as it installs; a worker that holds a database open, closing it on no one's word; and a
@@ -189,7 +199,17 @@ export async function checkClearing(run) {
     await closePreview();
     await openSession(snapshot.session, snapshot.origin);
     report.filled = await step('project', { do: 'fill', mark: 'cleared' });
+    // A preview registers no service worker: each platform refuses the project's in its own words, and its source is
+    // asked nothing; the worker's file is the project's all the same, to a page that asks for it as a fetch or a script.
+    const workerFetches = () => cloud.calls.filter((call) => call.host === 'snapshots' && call.call === `GET /${snapshot.session.id}/e2e-worker.js`).length;
+    const fetchesBefore = workerFetches();
     report.worker = await step('project', { do: 'worker' });
+    expect(WORKER_REFUSALS[platform].test(report.worker) && workerFetches() === fetchesBefore,
+        `the project's service worker on ${platform} answered ${report.worker}, its source asked for it ${workerFetches() - fetchesBefore} times`);
+    const workerFile = await step('project', { do: 'fetched', path: '/e2e-worker.js' });
+    const workerScript = await step('project', { do: 'script', path: '/e2e-worker.js' });
+    expect(workerFile.status === 200 && workerFile.text === CLEARING_FILES['e2e-worker.js'] && workerScript === 'loaded',
+        `the worker's file asked as a fetch and as a script got ${JSON.stringify({ status: workerFile.status, script: workerScript })}`);
     await answerCamera(SNAPSHOT, 'Allow');
     const before = await stores(['cleared']);
     report.workers = before.workers;
