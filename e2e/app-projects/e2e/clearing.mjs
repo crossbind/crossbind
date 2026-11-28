@@ -129,15 +129,15 @@ export async function checkClearing(run) {
     }
 
     // The menu's Clear this project's data…, which brings its question up and leaves the page: pressed at once where the
-    // hooks press it, as an armed press is one the page takes no step after. On Windows, as the dialog will hold every
-    // answer to the page, from outside where the page will go meanwhile, the page taking no next step first.
+    // hooks press it, as an armed press is one the page takes no step after. On Windows from outside, as the dialog holds
+    // every answer to the page until it closes, the page taking no next step first where it will go meanwhile.
     async function pressMenu({ isLeaving = false } = {}) {
         if (platform === 'android') {
             await indicators.press('project', CLEAR, 0, !isLeaving);
             return;
         }
-        if (platform === 'windows' && isLeaving) {
-            await step('project', { do: 'stop' });
+        if (platform === 'windows') {
+            if (isLeaving) await step('project', { do: 'stop' });
             await questions.pressMenu(CLEAR);
             return;
         }

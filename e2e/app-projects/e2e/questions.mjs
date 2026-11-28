@@ -298,7 +298,9 @@ export function questionsOn({
                     const ready = await powerShell.next(COMPILE_MS);
                     if (ready !== 'ready') throw new Error(`began with ${ready}`);
                 }
-                powerShell.child.stdin.write(`${JSON.stringify({ mode, button, process: appPid(), title: appTitle })}\n`);
+                // In ASCII alone, as Windows PowerShell reads its input in the console's code page.
+                const line = JSON.stringify({ mode, button, process: appPid(), title: appTitle }).replace(/[^\x20-\x7e]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+                powerShell.child.stdin.write(`${line}\n`);
                 return JSON.parse(await powerShell.next(TOOL_MS));
             } catch (error) {
                 powerShell?.child.kill();
