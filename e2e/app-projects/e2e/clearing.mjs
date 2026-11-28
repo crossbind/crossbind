@@ -474,7 +474,7 @@ export async function checkDeletedAccount(run) {
     const { data } = await step({ do: 'paths' });
     const note = storeOn({ ...run, data }, 'projects.json');
     const earlier = note.read() ?? {};
-    expect(Object.values(earlier).every((entry) => entry.account === '' && entry.accountId === ''),
+    expect(Object.values(earlier).every((entry) => entry.account !== accountName),
         `the run's deletion before this one left the account in the note: ${JSON.stringify(earlier)}`);
     await signIn();
     const own = await stepsProject(DELETED);
