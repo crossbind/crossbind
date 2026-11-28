@@ -1149,6 +1149,9 @@ async function flow() {
         accountName: ACCOUNTS.main.name,
         otherAccount: ACCOUNTS.other,
         signIn: () => signIn(ACCOUNTS.main, NUMBER),
+        openSession,
+        closePreview,
+        stepsProject: (projectName) => stepsProject(address, projectName),
     });
     const secrets = checkSecrets();
     console.log(`PROJECTS CHECKS ${JSON.stringify({

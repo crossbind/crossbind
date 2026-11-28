@@ -36,6 +36,7 @@ const SNAPSHOT = 'e2e cleared snapshot';
 const KEPT = 'e2e kept project';
 const IDLE = 'e2e idle project';
 const HELD = 'e2e held project';
+const DELETED = 'e2e project of the account deleted';
 // The origin of an entry of another account's, written into the note.
 const OTHER_ORIGIN = '0123456789abcdef0123456789abcdef';
 
@@ -459,10 +460,11 @@ export async function checkClearing(run) {
 
 // The note after the account's deletion: each of its entries keeps its project and its snapshots and reads no account,
 // in the file and in preview.projects(); another account's entry keeps its own; and a sign-out before it changed none.
+// The run's deletion before it took the account out of every entry noted then, so a project of its own is noted first.
 // Last of the run, as the deletion takes the account's sessions with it.
 export async function checkDeletedAccount(run) {
     const {
-        endpoint, accountName, otherAccount, signIn,
+        endpoint, accountName, otherAccount, signIn, openSession, closePreview, stepsProject,
     } = run;
     const step = async (what) => {
         const answered = await endpoint.step('app', what);
@@ -471,9 +473,16 @@ export async function checkDeletedAccount(run) {
     };
     const { data } = await step({ do: 'paths' });
     const note = storeOn({ ...run, data }, 'projects.json');
+    const earlier = note.read() ?? {};
+    expect(Object.values(earlier).every((entry) => entry.account === '' && entry.accountId === ''),
+        `the run's deletion before this one left the account in the note: ${JSON.stringify(earlier)}`);
+    await signIn();
+    const own = await stepsProject(DELETED);
+    await openSession(own.session, own.origin);
+    await closePreview();
     const before = note.read() ?? {};
     const mine = (await step({ do: 'projects' })).projects.filter((each) => each.account === accountName).map((each) => each.id);
-    expect(mine.length > 0, `the note held no entry of ${accountName} before its deletion: ${JSON.stringify(before)}`);
+    expect(mine.includes(own.origin), `the note held no entry of ${accountName} before its deletion: ${JSON.stringify(before)}`);
     const other = {
         name: 'e2e project of another account', account: otherAccount.name, accountId: otherAccount.id, snapshots: [],
     };
