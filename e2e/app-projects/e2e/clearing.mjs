@@ -444,6 +444,12 @@ export async function checkClearing(run) {
         }
         await step('app2', { do: 'closeWindow' });
         await sleep(SETTLED_MS);
+        // What could not wait was removed though the database waited: each of the project's own stores is gone.
+        await openSession(held.session, held.origin);
+        const besideHeld = await stores(['held']);
+        expect(STORES.every((store) => besideHeld.seen.held[store] !== true), `beside the held database the clearing left ${JSON.stringify(besideHeld)}`);
+        out.besideHeld = besideHeld.seen.held;
+        await closePreview();
         return out;
     }
 }

@@ -33,9 +33,9 @@ const std::string REST = " Its permissions are removed; clear its data again to 
 const Request::Headers PAGE_HEADERS{{"Content-Type", "text/html; charset=utf-8"}, {"Cache-Control", "no-store"}};
 
 // The page takes the token from its URL, which it then leaves, as another page of the origin hears the URL of the one
-// that changes its storage; it removes each item of each store, and names a store where one stays or where it cannot
-// list them; it waits for each, a database another of the origin's pages holds open among them, which the clearing's
-// time ends.
+// that changes its storage; it removes each item of each store at once, so that what cannot wait is removed whatever
+// waits, and names a store where one stays or where it cannot list them; it tells its end once each is done, which a
+// database another of the origin's pages holds open keeps it from, and the clearing's time ends.
 const std::string PAGE = R"HTML(<!doctype html>
 <meta charset="utf-8">
 <meta name="color-scheme" content="light dark">
@@ -52,41 +52,43 @@ const std::string PAGE = R"HTML(<!doctype html>
             left.push(store);
             return;
         }
-        for (const item of items) {
+        await Promise.all(items.map(async (item) => {
             try {
                 await remove(item);
             } catch {
                 if (!left.includes(store)) left.push(store);
             }
-        }
+        }));
     };
-    await each('serviceWorkers', () => (navigator.serviceWorker ? navigator.serviceWorker.getRegistrations() : []), async (registration) => {
-        if (!(await registration.unregister())) throw new Error();
-    });
-    await each('caches', () => (self.caches ? caches.keys() : []), async (name) => {
-        if (!(await caches.delete(name))) throw new Error();
-    });
-    await each('indexedDB', () => (self.indexedDB ? indexedDB.databases() : []), ({ name }) => new Promise((done, fail) => {
-        const deleting = indexedDB.deleteDatabase(name);
-        deleting.onsuccess = done;
-        deleting.onerror = () => fail(deleting.error);
-    }));
-    await each('opfs', async () => {
-        if (!navigator.storage?.getDirectory) return [];
-        const root = await navigator.storage.getDirectory();
-        const names = [];
-        for await (const name of root.keys()) names.push(name);
-        return names.map((name) => () => root.removeEntry(name, { recursive: true }));
-    }, (remove) => remove());
-    await each('localStorage', () => [localStorage], (storage) => storage.clear());
-    await each('sessionStorage', () => [sessionStorage], (storage) => storage.clear());
     const cookies = () => document.cookie.split(';').map((pair) => pair.split('=')[0].trim()).filter(Boolean);
-    await each('cookies', cookies, (name) => {
-        for (const path of ['/', '/__crossbind-preview']) {
-            for (const domain of ['', `; domain=${location.hostname}`]) document.cookie = `${name}=; max-age=0; path=${path}${domain}`;
-        }
-        if (cookies().includes(name)) throw new Error();
-    });
+    await Promise.all([
+        each('serviceWorkers', () => (navigator.serviceWorker ? navigator.serviceWorker.getRegistrations() : []), async (registration) => {
+            if (!(await registration.unregister())) throw new Error();
+        }),
+        each('caches', () => (self.caches ? caches.keys() : []), async (name) => {
+            if (!(await caches.delete(name))) throw new Error();
+        }),
+        each('indexedDB', () => (self.indexedDB ? indexedDB.databases() : []), ({ name }) => new Promise((done, fail) => {
+            const deleting = indexedDB.deleteDatabase(name);
+            deleting.onsuccess = done;
+            deleting.onerror = () => fail(deleting.error);
+        })),
+        each('opfs', async () => {
+            if (!navigator.storage?.getDirectory) return [];
+            const root = await navigator.storage.getDirectory();
+            const names = [];
+            for await (const name of root.keys()) names.push(name);
+            return names.map((name) => () => root.removeEntry(name, { recursive: true }));
+        }, (remove) => remove()),
+        each('localStorage', () => [localStorage], (storage) => storage.clear()),
+        each('sessionStorage', () => [sessionStorage], (storage) => storage.clear()),
+        each('cookies', cookies, (name) => {
+            for (const path of ['/', '/__crossbind-preview']) {
+                for (const domain of ['', `; domain=${location.hostname}`]) document.cookie = `${name}=; max-age=0; path=${path}${domain}`;
+            }
+            if (cookies().includes(name)) throw new Error();
+        }),
+    ]);
     await fetch(`/__crossbind-preview/cleared?token=${token}&left=${left.join(',')}`, { cache: 'no-store' });
 })();
 </script>
