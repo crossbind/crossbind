@@ -144,6 +144,10 @@ crossbind::Value indicatorState();
 void indicatorUp(crossbind::Call call);
 void pressIndicator(crossbind::Call call);
 #endif
+#if defined(_WIN32)
+// Each request for a served origin's first page that WebView2 hands the host in the window, noted at the endpoint.
+void noteFirstPages(const std::string &endpoint, const crossbind::Window &window);
+#endif
 #if defined(__APPLE__)
 // A script run in the page as its user's click would run it; the indicator and the app's alerts noted later; and a file
 // input's picker read and closed.
@@ -194,6 +198,9 @@ void crossbind_extension_e2e_hooks(crossbind::Registry &registry) {
             crossbind::fetch("POST", endpoint + "/report?role=app", {{"Content-Type", "application/json"}}, body, [](std::optional<std::string>, crossbind::FetchResponse) {});
         });
     });
+#if defined(_WIN32)
+    registry.onWindow([endpoint](const crossbind::Window &window) { noteFirstPages(endpoint, window); });
+#endif
 #if defined(__ANDROID__)
     registry.function("e2e-hooks.indicator", PAGES, [](Call call) { crossbind::android::callJava("e2e-hooks", "indicator", call); });
 #else

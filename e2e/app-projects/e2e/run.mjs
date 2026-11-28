@@ -89,6 +89,8 @@ const isWebBuilt = process.platform === 'linux';
 const isWindows = !platform && process.platform === 'win32';
 // The port WebView2's DevTools listen on in a Windows run, through which the run clicks in the page, as its user would.
 const DEVTOOLS_PORT = 9224;
+// How much of a page's text a failure quotes.
+const SHOWN_CHARACTERS = 300;
 const CLICK_MS = 5000;
 const run = randomBytes(4).toString('hex');
 process.chdir(root);
@@ -642,12 +644,38 @@ async function checkOptimizedDependency(source, token) {
 
 // Opens a session from the app's page and waits for its page, which says so as it takes the run's steps.
 async function openSession(session, origin) {
+    const from = endpoint.notes.length;
     const loaded = endpoint.waitForNote((note) => note.role === 'project' && note.loaded, LOAD_MS, "the project's page");
     const { sheet, url } = await valueOf(`the open of ${session.id}`, { do: 'open', session: session.id });
     expect(url === originUrl(origin), `the session opened at ${url}, not at its account's and project's ${originUrl(origin)}`);
-    const shown = await loaded;
+    const shown = await loaded.catch(async (error) => {
+        throw new Error(isWindows ? `${error.message}: ${JSON.stringify(await shownInstead(origin, from))}` : error.message);
+    });
     expect(shown.loaded === url.replace(/\/$/, ''), `the project's page loaded at ${shown.loaded}, not at ${url}`);
     return sheet;
+}
+
+// Where a project's page did not come on Windows: what WebView2 shows, by its DevTools, as no page of the fixture's
+// there reports it, and each request for the origin's first page it handed the host since the open, with what asked it.
+async function shownInstead(origin, from) {
+    const read = async (what) => {
+        try {
+            return await what();
+        } catch (error) {
+            return { devTools: error.message };
+        }
+    };
+    const targets = await read(async () => (await (await fetch(`http://127.0.0.1:${DEVTOOLS_PORT}/json`, { signal: AbortSignal.timeout(ASKED_MS) })).json())
+        .map(({ type, url, title }) => ({ type, url, title })));
+    const page = await read(() => inPage(`({ url: location.href, title: document.title, text: (document.body?.innerText ?? '').slice(0, ${SHOWN_CHARACTERS}),
+        controller: navigator.serviceWorker?.controller?.scriptURL ?? null })`));
+    const handed = endpoint.notes.slice(from).filter((note) => note.event === 'handed' && note.url.startsWith(originUrl(origin)));
+    return { targets, page, handed };
+}
+
+// The WebView2 Runtime the app runs on, as its DevTools name it.
+async function webView2Version() {
+    return (await (await fetch(`http://127.0.0.1:${DEVTOOLS_PORT}/json/version`, { signal: AbortSignal.timeout(ASKED_MS) })).json()).Browser;
 }
 
 // Ends the preview from the project's page, a message dialog of its own up or none, and waits for the app's page.
@@ -1004,6 +1032,8 @@ async function flow() {
         }
     }
     expect(JSON.stringify(links) === JSON.stringify([{ session: dev.id }, { message: NO_PREVIEW }]), `the app's page got the links ${JSON.stringify(links)}`);
+    // Each Windows runner's WebView2 Runtime, which its image brings.
+    if (isWindows) console.log(`PROJECTS WEBVIEW2 ${await webView2Version()}`);
     // A token a run before left on the device.
     if ((await valueOf('the account at the start', { do: 'account' })).account) await valueOf('the sign-out of a run before', { do: 'signOut' });
     const keyring = await checkAccounts(dev, snapshot);

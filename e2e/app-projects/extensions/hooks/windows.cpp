@@ -1,12 +1,18 @@
 // The preview's indicator as its user sees it on Windows: the app window's title and the items at the top of its system
 // menu, each with its words and whether it takes a click; an item of it pressed as a click on it sends its command;
 // whether the window takes its user's input, which a message dialog or a question of its own takes from it; and whether
-// it keeps its title bar, which a window that fills the screen for its page has not.
+// it keeps its title bar, which a window that fills the screen for its page has not; and each request for a served
+// origin's first page that WebView2 hands the host, noted at the run's endpoint with what asked it.
 #include "crossbind/extension.h"
 
 #include <windows.h>
 
+#include "WebView2.h"
+
 #include <chrono>
+#include <cstdint>
+#include <cwchar>
+#include <optional>
 #include <string>
 #include <thread>
 
@@ -60,7 +66,81 @@ const Value *itemOf(const Value::Array &items, const std::string &words) {
     return nullptr;
 }
 
+// Whether a URL is the first page of an origin an extension serves, http://<name>.localhost/.
+bool isFirstPage(const std::string &url) {
+    const std::string scheme = "http://";
+    const std::string suffix = ".localhost";
+    const std::size_t path = url.rfind(scheme, 0) == 0 ? url.find('/', scheme.size()) : std::string::npos;
+    if (path == std::string::npos || path < scheme.size() + suffix.size() || url.compare(path - suffix.size(), suffix.size(), suffix) != 0) return false;
+    return path + 1 == url.size() || url[path + 1] == '?' || url[path + 1] == '#';
+}
+
+std::string sourceOf(COREWEBVIEW2_WEB_RESOURCE_REQUEST_SOURCE_KINDS kind) {
+    if (kind == COREWEBVIEW2_WEB_RESOURCE_REQUEST_SOURCE_KINDS_DOCUMENT) return "document";
+    if (kind == COREWEBVIEW2_WEB_RESOURCE_REQUEST_SOURCE_KINDS_SHARED_WORKER) return "shared worker";
+    if (kind == COREWEBVIEW2_WEB_RESOURCE_REQUEST_SOURCE_KINDS_SERVICE_WORKER) return "service worker";
+    return "unknown";
+}
+
+// Each request for a served origin's first page that WebView2 hands the host, which it reads and leaves unanswered.
+class FirstPages final : public ICoreWebView2WebResourceRequestedEventHandler {
+public:
+    FirstPages(std::string endpoint, uint64_t window) : endpoint_(std::move(endpoint)), window_(window) {}
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void **out) override {
+        if (!IsEqualIID(riid, IID_IUnknown) && !IsEqualIID(riid, IID_ICoreWebView2WebResourceRequestedEventHandler)) {
+            *out = nullptr;
+            return E_NOINTERFACE;
+        }
+        *out = static_cast<ICoreWebView2WebResourceRequestedEventHandler *>(this);
+        AddRef();
+        return S_OK;
+    }
+    ULONG STDMETHODCALLTYPE AddRef() override { return InterlockedIncrement(&references_); }
+    ULONG STDMETHODCALLTYPE Release() override {
+        const ULONG left = InterlockedDecrement(&references_);
+        if (left == 0) delete this;
+        return left;
+    }
+    HRESULT STDMETHODCALLTYPE Invoke(ICoreWebView2 *, ICoreWebView2WebResourceRequestedEventArgs *args) override {
+        ICoreWebView2WebResourceRequest *request = nullptr;
+        if (FAILED(args->get_Request(&request)) || !request) return S_OK;
+        LPWSTR uri = nullptr;
+        const HRESULT read = request->get_Uri(&uri);
+        request->Release();
+        if (FAILED(read) || !uri) return S_OK;
+        const std::string url = narrow(uri, static_cast<int>(std::wcslen(uri)));
+        CoTaskMemFree(uri);
+        if (!isFirstPage(url)) return S_OK;
+        COREWEBVIEW2_WEB_RESOURCE_REQUEST_SOURCE_KINDS kind{};
+        ICoreWebView2WebResourceRequestedEventArgs2 *more = nullptr;
+        if (SUCCEEDED(args->QueryInterface(IID_ICoreWebView2WebResourceRequestedEventArgs2, reinterpret_cast<void **>(&more))) && more) {
+            more->get_RequestedSourceKind(&kind);
+            more->Release();
+        }
+        const std::string body =
+            Value(Value::Object{{"event", std::string("handed")}, {"window", static_cast<double>(window_)}, {"url", url}, {"source", sourceOf(kind)}}).json();
+        crossbind::fetch("POST", endpoint_ + "/report?role=app", {{"Content-Type", "application/json"}}, body, [](std::optional<std::string>, crossbind::FetchResponse) {});
+        return S_OK;
+    }
+
+private:
+    std::string endpoint_;
+    uint64_t window_;
+    LONG references_ = 1;
+};
+
 }  // namespace
+
+void noteFirstPages(const std::string &endpoint, const crossbind::Window &window) {
+    ICoreWebView2 *core = nullptr;
+    if (!window.webView() || FAILED(static_cast<ICoreWebView2Controller *>(window.webView())->get_CoreWebView2(&core)) || !core) return;
+    auto *heard = new FirstPages(endpoint, window.id());
+    EventRegistrationToken token;
+    core->add_WebResourceRequested(heard, &token);
+    heard->Release();
+    core->Release();
+}
 
 Value indicatorState() {
     HWND window = static_cast<HWND>(crossbind::appWindow());
