@@ -190,6 +190,16 @@ export async function checkClearing(run) {
     await openSession(snapshot.session, snapshot.origin);
     report.filled = await step('project', { do: 'fill', mark: 'cleared' });
     report.worker = await step('project', { do: 'worker' });
+    // The spike: the snapshot's page reloaded under its worker, with no end and no question before it.
+    if (platform === 'windows') {
+        const from = endpoint.notes.length;
+        const reloaded = endpoint.waitForNote((note) => note.role === 'project' && note.loaded, LOAD_MS, "the snapshot's page after Reload under its worker");
+        await indicators.press('project', 'Reload');
+        report.reloadUnderWorker = (await reloaded.catch(async (error) => {
+            throw new Error(`${error.message}: ${JSON.stringify(await run.shownInstead(snapshot.origin, from))}`);
+        })).loaded;
+        console.log(`SPIKE reload under the worker: ${report.reloadUnderWorker}`);
+    }
     await answerCamera(SNAPSHOT, 'Allow');
     const before = await stores(['cleared']);
     report.workers = before.workers;

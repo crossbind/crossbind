@@ -1129,6 +1129,7 @@ async function flow() {
     });
     // What the preview's menu and the app's page clear of what a project keeps, and what Settings calls.
     const clearing = await checkClearing({
+        shownInstead,
         platform: devicePlatform,
         endpoint,
         app,
