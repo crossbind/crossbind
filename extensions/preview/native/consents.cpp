@@ -20,6 +20,28 @@ void endConsents() {
     crossbind::android::callJava("preview", "ended", {}, [](Failure, Value) {});
 }
 
+void consentsOf(std::vector<std::string> origins, std::function<void(std::map<std::string, Answers> answers)> done) {
+    crossbind::android::callJava("preview", "consentsOf", {{"origins", Value(origins)}}, [origins, done](Failure, Value kept) {
+        std::map<std::string, Answers> answers;
+        for (const auto &origin : origins) {
+            for (const auto &kind : ASKED_KINDS) {
+                if (kept[origin][kind].isBool()) answers[origin].emplace_back(kind, kept[origin][kind].asBool());
+            }
+        }
+        done(std::move(answers));
+    });
+}
+
+void takeBackConsent(const std::string &origin, const std::string &kind, std::function<void(bool isTaken, bool isServed)> done) {
+    crossbind::android::callJava("preview", "takeBack", {{"origin", origin}, {"kind", kind}}, [done](Failure failure, Value taken) {
+        done(!failure && taken["taken"].asBool(false), !failure && taken["served"].asBool(false));
+    });
+}
+
+void forgetConsents(const std::string &origin) {
+    crossbind::android::callJava("preview", "forget", {{"origin", origin}}, [](Failure, Value) {});
+}
+
 }  // namespace preview
 
 #else
@@ -28,14 +50,13 @@ void endConsents() {
 #include <cstdio>
 #include <map>
 #include <mutex>
+#include <set>
 
 namespace preview {
 namespace {
 
 using crossbind::PagePermission;
 
-// The kinds a project is asked for; any other is denied it with no question.
-const std::vector<std::string> ASKED{"camera", "microphone", "location"};
 const std::string CONSENTS = "consents.json";
 const std::string DETAIL = "It is a preview of your project. You can change this in the preview's menu.";
 // The quotes around the project's name, in UTF-8.
@@ -69,10 +90,12 @@ std::vector<PagePermission> waiting;
 uint64_t asked = 0;
 std::optional<std::vector<std::string>> asking;
 std::function<void()> closeAsking;
-// The answers the store could not keep, which hold for the app's run: by the origin's name and the kind.
+// The answers the store could not keep, which hold for the app's run: by the origin's name and the kind; and the origins
+// whose answers the store could not forget, which have none for the run but those kept after.
 std::map<std::string, std::map<std::string, bool>> held;
+std::set<std::string> forgotten;
 
-bool isAsked(const std::string &kind) { return std::find(ASKED.begin(), ASKED.end(), kind) != ASKED.end(); }
+bool isAsked(const std::string &kind) { return std::find(ASKED_KINDS.begin(), ASKED_KINDS.end(), kind) != ASKED_KINDS.end(); }
 
 std::string nounOf(const std::string &kind) { return kind == "location" ? "your location" : "the " + kind; }
 
@@ -102,13 +125,14 @@ std::optional<bool> keptOf(const Value &kept, const std::string &origin, const s
     if (const auto run = held.find(origin); run != held.end()) {
         if (const auto answer = run->second.find(kind); answer != run->second.end()) return answer->second;
     }
+    if (forgotten.count(origin) > 0) return std::nullopt;
     const Value &answer = kept[origin][kind];
     return answer.isBool() ? std::optional<bool>(answer.asBool()) : std::nullopt;
 }
 
 Answers answersOf(const Value &kept, const std::string &origin) {
     Answers answers;
-    for (const auto &kind : ASKED) {
+    for (const auto &kind : ASKED_KINDS) {
         if (const std::optional<bool> answer = keptOf(kept, origin, kind)) answers.emplace_back(kind, *answer);
     }
     return answers;
@@ -125,12 +149,13 @@ Kept keptFor(const Value &kept, const std::string &origin, const std::vector<std
 }
 
 // Keeps an answer for these kinds of the origin, the store's other entries as they were, in place of one held for the
-// run; one the store cannot take holds for the app's run, and the output says so.
+// run; one the store cannot take holds for the app's run, and the output says so. A forgotten origin's answers before
+// it stay forgotten.
 void keep(const std::string &origin, const std::vector<std::string> &kinds, bool isAllowed) {
     const Value kept = store();
     Value::Object entries;
     Value::Object entry;
-    bool isSeen = false;
+    bool isSeen = forgotten.count(origin) > 0;
     for (const auto &[name, value] : kept.asObject()) {
         if (name != origin) {
             entries.emplace_back(name, value);
@@ -150,6 +175,7 @@ void keep(const std::string &origin, const std::vector<std::string> &kinds, bool
         if (failure) held[origin][kind] = isAllowed;
         else if (const auto run = held.find(origin); run != held.end()) run->second.erase(kind);
     }
+    if (!failure) forgotten.erase(origin);
     if (failure) std::fprintf(stderr, "crossbind: preview could not keep an answer in its %s, which holds for this run: %s\n", CONSENTS.c_str(), failure->c_str());
 }
 
@@ -253,6 +279,58 @@ bool changeConsent(const std::string &origin, const std::string &kind, bool isAl
     }
     give(std::move(settled));
     return true;
+}
+
+void consentsOf(std::vector<std::string> origins, std::function<void(std::map<std::string, Answers> answers)> done) {
+    std::map<std::string, Answers> answers;
+    {
+        std::lock_guard<std::mutex> lock(consentsMutex);
+        const Value kept = store();
+        for (const auto &origin : origins) answers[origin] = answersOf(kept, origin);
+    }
+    done(std::move(answers));
+}
+
+// Under the lock, the indicator's own taken inside it where the origin is the preview served, as a change is.
+void takeBackConsent(const std::string &origin, const std::string &kind, std::function<void(bool isTaken, bool isServed)> done) {
+    Settled settled;
+    bool isTaken = false;
+    bool isServed = false;
+    {
+        std::lock_guard<std::mutex> lock(consentsMutex);
+        const std::optional<bool> answer = keptOf(store(), origin, kind);
+        isTaken = answer.value_or(false);
+        if (isTaken) {
+            keep(origin, {kind}, false);
+            isServed = served && served->name == origin;
+            if (isServed) {
+                settled = settle();
+                answerIndicator(served->url, answersOf(store(), served->name));
+            }
+        }
+    }
+    give(std::move(settled));
+    done(isTaken, isServed);
+}
+
+void forgetConsents(const std::string &origin) {
+    std::lock_guard<std::mutex> lock(consentsMutex);
+    held.erase(origin);
+    const Value kept = store();
+    Value::Object entries;
+    for (const auto &[name, value] : kept.asObject()) {
+        if (name != origin) entries.emplace_back(name, value);
+    }
+    if (entries.size() == kept.asObject().size()) {
+        forgotten.erase(origin);
+        return;
+    }
+    if (const Failure failure = writeDataFile(CONSENTS, Value(std::move(entries)).json())) {
+        forgotten.insert(origin);
+        std::fprintf(stderr, "crossbind: preview could not forget a project's answers in its %s, which are forgotten for this run: %s\n", CONSENTS.c_str(), failure->c_str());
+        return;
+    }
+    forgotten.erase(origin);
 }
 
 std::string controlWordOf(const std::string &kind) {

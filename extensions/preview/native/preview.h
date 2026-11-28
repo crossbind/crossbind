@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <functional>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -63,9 +64,27 @@ bool hasKeyring();
 void keepList(std::vector<Session> sessions);
 std::optional<Session> listed(const std::string &id);
 void dropListed(const std::string &id);
-// Each snapshot's version as it was opened last, from the app's data folder.
+// Each snapshot's version as it was opened last, from the app's data folder; and those of these snapshots forgotten.
 std::optional<int> openedVersion(const std::string &id);
 void noteOpened(const std::string &id, int version);
+void forgetVersions(const std::vector<std::string> &ids);
+// The note of the projects opened on this device, preview/projects.json in the app's data folder, by the origin's name:
+// the project's name and the account's as the list gave them at its last open, the account's id, which no page is
+// given, and the snapshots of it opened. A note that cannot be read, is no JSON or has another shape lists nothing, and
+// an entry of another shape is no project's. Written at each open, a project's entry removed by its data's clearing
+// alone, and an account taken out of its entries, its name and its id, by its deletion.
+struct Noted {
+    std::string origin;
+    std::string project;
+    std::string account;
+    std::vector<std::string> snapshots;
+    std::string accountId;
+};
+std::vector<Noted> notedProjects();
+std::optional<Noted> notedProject(const std::string &origin);
+void noteProject(const std::string &origin, const std::string &project, const Account &account, const std::string &snapshot);
+void forgetAccount(const std::string &id);
+void forgetProject(const std::string &origin);
 // A file of the extension's own in the app's data folder, as preview/versions.json: its text, none where it cannot be
 // read; and its text written whole, which a read sees all of or none of: why it could not be, or none.
 std::optional<std::string> readDataFile(const std::string &name);
@@ -85,6 +104,32 @@ void reloadPreview();
 void closePreview();
 // A snapshot's session read again as the app comes to the front: a higher version, its proof holding, reloads its page.
 void readPreviewAgain();
+// Clear this project's data…, of the preview whose origin is this URL while it is the one open: its own question over
+// the preview's window, one at a time, which the preview's end closes unanswered; then the preview ends as Close preview
+// ends it but for its origin, which its clearing takes. Android's question is its Java's, which asks for the clearing.
+#if !defined(__ANDROID__)
+void askToClear(const std::string &origin);
+#endif
+void clearPreview(const std::string &origin);
+// The page of the open preview of this origin's name reloaded, as a change of an answer of its reloads it.
+void reloadPreviewOf(const std::string &name);
+
+// clearing.cpp: what a project keeps on this device removed, for its origin alone, by the origin's own page, which is
+// the extension's text at /__crossbind-preview/clear: its storage, and of the extension's own its answers, its note and
+// its snapshots' versions noted. The prefix /__crossbind-preview/ is the extension's on every origin it serves: outside
+// a clearing each path under it answers 404, and none reaches a source. One clearing runs at a time, which ends as its
+// page tells its end with the token put in it, or after its time all the same.
+bool isClearingPath(const std::string &path);
+void answerClearing(const std::string &origin, crossbind::Request request);
+// Whether this origin's data is being cleared, which nothing of the project's is served during; and whether any is.
+bool isClearing(const std::string &origin);
+bool isClearingAny();
+// The project of this note's entry cleared by its origin, served for its preview or for the clearing alone, in the window
+// of this id; from the preview's menu, preview.ended is held as it ends. Whether it began: false where one runs.
+bool beginClearing(const Noted &project, crossbind::Origin origin, uint64_t window, bool isFromMenu);
+// The words of a clearing refused as another runs.
+std::string clearingWords();
+void addClearingFunctions(crossbind::Registry &registry);
 
 // indicator.cpp: what shows that a preview is one, on each window a project's page shows in: the pill on a phone, on a
 // desktop the window's title and the preview's menu. It is up on a window before the project's page can load there,
@@ -140,6 +185,17 @@ struct Served {
 };
 void serveConsents(Served served, std::function<void(Answers answers)> then);
 void endConsents();
+// The kinds a project is asked for; any other is denied it with no question.
+inline const std::vector<std::string> ASKED_KINDS{"camera", "microphone", "location"};
+// The answers of each of these origins' names, kept or held for the run, as Permissions shows them: Android's from its
+// Java, which keeps them there.
+void consentsOf(std::vector<std::string> origins, std::function<void(std::map<std::string, Answers> answers)> done);
+// An Allow of this origin's name and kind, kept or held for the run, made Don't Allow as the menu's control turned off
+// makes it, and nothing else: done gets whether one was, and whether the origin is the preview served.
+void takeBackConsent(const std::string &origin, const std::string &kind, std::function<void(bool isTaken, bool isServed)> done);
+// The origin's answers forgotten, kept and held for the run, as its data is cleared: where the store cannot take it, they
+// are forgotten for the run, and the output says so.
+void forgetConsents(const std::string &origin);
 #if !defined(__ANDROID__)
 // A request of a page whose role is a served origin's, which the extension's own question decides; Android's are its
 // Java's.
@@ -156,6 +212,18 @@ std::string controlWordOf(const std::string &kind);
 // from any thread, as a Windows task dialog holds the main thread's queue, and done hears nothing of that.
 std::function<void()> showConsent(uint64_t window, const std::string &message, const std::string &detail,
     std::function<void(std::optional<bool> isAllowed)> done);
+// The platform's own question of Clear this project's data…, as the consent's is drawn, but its default button Cancel and
+// its ways out, Escape and a window's close, Cancel's: done gets whether its user pressed Clear, or none where it could
+// not be shown; the function it gives closes it unanswered.
+std::function<void()> showClearQuestion(uint64_t window, const std::string &message, const std::string &detail,
+    std::function<void(std::optional<bool> isCleared)> done);
+#endif
+// The page at this URL loaded in the window of this id, the app's oldest for 0, on the main thread: the clearing's page.
+void loadWindow(uint64_t window, const std::string &url);
+#if defined(_WIN32)
+// The web view's own removal of what the origin of this URL keeps, by WebView2's DevTools protocol, which a project's
+// service worker cannot answer for: done gets why it failed, or none.
+void removeOriginData(uint64_t window, const std::string &url, Done done);
 #endif
 
 // cloud.cpp: a call of crossbind cloud's, with the app's token where one is given: done gets why it failed, or its
@@ -174,6 +242,9 @@ std::optional<int> integerOf(const Value &value);
 std::string toBase64url(const std::string &bytes);
 std::optional<std::string> fromBase64url(const std::string &text);
 bool isSessionId(const std::string &text);
+// An origin's name as the extension makes one: the first hexadecimal digits, in lowercase, of a SHA-256.
+constexpr std::size_t ORIGIN_NAME_DIGITS = 32;
+bool isOriginName(const std::string &text);
 bool isKey(const std::string &text);
 bool isLocalAddress(const std::string &address);
 bool isListedName(const std::string &name);

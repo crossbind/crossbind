@@ -1,15 +1,19 @@
 // The crossbind app's previews of its account's projects: the extension's entry, the account signed in and its token as
-// the system's store keeps them, the list the page read last, the snapshots' versions as they were opened, and the
-// links that name a session.
+// the system's store keeps them, the list the page read last, the snapshots' versions as they were opened, the note of
+// the projects opened, and the links that name a session.
 #include "preview.h"
 
 #include "crossbind/app.h"
 
+#include <algorithm>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <mutex>
+#include <set>
 #include <sstream>
 #include <stdexcept>
+#include <tuple>
 
 namespace preview {
 namespace {
@@ -31,6 +35,10 @@ std::vector<Session> list;
 
 std::mutex versionsMutex;
 const std::string VERSIONS = "versions.json";
+std::mutex projectsMutex;
+const std::string PROJECTS = "projects.json";
+// The accounts deleted whose note could not be written, out of it for the run.
+std::set<std::string> deletedAccounts;
 
 fs::path pathOf(const std::string &text) { return fs::path(std::u8string(text.begin(), text.end())); }
 
@@ -43,6 +51,54 @@ Value readVersions() {
         return versions.isObject() ? versions : Value(Value::Object{});
     } catch (const std::exception &) {
         return Value::Object{};
+    }
+}
+
+void writeVersions(Value::Object versions) { writeDataFile(VERSIONS, Value(std::move(versions)).json()); }
+
+// An entry of the note, or none for one of another shape: the project's name as the list shows one, and its snapshots'
+// ids.
+std::optional<Noted> notedOf(const std::string &origin, const Value &entry) {
+    if (!isOriginName(origin) || !entry.isObject() || !entry["snapshots"].isArray()) return std::nullopt;
+    Noted noted{origin, textOf(entry["name"]), textOf(entry["account"]), {}, textOf(entry["accountId"])};
+    if (!isListedName(noted.project) || noted.account.empty() != noted.accountId.empty()) return std::nullopt;
+    if (deletedAccounts.count(noted.accountId) > 0) noted.account = noted.accountId = "";
+    for (const Value &id : entry["snapshots"].asArray()) {
+        if (!isSessionId(textOf(id))) return std::nullopt;
+        noted.snapshots.push_back(textOf(id));
+    }
+    return noted;
+}
+
+// The note, under its lock: each entry of its shape, the first of a name standing.
+std::vector<Noted> readNote() {
+    const std::optional<std::string> text = readDataFile(PROJECTS);
+    std::vector<Noted> note;
+    try {
+        const Value kept = text ? parseJson(*text) : Value();
+        if (!kept.isObject()) return note;
+        for (const auto &[origin, entry] : kept.asObject()) {
+            const bool isSeen = std::any_of(note.begin(), note.end(), [&origin](const Noted &each) { return each.origin == origin; });
+            const std::optional<Noted> noted = isSeen ? std::nullopt : notedOf(origin, entry);
+            if (noted) note.push_back(*noted);
+        }
+    } catch (const std::exception &) {
+        // A note that is no JSON lists nothing.
+    }
+    return note;
+}
+
+std::string noteText(const std::vector<Noted> &note) {
+    Value::Object entries;
+    for (const Noted &each : note) {
+        entries.emplace_back(each.origin, Value::Object{{"name", each.project}, {"account", each.account}, {"accountId", each.accountId}, {"snapshots", Value(each.snapshots)}});
+    }
+    return Value(std::move(entries)).json();
+}
+
+void writeNote(const std::vector<Noted> &note) {
+    if (const Failure failure = writeDataFile(PROJECTS, noteText(note))) {
+        std::fprintf(stderr, "crossbind: preview could not note a project in its %s: %s\n", PROJECTS.c_str(), failure->c_str());
     }
 }
 
@@ -179,7 +235,70 @@ void noteOpened(const std::string &id, int version) {
         if (session != id) versions.emplace_back(session, opened);
     }
     versions.emplace_back(id, version);
-    writeDataFile(VERSIONS, Value(std::move(versions)).json());
+    writeVersions(std::move(versions));
+}
+
+void forgetVersions(const std::vector<std::string> &ids) {
+    std::lock_guard<std::mutex> lock(versionsMutex);
+    const Value read = readVersions();
+    Value::Object versions;
+    for (const auto &[session, opened] : read.asObject()) {
+        if (std::find(ids.begin(), ids.end(), session) == ids.end()) versions.emplace_back(session, opened);
+    }
+    if (versions.size() != read.asObject().size()) writeVersions(std::move(versions));
+}
+
+std::vector<Noted> notedProjects() {
+    std::vector<Noted> note;
+    {
+        std::lock_guard<std::mutex> lock(projectsMutex);
+        note = readNote();
+    }
+    std::sort(note.begin(), note.end(), [](const Noted &a, const Noted &b) { return std::tie(a.project, a.account, a.origin) < std::tie(b.project, b.account, b.origin); });
+    return note;
+}
+
+std::optional<Noted> notedProject(const std::string &origin) {
+    std::lock_guard<std::mutex> lock(projectsMutex);
+    for (Noted &each : readNote()) {
+        if (each.origin == origin) return each;
+    }
+    return std::nullopt;
+}
+
+void noteProject(const std::string &origin, const std::string &project, const Account &account, const std::string &snapshot) {
+    std::lock_guard<std::mutex> lock(projectsMutex);
+    std::vector<Noted> note = readNote();
+    std::vector<std::string> snapshots;
+    for (const Noted &each : note) {
+        if (each.origin == origin) snapshots = each.snapshots;
+    }
+    std::erase_if(note, [&origin](const Noted &each) { return each.origin == origin; });
+    if (!snapshot.empty() && std::find(snapshots.begin(), snapshots.end(), snapshot) == snapshots.end()) snapshots.push_back(snapshot);
+    note.push_back({origin, project, account.name, std::move(snapshots), account.id});
+    writeNote(note);
+}
+
+void forgetAccount(const std::string &id) {
+    std::lock_guard<std::mutex> lock(projectsMutex);
+    std::vector<Noted> note = readNote();
+    bool isNoted = false;
+    for (Noted &each : note) {
+        if (each.accountId != id) continue;
+        each.account = each.accountId = "";
+        isNoted = true;
+    }
+    if (!isNoted) return;
+    if (const Failure failure = writeDataFile(PROJECTS, noteText(note))) {
+        deletedAccounts.insert(id);
+        std::fprintf(stderr, "crossbind: preview could not take a deleted account out of its %s, which holds for this run: %s\n", PROJECTS.c_str(), failure->c_str());
+    }
+}
+
+void forgetProject(const std::string &origin) {
+    std::lock_guard<std::mutex> lock(projectsMutex);
+    std::vector<Noted> note = readNote();
+    if (std::erase_if(note, [&origin](const Noted &each) { return each.origin == origin; }) > 0) writeNote(note);
 }
 
 std::optional<std::string> readDataFile(const std::string &name) {
@@ -222,6 +341,7 @@ void crossbind_extension_preview(crossbind::Registry &registry) {
     preview::addOpenerFunctions(registry);
     preview::addPageRequests(registry);
     preview::addIndicatorHooks(registry);
+    preview::addClearingFunctions(registry);
     // A link of the app's scheme, or on a phone of crossbind.dev/open, names a session alone, which the app's page opens
     // from the account's list: the preview open ends, so that the page shows again and asks for the link as it loads.
     registry.onOpenUrl([](const crossbind::OpenUrl &open) {

@@ -30,10 +30,20 @@ export const preview = {
     // The playground's compile, signed in: { status, ...what crossbind cloud answered }.
     compile: async ({ files, packages }) => invoke('preview.compile', { files, packages }),
     removeSnapshot: async (session) => invoke('preview.removeSnapshot', { session }),
-    // The links that opened the app since its page loaded, each { session } or { message } for one that names none, and
-    // the previews that ended but by preview.close, each { message } for one the extension ended itself and {} for one
-    // its user closed from the preview's menu or with Back; later ones come as the events preview.link and
-    // preview.ended. Listening first, then asking, misses none.
+    // The projects opened on this device, signed in or not, in the order of their names: { projects: [{ id, name, account,
+    // consents }] }, its id the name of its origin, and its consents the kinds its user answered, as { camera: true }.
+    projects: async () => invoke('preview.projects'),
+    // An Allow of a project of projects() made Don't Allow, as the preview's menu turns one off; it gives nothing.
+    takeBack: async (id, kind) => invoke('preview.takeBack', { id, kind }),
+    // What a project of projects() keeps on this device removed, in the window of the page that asks, which shows the
+    // app's first page again as it ends; it answers as the clearing begins.
+    clearData: async (id) => invoke('preview.clearData', { id }),
+    // The links that opened the app since its page loaded, each { session } or { message } for one that names none; the
+    // previews that ended but by preview.close, each { message } for one the extension ended itself and {} for one its
+    // user closed from the preview's menu or with Back; and the clearings that ended, each { id, name, account }, with
+    // { message } where something stays. Later ones come as the events preview.link, preview.ended and preview.cleared.
+    // Listening first, then asking, misses none.
     links: async () => events.held('preview.link'),
     ended: async () => events.held('preview.ended'),
+    cleared: async () => events.held('preview.cleared'),
 };

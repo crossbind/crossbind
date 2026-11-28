@@ -13,6 +13,7 @@ import config from '../crossbind.config.mjs';
 import {
     ACCOUNTS, CLI_TOKEN, COMPILED, gateToken, newId, newKey, sessionAnswer, standInCloud, standInSource,
 } from './cloud.mjs';
+import { checkClearing, checkDeletedAccount } from './clearing.mjs';
 import { checkConsents } from './consents.mjs';
 import { checkIndicator } from './indicator.mjs';
 import { checkPermissions } from './permissions.mjs';
@@ -30,7 +31,7 @@ import {
 // preview's terminal, as phase 2's checks read them. With CROSSBIND_APP_PLATFORM=ios the app opens in the Simulator,
 // with android on the attached device.
 //   node e2e/run.mjs
-const RUN_TIMEOUT_MS = 900000;
+const RUN_TIMEOUT_MS = 1500000;
 const START_MS = 300000;
 const LOAD_MS = 180000;
 const HOT_MS = 5000;
@@ -88,6 +89,8 @@ const isWebBuilt = process.platform === 'linux';
 const isWindows = !platform && process.platform === 'win32';
 // The port WebView2's DevTools listen on in a Windows run, through which the run clicks in the page, as its user would.
 const DEVTOOLS_PORT = 9224;
+// How much of a page's text a failure quotes.
+const SHOWN_CHARACTERS = 300;
 const CLICK_MS = 5000;
 const run = randomBytes(4).toString('hex');
 process.chdir(root);
@@ -443,18 +446,20 @@ const stepsFiles = () => ({
     'inline.mp4': readFileSync(join(repository, 'e2e', 'desktop-app', 'public', 'inline.mp4')),
 });
 
-// A project of this name, served by a server of the run's own, whose page takes the project's steps alone: at its
-// origin's name and URL.
-async function stepsProject(address, projectName) {
-    const files = Object.fromEntries(Object.entries(stepsFiles()).map(([path, body]) => [`/${path}`, body]));
-    const { session } = await listedSource(address, { project: { id: newId(), name: projectName } }, asPreview(), files);
+// A project of this name, served by a server of the run's own, whose page takes the project's steps alone, with these
+// files of its own beside them: at its origin's name and URL, with what its source was asked.
+async function stepsProject(address, projectName, extra = {}) {
+    const files = Object.fromEntries(Object.entries({ ...stepsFiles(), ...extra }).map(([path, body]) => [`/${path}`, body]));
+    const { session, source } = await listedSource(address, { project: { id: newId(), name: projectName } }, asPreview(), files);
     const origin = originName(ACCOUNTS.main, session.project.id);
-    return { session, origin, url: originUrl(origin) };
+    return {
+        session, origin, url: originUrl(origin), asked: source.asked,
+    };
 }
 
 // A snapshot of a project of this name, of the same steps page, which the stand-in's snapshot host serves.
-function stepsSnapshot(projectName) {
-    const session = cloud.snapshot(ACCOUNTS.main, { id: newId(), name: projectName }, stepsFiles());
+function stepsSnapshot(projectName, extra = {}) {
+    const session = cloud.snapshot(ACCOUNTS.main, { id: newId(), name: projectName }, { ...stepsFiles(), ...extra });
     const origin = originName(ACCOUNTS.main, session.project.id);
     return { session, origin, url: originUrl(origin) };
 }
@@ -639,12 +644,38 @@ async function checkOptimizedDependency(source, token) {
 
 // Opens a session from the app's page and waits for its page, which says so as it takes the run's steps.
 async function openSession(session, origin) {
+    const from = endpoint.notes.length;
     const loaded = endpoint.waitForNote((note) => note.role === 'project' && note.loaded, LOAD_MS, "the project's page");
     const { sheet, url } = await valueOf(`the open of ${session.id}`, { do: 'open', session: session.id });
     expect(url === originUrl(origin), `the session opened at ${url}, not at its account's and project's ${originUrl(origin)}`);
-    const shown = await loaded;
+    const shown = await loaded.catch(async (error) => {
+        throw new Error(isWindows ? `${error.message}: ${JSON.stringify(await shownInstead(origin, from))}` : error.message);
+    });
     expect(shown.loaded === url.replace(/\/$/, ''), `the project's page loaded at ${shown.loaded}, not at ${url}`);
     return sheet;
+}
+
+// Where a project's page did not come on Windows: what WebView2 shows, by its DevTools, as no page of the fixture's
+// there reports it, and each request for the origin's first page it handed the host since the open, with what asked it.
+async function shownInstead(origin, from) {
+    const read = async (what) => {
+        try {
+            return await what();
+        } catch (error) {
+            return { devTools: error.message };
+        }
+    };
+    const targets = await read(async () => (await (await fetch(`http://127.0.0.1:${DEVTOOLS_PORT}/json`, { signal: AbortSignal.timeout(ASKED_MS) })).json())
+        .map(({ type, url, title }) => ({ type, url, title })));
+    const page = await read(() => inPage(`({ url: location.href, title: document.title, text: (document.body?.innerText ?? '').slice(0, ${SHOWN_CHARACTERS}),
+        controller: navigator.serviceWorker?.controller?.scriptURL ?? null })`));
+    const handed = endpoint.notes.slice(from).filter((note) => note.event === 'handed' && note.url.startsWith(originUrl(origin)));
+    return { targets, page, handed };
+}
+
+// The WebView2 Runtime the app runs on, as its DevTools name it.
+async function webView2Version() {
+    return (await (await fetch(`http://127.0.0.1:${DEVTOOLS_PORT}/json/version`, { signal: AbortSignal.timeout(ASKED_MS) })).json()).Browser;
 }
 
 // Ends the preview from the project's page, a message dialog of its own up or none, and waits for the app's page.
@@ -1001,6 +1032,8 @@ async function flow() {
         }
     }
     expect(JSON.stringify(links) === JSON.stringify([{ session: dev.id }, { message: NO_PREVIEW }]), `the app's page got the links ${JSON.stringify(links)}`);
+    // Each Windows runner's WebView2 Runtime, which its image brings.
+    if (isWindows) console.log(`PROJECTS WEBVIEW2 ${await webView2Version()}`);
     // A token a run before left on the device.
     if ((await valueOf('the account at the start', { do: 'account' })).account) await valueOf('the sign-out of a run before', { do: 'signOut' });
     const keyring = await checkAccounts(dev, snapshot);
@@ -1094,6 +1127,25 @@ async function flow() {
         appPid: () => opened.child.pid,
         appTitle: config.app.name,
     });
+    // What the preview's menu and the app's page clear of what a project keeps, and what Settings calls.
+    const clearing = await checkClearing({
+        platform: devicePlatform,
+        endpoint,
+        app,
+        openSession,
+        closePreview,
+        stepsProject: (projectName, extra) => stepsProject(address, projectName, extra),
+        stepsSnapshot,
+        cloud,
+        signIn: () => signIn(ACCOUNTS.main, NUMBER),
+        returnToFront,
+        device,
+        adb: adbPath,
+        applicationId: () => applicationIdOf(builtForDevice),
+        appPid: () => opened.child.pid,
+        appTitle: config.app.name,
+        accountName: ACCOUNTS.main.name,
+    });
     // A file input's picker closes as its page goes, where the host shows it.
     const pickers = await checkPickers({
         platform: devicePlatform,
@@ -1118,9 +1170,22 @@ async function flow() {
     const source = `http://${dev.addresses[0]}`;
     const other = await checkOtherMachine(source, gateToken(dev.key));
     const dependency = await checkOptimizedDependency(source, gateToken(dev.key));
+    // An account's deletion takes the account out of the note of the projects opened.
+    const deletedAccount = await checkDeletedAccount({
+        platform: devicePlatform,
+        endpoint,
+        adb: adbPath,
+        applicationId: () => applicationIdOf(builtForDevice),
+        accountName: ACCOUNTS.main.name,
+        otherAccount: ACCOUNTS.other,
+        signIn: () => signIn(ACCOUNTS.main, NUMBER),
+        openSession,
+        closePreview,
+        stepsProject: (projectName) => stepsProject(address, projectName),
+    });
     const secrets = checkSecrets();
     console.log(`PROJECTS CHECKS ${JSON.stringify({
-        platform: devicePlatform, keyring, stops, ownClipboard, first, consents, indicator, permissions, pickers, ranges, other, dependency, secrets,
+        platform: devicePlatform, keyring, stops, ownClipboard, first, consents, indicator, permissions, clearing, pickers, ranges, other, dependency, deletedAccount, secrets,
     })}`);
     console.log(`TIMING a JavaScript edit to the page: ${first.js} ms`);
     console.log(`ok: ${devicePlatform} projects of e2e/app-projects`);

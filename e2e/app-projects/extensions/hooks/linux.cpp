@@ -3,6 +3,7 @@
 #include "crossbind/extension.h"
 
 #include <gtk/gtk.h>
+#include <webkit2/webkit2.h>
 
 #include <memory>
 #include <vector>
@@ -75,8 +76,8 @@ void pressInQuestion(Call call) {
 }
 
 // The preview's indicator as its user sees it on Linux: the app window's title, and the bar above its page, with the
-// project's name and the preview's menu, its items with their words; an item of the menu pressed as its user's click
-// activates it.
+// project's name and the preview's menu, its items with their words, and whether the web view may fill the screen; an
+// item of the menu pressed as its user's click activates it.
 namespace {
 
 // The bar the preview adds to the window's box, above the page: a box of a label and a menu button.
@@ -147,9 +148,11 @@ Value indicatorState() {
     // each window of its own.
     GtkWindow *window = crossbind::appWindow() ? GTK_WINDOW(crossbind::appWindow()) : nullptr;
     const bool isHeld = window && gtk_window_group_get_current_grab(gtk_window_get_group(window)) != nullptr;
+    void *web = crossbind::appWebView();
+    const bool isWebFullScreen = web && webkit_settings_get_enable_fullscreen(webkit_web_view_get_settings(WEBKIT_WEB_VIEW(web)));
     return Value::Object{{"up", button != nullptr}, {"title", Value(title ? title : "")}, {"name", name ? Value(gtk_label_get_text(GTK_LABEL(name))) : Value()},
         {"button", button ? Value(gtk_button_get_label(GTK_BUTTON(button))) : Value()}, {"items", button ? Value(items) : Value()},
-        {"takesInput", window != nullptr && !isHeld}};
+        {"takesInput", window != nullptr && !isHeld}, {"webTakesFullScreen", isWebFullScreen}};
 }
 
 void indicatorUp(Call call) {

@@ -144,6 +144,10 @@ crossbind::Value indicatorState();
 void indicatorUp(crossbind::Call call);
 void pressIndicator(crossbind::Call call);
 #endif
+#if defined(_WIN32)
+// Each request for a served origin's first page that WebView2 hands the host in the window, noted at the endpoint.
+void noteFirstPages(const std::string &endpoint, const crossbind::Window &window);
+#endif
 #if defined(__APPLE__)
 // A script run in the page as its user's click would run it; the indicator and the app's alerts noted later; and a file
 // input's picker read and closed.
@@ -166,6 +170,9 @@ void noteIndicator(std::function<void(crossbind::Value indicator)> noted) {
 #endif
 }
 
+// The page's role at the run's endpoint: a desktop's second window's as app2 and project2.
+std::string roleAt(const crossbind::Page &page) { return page.role() + (page.windowId() >= 2 ? std::to_string(page.windowId()) : ""); }
+
 }  // namespace
 
 void crossbind_extension_e2e_hooks(crossbind::Registry &registry) {
@@ -174,7 +181,7 @@ void crossbind_extension_e2e_hooks(crossbind::Registry &registry) {
     registry.function("e2e-hooks.ask", PAGES, [endpoint](Call call) {
         const std::string path = call.options()["path"].asString();
         const Value &body = call.options()["body"];
-        const std::string url = endpoint + path + (path.find('?') == std::string::npos ? "?" : "&") + "role=" + call.page().role();
+        const std::string url = endpoint + path + (path.find('?') == std::string::npos ? "?" : "&") + "role=" + roleAt(call.page());
         crossbind::fetch(body.isNull() ? "GET" : "POST", url, {{"Content-Type", "application/json"}}, body.isNull() ? "" : body.asString(),
             [call](std::optional<std::string> failure, crossbind::FetchResponse response) {
                 if (failure) call.reject(*failure);
@@ -191,6 +198,9 @@ void crossbind_extension_e2e_hooks(crossbind::Registry &registry) {
             crossbind::fetch("POST", endpoint + "/report?role=app", {{"Content-Type", "application/json"}}, body, [](std::optional<std::string>, crossbind::FetchResponse) {});
         });
     });
+#if defined(_WIN32)
+    registry.onWindow([endpoint](const crossbind::Window &window) { noteFirstPages(endpoint, window); });
+#endif
 #if defined(__ANDROID__)
     registry.function("e2e-hooks.indicator", PAGES, [](Call call) { crossbind::android::callJava("e2e-hooks", "indicator", call); });
 #else
@@ -236,7 +246,7 @@ void crossbind_extension_e2e_hooks(crossbind::Registry &registry) {
     registry.function("e2e-hooks.presses", PAGES, [endpoint](Call call) {
         const Value step = call.options();
         const std::string report = Value(Value::Object{{"id", step["id"]}, {"value", "armed"}}).json();
-        crossbind::fetch("POST", endpoint + "/report?role=" + call.page().role(), {{"Content-Type", "application/json"}}, report,
+        crossbind::fetch("POST", endpoint + "/report?role=" + roleAt(call.page()), {{"Content-Type", "application/json"}}, report,
             [call, step, endpoint](std::optional<std::string> failure, crossbind::FetchResponse) {
                 if (failure) {
                     call.reject(*failure);
@@ -267,6 +277,23 @@ void crossbind_extension_e2e_hooks(crossbind::Registry &registry) {
     registry.function("e2e-hooks.openTwo", PAGES, openTwo);
     registry.function("e2e-hooks.closePreview", PAGES, [](Call call) {
         crossbind::invoke("preview.close", Value::Object{}, [call](std::optional<std::string> failure, Value) {
+            if (failure) call.reject(*failure);
+            else call.resolve();
+        });
+    });
+    // A session checked and opened by the app's own code, and what the open answered: its URL, or why it was refused.
+    registry.function("e2e-hooks.tryOpen", PAGES, [](Call call) {
+        const Value session = Value::Object{{"session", call.options()["session"]}};
+        crossbind::invoke("preview.check", session, [call, session](std::optional<std::string> failure, Value) {
+            if (failure) return call.resolve(Value::Object{{"checked", *failure}});
+            crossbind::invoke("preview.open", session, [call](std::optional<std::string> refused, Value opened) {
+                call.resolve(refused ? Value(Value::Object{{"refused", *refused}}) : Value(Value::Object{{"url", opened["url"]}}));
+            });
+        });
+    });
+    // The app signed out by its own code, as a sign-out ends the preview open.
+    registry.function("e2e-hooks.signOut", PAGES, [](Call call) {
+        crossbind::invoke("preview.signOut", Value::Object{}, [call](std::optional<std::string> failure, Value) {
             if (failure) call.reject(*failure);
             else call.resolve();
         });

@@ -47,11 +47,13 @@ export const centerOf = (node) => {
 function androidQuestion(nodes, applicationId) {
     const own = nodes.filter((node) => node.package === applicationId);
     const title = own.find((node) => node['resource-id'] === 'android:id/alertTitle');
-    if (!title) return null;
     const message = own.find((node) => node['resource-id'] === 'android:id/message');
+    if (!title && !message) return null;
     const buttons = own.filter((node) => /^android:id\/button[123]$/.test(node['resource-id']));
+    // A question is its message's first paragraph, which wraps whole, and what follows it the next.
+    const texts = [...(title ? [title.text] : []), ...(message?.text ?? '').split('\n\n')];
     return {
-        texts: [title.text, message?.text ?? ''], buttons: buttons.map((node) => node.text), preferred: null, focused: buttons.find((node) => node.focused === 'true')?.text ?? null, nodes: buttons,
+        texts, titled: Boolean(title), buttons: buttons.map((node) => node.text), preferred: null, focused: buttons.find((node) => node.focused === 'true')?.text ?? null, nodes: buttons,
     };
 }
 
@@ -298,7 +300,9 @@ export function questionsOn({
                     const ready = await powerShell.next(COMPILE_MS);
                     if (ready !== 'ready') throw new Error(`began with ${ready}`);
                 }
-                powerShell.child.stdin.write(`${JSON.stringify({ mode, button, process: appPid(), title: appTitle })}\n`);
+                // In ASCII alone, as Windows PowerShell reads its input in the console's code page.
+                const line = JSON.stringify({ mode, button, process: appPid(), title: appTitle }).replace(/[^\x20-\x7e]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+                powerShell.child.stdin.write(`${line}\n`);
                 return JSON.parse(await powerShell.next(TOOL_MS));
             } catch (error) {
                 powerShell?.child.kill();
@@ -348,11 +352,11 @@ export function questionsOn({
             adbShell('input', 'tap', ...centerOf(node));
         },
         // The keys and closes its user may try, each a way out the question must not take, where the run can send
-        // them: Escape's command on macOS, through the fixture's hook; Escape on Linux; Back and Escape on Android;
+        // them: Escape on macOS, through the fixture's hook; Escape on Linux; Back and Escape on Android;
         // Escape's command and the window's close on Windows. None on iOS.
         waysOut(role) {
             const ways = {
-                macos: { "Escape's command": () => byPage(role, { do: 'cancel' }) },
+                macos: { Escape: () => byPage(role, { do: 'cancel' }) },
                 linux: { Escape: () => keyToLinuxDialog(appTitle, 'Escape') },
                 android: { Back: () => adbShell('input', 'keyevent', 'KEYCODE_BACK'), Escape: () => adbShell('input', 'keyevent', 'KEYCODE_ESCAPE') },
                 windows: { "Escape's command": () => windows('escape'), 'the close': () => windows('close') },
