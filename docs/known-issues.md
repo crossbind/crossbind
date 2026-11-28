@@ -24,6 +24,44 @@ OPFS and its sync handle; a development session's page comes from the dev server
 - Remove when WebView2 gives a custom scheme OPFS, or a Windows app's own page moves to an http or https origin of its
   own; then drop the Windows sentence of `docs/api/extensions.md`'s Limits.
 
+## WebView2 does not hand the host two requests of a served origin's service worker
+
+On Windows the host asks WebView2 for every request of an origin an extension serves, its workers' among them
+(`AddWebResourceRequestedFilterWithRequestSourceKinds` in `channels.cpp`), and answers each through the extension that
+serves it (`Core::serveServed()`). Two requests of a registered service worker were not handed to it, on the x64
+runner's WebView2 157.0.4341.60 (image `windows-2025-vs2026` of 23 Nov 2026) and the arm64 runner's 158.0.4370.33
+(`windows-11-vs2026-arm64`):
+
+- On 157, the worker's own request for the page, `fetch(event.request)`, once its origin ended and was served again: the
+  window showed the origin's address over an empty document the worker controlled, and no `WebResourceRequested` came
+  for it, of any source kind, in 180 s. While the origin stayed served, the same request under a reload was handed
+  over, as a service worker's; on 158 it was handed over in both.
+- On 157 and on 158, an update's check of the worker's script, `registration.update()`: neither the extension nor the
+  source was asked for it. On 157 the update failed "A bad HTTP response code (404) was received when fetching the
+  script.", a 404 from neither of them; on 158 "An unknown error occurred when fetching the script.". The
+  registration's own request for the script was handed over on both, with `Service-Worker: script`.
+
+Where such a request goes instead is not shown, nor whether the runtime or the system (Windows Server 2025 against
+Windows 11) makes 157's difference. The preview extension refuses a project's worker at its registration, so no preview
+holds one; an app's own extension that serves an origin whose pages register a worker would meet both.
+
+- Seen: 2026-11-28; the page in conformance runs 46166400172 (job 141046570389) and 46166707500 (job 141047457429), the
+  update's check in 46174151135 (jobs 141073183534 and 141073183203).
+- Check: on a scratch branch of the day, two edits bring the steps back: the line
+  `if (isWorkerScript(request)) return request.respond(404);` out of `answerOrigin()` in
+  `extensions/preview/native/opener.cpp`, and the expectation of the refusal's words, the `WORKER_REFUSALS` check after
+  the `worker` step, out of `checkClearing()` in `e2e/app-projects/e2e/clearing.mjs`. Pushed and run with
+  `gh workflow run test-node-addon-conformance.yml --ref <that branch>`, the x64 Windows job, where its
+  `PROJECTS WEBVIEW2` line reads 157, fails at the snapshot opened again after "Close preview with its question up" with
+  `the project's page did not come in 180 s` and `"handed":[]`. For an update's check, the `worker` step of
+  `e2e/app-preview/src/project-steps.js` also calls `(await navigator.serviceWorker.getRegistration('/')).update()` once
+  it registered, and `answerOrigin()` prints each request's path and `Service-Worker` header on stderr: the
+  registration's request prints and the update's does not, and the page's update fails in the words above.
+- Remove when the host is handed both on the runtimes it supports, as a mend of its own may make it (a host that refused
+  a worker's script at every origin it serves, as the preview extension does, would see no update's check made; what
+  answers on the x64 runner's port 80 is not known), and with it the Windows clause of `docs/api/extensions.md`'s Limits
+  on the host's `http://<label>.localhost/`.
+
 ## A Linux app's pages have no OPFS
 
 WebKitGTK keeps the Storage API (`navigator.storage`), the File System API and its access handles off by default, so
