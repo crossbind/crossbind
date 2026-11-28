@@ -227,6 +227,12 @@ export async function checkIndicator(run) {
         return answered.value;
     };
     const pagesSince = (from) => endpoint.notes.slice(from).filter((note) => note.event === 'page');
+    // The start note of the first page of this role since that note: the hook posts it once it has read the indicator on
+    // the main thread, so the page's own report of its load may come first.
+    const startedSince = (from, role, what) => {
+        const found = pagesSince(from).find((note) => note.role === role);
+        return found ? Promise.resolve(found) : endpoint.waitForNote((note) => note.event === 'page' && note.role === role, SHOWN_MS, what);
+    };
     const isUp = (shown, name) => shown.up && (isDesktop ? shown.title === titleOf(name) : shown.label === titleOf(name));
     const isDown = (shown) => !shown.up && (!isDesktop || shown.title === appTitle);
     async function until(read, test, what, ms = SHOWN_MS) {
@@ -248,7 +254,7 @@ export async function checkIndicator(run) {
         const back = appLoaded(`the app's page after ${what}`);
         await end();
         const home = await back;
-        const page = pagesSince(from).find((note) => note.role === 'app');
+        const page = await startedSince(from, 'app', `the app's page's start after ${what}`);
         expect(page?.indicator?.up === true, `the indicator was down as the app's page started after ${what}: ${JSON.stringify(pagesSince(from))}`);
         await down(`the indicator after ${what}`);
         return home.ended;
@@ -269,7 +275,7 @@ export async function checkIndicator(run) {
     await openSession(marked.session, marked.origin);
     const shown = await indicators.read('project');
     expect(isUp(shown, MARKED_NAME), `the indicator of "${MARKED_NAME}" read ${JSON.stringify(shown)}`);
-    const firstPage = pagesSince(from).find((note) => note.role === 'project');
+    const firstPage = await startedSince(from, 'project', "the project's first page's start");
     expect(firstPage?.indicator?.up === true, `the indicator was not up as the project's first page started: ${JSON.stringify(pagesSince(from))}`);
     const devLine = `${accountName} ${DOT} on ${marked.session.addresses[0]}`;
     const words = menuWords(platform, await indicators.menu('project'));
@@ -287,6 +293,7 @@ export async function checkIndicator(run) {
     const reloaded = projectLoaded("the project's page after Reload");
     await indicators.press('project', 'Reload');
     expect((await reloaded).loaded === marked.url.replace(/\/$/, ''), 'Reload loaded another page');
+    await startedSince(from, 'project', "the project's page's start after Reload");
     const reloadPages = pagesSince(from);
     expect(reloadPages.length === 1 && reloadPages[0].role === 'project' && reloadPages[0].indicator?.up === true, `Reload started ${JSON.stringify(reloadPages)}`);
 
@@ -666,8 +673,10 @@ export async function checkIndicator(run) {
         // A key made anew, taken at Reload, with 3.4's words.
         cloud.rekey(snapshot.session.id);
         reloaded = projectLoaded('the snapshot after Reload with a new key');
+        const rekeyed = endpoint.notes.length;
         await indicators.press('project', 'Reload');
         await reloaded;
+        await startedSince(rekeyed, 'project', "the snapshot's start after Reload with a new key");
         expect(await lineOf() === RENEWED, 'the line did not say the key was renewed');
         // Reload while a reading waits: one reading, one reload.
         let release = cloud.hold(snapshot.session.id);
@@ -677,6 +686,7 @@ export async function checkIndicator(run) {
         await sleep(SETTLED_MS / 3);
         release();
         await projectLoaded('the snapshot after two Reloads');
+        await startedSince(from, 'project', "the snapshot's start after two Reloads");
         await sleep(SETTLED_MS);
         expect(readingsOf(snapshot.session) - before === 1 && pagesSince(from).filter((note) => note.role === 'project').length === 1,
             `two Reloads while a reading waited read ${readingsOf(snapshot.session) - before} times and started ${pagesSince(from).length} pages`);
@@ -691,7 +701,9 @@ export async function checkIndicator(run) {
         await reloaded;
         out.reloadBesideHeld = 'reloaded';
         await ended('Close preview of another snapshot', () => indicators.press('project', 'Close preview'));
+        const opening = endpoint.notes.length;
         await openSession(second.session, second.origin);
+        await startedSince(opening, 'project', "the second project's start");
         const secondLine = await lineOf();
         from = endpoint.notes.length;
         cloud.raise(snapshot.session.id);
@@ -788,7 +800,7 @@ export async function checkIndicator(run) {
         const shownAt = projectLoaded('the second of two sessions opened at once');
         const two = await step('app', { do: 'openTwo', first: marked.session.id, second: second.session.id });
         const firstPage = await shownAt;
-        const started = pagesSince(from).find((note) => note.role === 'project');
+        const started = await startedSince(from, 'project', 'the start of the second of two sessions opened at once');
         expect(two.url && firstPage.loaded === two.url.replace(/\/$/, '') && isUp(started?.indicator ?? {}, SECOND_NAME),
             `the second of two opened at once showed ${firstPage.loaded} with ${JSON.stringify({ two, indicator: started?.indicator })}`);
         if (two.held) expect(two.first.error === ENDED_AS_OPENED, `the first of two opened at once answered ${JSON.stringify(two.first)}, the second's open past it`);
@@ -796,7 +808,7 @@ export async function checkIndicator(run) {
         const reloaded = projectLoaded('the second of two after Reload');
         await indicators.press('project', 'Reload');
         await reloaded;
-        const again = pagesSince(from).find((note) => note.role === 'project');
+        const again = await startedSince(from, 'project', 'the start of the second of two after Reload');
         expect(isUp(again?.indicator ?? {}, SECOND_NAME) && isUp(await indicators.read('project'), SECOND_NAME),
             `the second of two after Reload: ${JSON.stringify(again?.indicator)}`);
         await ended('Close preview of the second of two', () => indicators.press('project', 'Close preview'));
