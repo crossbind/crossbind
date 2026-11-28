@@ -36,6 +36,8 @@ const SNAPSHOT = 'e2e cleared snapshot';
 const KEPT = 'e2e kept project';
 const IDLE = 'e2e idle project';
 const HELD = 'e2e held project';
+// The origin of an entry of another account's, written into the note.
+const OTHER_ORIGIN = '0123456789abcdef0123456789abcdef';
 
 // A service worker of the project's that answers every path, the steps page's own files through and any other with a page
 // of its own, its cache filled as it installs; a worker that holds a database open, closing it on no one's word; and a
@@ -452,4 +454,40 @@ export async function checkClearing(run) {
         await closePreview();
         return out;
     }
+}
+
+// The note after the account's deletion: each of its entries keeps its project and its snapshots and reads no account,
+// in the file and in preview.projects(); another account's entry keeps its own; and a sign-out before it changed none.
+// Last of the run, as the deletion takes the account's sessions with it.
+export async function checkDeletedAccount(run) {
+    const {
+        endpoint, accountName, otherAccount, signIn,
+    } = run;
+    const step = async (what) => {
+        const answered = await endpoint.step('app', what);
+        expect(answered.error === undefined, `the app's page's ${what.do}: ${answered.error}`);
+        return answered.value;
+    };
+    const { data } = await step({ do: 'paths' });
+    const note = storeOn({ ...run, data }, 'projects.json');
+    const before = note.read() ?? {};
+    const mine = (await step({ do: 'projects' })).projects.filter((each) => each.account === accountName).map((each) => each.id);
+    expect(mine.length > 0, `the note held no entry of ${accountName} before its deletion: ${JSON.stringify(before)}`);
+    const other = {
+        name: 'e2e project of another account', account: otherAccount.name, accountId: otherAccount.id, snapshots: [],
+    };
+    const noted = { ...before, [OTHER_ORIGIN]: other };
+    note.write(JSON.stringify(noted));
+    await step({ do: 'signOut' });
+    expect(JSON.stringify(note.read()) === JSON.stringify(noted), `a sign-out changed the note: ${JSON.stringify(note.read())}`);
+    await signIn();
+    await step({ do: 'deleteAccount' });
+    const after = note.read();
+    const { projects } = await step({ do: 'projects' });
+    const listedAs = (origin) => projects.find((each) => each.id === origin)?.account;
+    const isOut = (origin) => after?.[origin]?.account === '' && !after[origin].accountId && after[origin].name === before[origin].name
+        && JSON.stringify(after[origin].snapshots) === JSON.stringify(before[origin].snapshots) && listedAs(origin) === '';
+    expect(mine.every(isOut) && JSON.stringify(after?.[OTHER_ORIGIN]) === JSON.stringify(other) && listedAs(OTHER_ORIGIN) === otherAccount.name,
+        `after the deletion the note held ${JSON.stringify(after)} and preview.projects() gave ${JSON.stringify(projects)}`);
+    return { entries: mine.length, other: 'kept', signOut: 'changed nothing' };
 }

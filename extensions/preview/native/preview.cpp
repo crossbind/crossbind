@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <fstream>
 #include <mutex>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <tuple>
@@ -36,6 +37,8 @@ std::mutex versionsMutex;
 const std::string VERSIONS = "versions.json";
 std::mutex projectsMutex;
 const std::string PROJECTS = "projects.json";
+// The accounts deleted whose note could not be written, out of it for the run.
+std::set<std::string> deletedAccounts;
 
 fs::path pathOf(const std::string &text) { return fs::path(std::u8string(text.begin(), text.end())); }
 
@@ -57,8 +60,9 @@ void writeVersions(Value::Object versions) { writeDataFile(VERSIONS, Value(std::
 // ids.
 std::optional<Noted> notedOf(const std::string &origin, const Value &entry) {
     if (!isOriginName(origin) || !entry.isObject() || !entry["snapshots"].isArray()) return std::nullopt;
-    Noted noted{origin, textOf(entry["name"]), textOf(entry["account"]), {}};
-    if (!isListedName(noted.project) || noted.account.empty()) return std::nullopt;
+    Noted noted{origin, textOf(entry["name"]), textOf(entry["account"]), {}, textOf(entry["accountId"])};
+    if (!isListedName(noted.project) || noted.account.empty() != noted.accountId.empty()) return std::nullopt;
+    if (deletedAccounts.count(noted.accountId) > 0) noted.account = noted.accountId = "";
     for (const Value &id : entry["snapshots"].asArray()) {
         if (!isSessionId(textOf(id))) return std::nullopt;
         noted.snapshots.push_back(textOf(id));
@@ -84,10 +88,16 @@ std::vector<Noted> readNote() {
     return note;
 }
 
-void writeNote(const std::vector<Noted> &note) {
+std::string noteText(const std::vector<Noted> &note) {
     Value::Object entries;
-    for (const Noted &each : note) entries.emplace_back(each.origin, Value::Object{{"name", each.project}, {"account", each.account}, {"snapshots", Value(each.snapshots)}});
-    if (const Failure failure = writeDataFile(PROJECTS, Value(std::move(entries)).json())) {
+    for (const Noted &each : note) {
+        entries.emplace_back(each.origin, Value::Object{{"name", each.project}, {"account", each.account}, {"accountId", each.accountId}, {"snapshots", Value(each.snapshots)}});
+    }
+    return Value(std::move(entries)).json();
+}
+
+void writeNote(const std::vector<Noted> &note) {
+    if (const Failure failure = writeDataFile(PROJECTS, noteText(note))) {
         std::fprintf(stderr, "crossbind: preview could not note a project in its %s: %s\n", PROJECTS.c_str(), failure->c_str());
     }
 }
@@ -256,7 +266,7 @@ std::optional<Noted> notedProject(const std::string &origin) {
     return std::nullopt;
 }
 
-void noteProject(const std::string &origin, const std::string &project, const std::string &account, const std::string &snapshot) {
+void noteProject(const std::string &origin, const std::string &project, const Account &account, const std::string &snapshot) {
     std::lock_guard<std::mutex> lock(projectsMutex);
     std::vector<Noted> note = readNote();
     std::vector<std::string> snapshots;
@@ -265,8 +275,24 @@ void noteProject(const std::string &origin, const std::string &project, const st
     }
     std::erase_if(note, [&origin](const Noted &each) { return each.origin == origin; });
     if (!snapshot.empty() && std::find(snapshots.begin(), snapshots.end(), snapshot) == snapshots.end()) snapshots.push_back(snapshot);
-    note.push_back({origin, project, account, std::move(snapshots)});
+    note.push_back({origin, project, account.name, std::move(snapshots), account.id});
     writeNote(note);
+}
+
+void forgetAccount(const std::string &id) {
+    std::lock_guard<std::mutex> lock(projectsMutex);
+    std::vector<Noted> note = readNote();
+    bool isNoted = false;
+    for (Noted &each : note) {
+        if (each.accountId != id) continue;
+        each.account = each.accountId = "";
+        isNoted = true;
+    }
+    if (!isNoted) return;
+    if (const Failure failure = writeDataFile(PROJECTS, noteText(note))) {
+        deletedAccounts.insert(id);
+        std::fprintf(stderr, "crossbind: preview could not take a deleted account out of its %s, which holds for this run: %s\n", PROJECTS.c_str(), failure->c_str());
+    }
 }
 
 void forgetProject(const std::string &origin) {

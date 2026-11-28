@@ -51,8 +51,9 @@ location.href = (await preview.open(sessions[0].id)).url;
   snapshot no longer listed or a sign-out, and `{}` for one its user closed from the preview's menu or with Back; later
   ones come as the event `preview.ended`.
 - `projects()` gives the projects opened on this device, signed in or not, in the order of their names:
-  `{ projects: [{ id, name, account, consents }] }`, `id` the name of the project's origin and `consents` the kinds its
-  user answered, as `{ camera: true, location: false }`, kept or held for the run.
+  `{ projects: [{ id, name, account, consents }] }`, `id` the name of the project's origin, `account` the name of the
+  account it was opened with, `""` once that account is deleted, and `consents` the kinds its user answered, as
+  `{ camera: true, location: false }`, kept or held for the run.
 - `takeBack(id, kind)` makes an Allow of one of them Don't Allow, as the menu's control turned off does, and nothing
   else: it gives nothing, and changes nothing of a kind kept off or not asked. Where that project's preview shows, its
   page reloads, as after the menu's change.
@@ -157,9 +158,12 @@ again, and `preview.cleared` says in words what may stay. One clearing runs at a
 refused while it runs: "crossbind clears a project's data now: try again once that is done."
 
 The note of the projects opened is `preview/projects.json` in the app's data folder, by the origin's name: the
-project's name and the account's as the list gave them at its last open, and the sessions of its snapshots. It is
-written at each open, read as strictly as `consents.json` is, and removed by a clearing alone: a sign-out and an
-account's deletion leave it, as they leave the project's storage.
+project's name, the account's name and id as the list gave them at its last open, and the sessions of its snapshots;
+the id reaches no page. It is written at each open, read as strictly as `consents.json` is, and a project's entry is
+removed by its clearing alone. `deleteAccount()` takes the account out of each of its entries, its name and its id,
+which keep their projects and snapshots and read `account: ""` from then on; where the note cannot be written the
+account is out of it for the run, and the output says so. A sign-out changes nothing, and an account deleted
+elsewhere reaches this device as a 401, which is a sign-out here.
 
 ## Platforms
 

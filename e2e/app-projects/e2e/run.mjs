@@ -13,7 +13,7 @@ import config from '../crossbind.config.mjs';
 import {
     ACCOUNTS, CLI_TOKEN, COMPILED, gateToken, newId, newKey, sessionAnswer, standInCloud, standInSource,
 } from './cloud.mjs';
-import { checkClearing } from './clearing.mjs';
+import { checkClearing, checkDeletedAccount } from './clearing.mjs';
 import { checkConsents } from './consents.mjs';
 import { checkIndicator } from './indicator.mjs';
 import { checkPermissions } from './permissions.mjs';
@@ -1140,9 +1140,19 @@ async function flow() {
     const source = `http://${dev.addresses[0]}`;
     const other = await checkOtherMachine(source, gateToken(dev.key));
     const dependency = await checkOptimizedDependency(source, gateToken(dev.key));
+    // An account's deletion takes the account out of the note of the projects opened.
+    const deletedAccount = await checkDeletedAccount({
+        platform: devicePlatform,
+        endpoint,
+        adb: adbPath,
+        applicationId: () => applicationIdOf(builtForDevice),
+        accountName: ACCOUNTS.main.name,
+        otherAccount: ACCOUNTS.other,
+        signIn: () => signIn(ACCOUNTS.main, NUMBER),
+    });
     const secrets = checkSecrets();
     console.log(`PROJECTS CHECKS ${JSON.stringify({
-        platform: devicePlatform, keyring, stops, ownClipboard, first, consents, indicator, permissions, clearing, pickers, ranges, other, dependency, secrets,
+        platform: devicePlatform, keyring, stops, ownClipboard, first, consents, indicator, permissions, clearing, pickers, ranges, other, dependency, deletedAccount, secrets,
     })}`);
     console.log(`TIMING a JavaScript edit to the page: ${first.js} ms`);
     console.log(`ok: ${devicePlatform} projects of e2e/app-projects`);

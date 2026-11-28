@@ -69,18 +69,21 @@ std::optional<int> openedVersion(const std::string &id);
 void noteOpened(const std::string &id, int version);
 void forgetVersions(const std::vector<std::string> &ids);
 // The note of the projects opened on this device, preview/projects.json in the app's data folder, by the origin's name:
-// the project's name and the account's as the list gave them at its last open, and the snapshots of it opened. A note
-// that cannot be read, is no JSON or has another shape lists nothing, and an entry of another shape is no project's.
-// Written at each open, and a project's entry removed by its data's clearing alone.
+// the project's name and the account's as the list gave them at its last open, the account's id, which no page is
+// given, and the snapshots of it opened. A note that cannot be read, is no JSON or has another shape lists nothing, and
+// an entry of another shape is no project's. Written at each open, a project's entry removed by its data's clearing
+// alone, and an account taken out of its entries, its name and its id, by its deletion.
 struct Noted {
     std::string origin;
     std::string project;
     std::string account;
     std::vector<std::string> snapshots;
+    std::string accountId;
 };
 std::vector<Noted> notedProjects();
 std::optional<Noted> notedProject(const std::string &origin);
-void noteProject(const std::string &origin, const std::string &project, const std::string &account, const std::string &snapshot);
+void noteProject(const std::string &origin, const std::string &project, const Account &account, const std::string &snapshot);
+void forgetAccount(const std::string &id);
 void forgetProject(const std::string &origin);
 // A file of the extension's own in the app's data folder, as preview/versions.json: its text, none where it cannot be
 // read; and its text written whole, which a read sees all of or none of: why it could not be, or none.

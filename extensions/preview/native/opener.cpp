@@ -510,7 +510,8 @@ void serve(const Call &call, const Checked &found) {
     }
     auto proxy = std::make_shared<Proxy>(number, found.session, found.account, found.source, found.gateToken);
     const bool isSnapshot = found.session.source == "snapshot";
-    const Noted project{found.originName, found.session.projectName, found.account.name, isSnapshot ? std::vector<std::string>{found.session.id} : std::vector<std::string>{}};
+    const Noted project{found.originName, found.session.projectName, found.account.name,
+        isSnapshot ? std::vector<std::string>{found.session.id} : std::vector<std::string>{}, found.account.id};
     try {
         const crossbind::Origin origin = crossbind::serveOrigin(
             found.originName, "project", [proxy, name = found.originName](Request request) { answerOrigin(name, proxy, std::move(request)); }, found.session.projectName);
@@ -520,7 +521,7 @@ void serve(const Call &call, const Checked &found) {
             openProxy = proxy;
             openProject = project;
         }
-        noteProject(project.origin, project.project, project.account, isSnapshot ? found.session.id : "");
+        noteProject(project.origin, project.project, found.account, isSnapshot ? found.session.id : "");
         if (isSnapshot) noteOpened(found.session.id, found.session.version);
         // The page goes to the origin once its requests' holder knows the preview they are of, and the indicator is up
         // on the page's window.

@@ -248,7 +248,7 @@ void deleteAccount(Call call) {
             call.reject(signedOutWords());
             return;
         }
-        askCloud("DELETE", "/v1/account", token, "", [call, name = account->name](Failure failure, int status, Value answer) {
+        askCloud("DELETE", "/v1/account", token, "", [call, id = account->id, name = account->name](Failure failure, int status, Value answer) {
             if (failure) {
                 call.reject("Deleting your account needs the network.");
                 return;
@@ -261,6 +261,7 @@ void deleteAccount(Call call) {
                 call.reject(cloudWords(answer, "crossbind cloud did not delete the account: try again."));
                 return;
             }
+            forgetAccount(id);
             forgetSignIn([call, name] { call.resolve(Value::Object{{"message", name + " is deleted, with its tokens, sessions and snapshots."}}); });
         });
     });
