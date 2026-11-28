@@ -179,6 +179,8 @@ export async function checkConsents(run) {
     // As it comes up, its default and its first focus are Don't Allow or none: macOS gives a sheet's buttons their keys
     // once it shows. Where the run reads it, the default is Don't Allow once it has settled.
     expect(isDontAllowOrNone(first.focused) && isDontAllowOrNone(first.preferred), `the question came up as ${JSON.stringify(first)}`);
+    // Android's question is its dialog's message, which wraps whole, as a title shows two lines at most.
+    expect(platform !== 'android' || first.titled === false, `the question came up in a title: ${JSON.stringify(first)}`);
     const isDefaultRead = ['macos', 'ios', 'linux'].includes(platform);
     const steady = isDefaultRead ? await settled() : await questions.read('project');
     report.settled = { preferred: steady?.preferred ?? null, focused: steady?.focused ?? null };

@@ -47,11 +47,13 @@ export const centerOf = (node) => {
 function androidQuestion(nodes, applicationId) {
     const own = nodes.filter((node) => node.package === applicationId);
     const title = own.find((node) => node['resource-id'] === 'android:id/alertTitle');
-    if (!title) return null;
     const message = own.find((node) => node['resource-id'] === 'android:id/message');
+    if (!title && !message) return null;
     const buttons = own.filter((node) => /^android:id\/button[123]$/.test(node['resource-id']));
+    // A question is its message's first paragraph, which wraps whole, and what follows it the next.
+    const texts = [...(title ? [title.text] : []), ...(message?.text ?? '').split('\n\n')];
     return {
-        texts: [title.text, message?.text ?? ''], buttons: buttons.map((node) => node.text), preferred: null, focused: buttons.find((node) => node.focused === 'true')?.text ?? null, nodes: buttons,
+        texts, titled: Boolean(title), buttons: buttons.map((node) => node.text), preferred: null, focused: buttons.find((node) => node.focused === 'true')?.text ?? null, nodes: buttons,
     };
 }
 

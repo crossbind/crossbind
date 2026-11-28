@@ -186,13 +186,13 @@ final class Consents {
     }
 
     // Back, Escape and a touch outside leave it up: a dialog that cancels on neither still closes at Escape, whose key
-    // it takes here. Don't Allow takes the first focus, which a key's press finds.
+    // it takes here. Don't Allow takes the first focus, which a key's press finds. The question is the message's, which
+    // wraps whole, as a title shows two lines at most.
     private void show(ExtensionHost host, List<String> kinds) {
         AlertDialog[] shown = new AlertDialog[1];
         DialogInterface.OnClickListener answer = (dialog, button) -> answered(host, shown[0], kinds, button == DialogInterface.BUTTON_POSITIVE);
         shown[0] = new AlertDialog.Builder(host.activity())
-                .setTitle(messageOf(project, kinds))
-                .setMessage(DETAIL)
+                .setMessage(messageOf(project, kinds) + "\n\n" + DETAIL)
                 .setNegativeButton("Don't Allow", answer)
                 .setPositiveButton("Allow", answer)
                 .setCancelable(false)

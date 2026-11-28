@@ -201,7 +201,8 @@ export async function checkClearing(run) {
     const up = await confirmation(SNAPSHOT);
     const isCancel = (drawn) => drawn === null || drawn === undefined || /^cancel$/i.test(drawn);
     expect(up.texts.includes(DETAIL) && up.buttons.some((button) => /^cancel$/i.test(button)) && up.buttons.some((button) => /^clear$/i.test(button))
-        && isCancel(up.preferred) && isCancel(up.focused) && isCancel(up.escape), `${CLEAR}'s question read ${JSON.stringify(up)}`);
+        && isCancel(up.preferred) && isCancel(up.focused) && isCancel(up.escape) && (platform !== 'android' || up.titled === false),
+    `${CLEAR}'s question read ${JSON.stringify(up)}`);
     report.question = {
         texts: up.texts, buttons: up.buttons, preferred: up.preferred ?? null, focused: up.focused ?? null, escape: up.escape ?? null,
     };

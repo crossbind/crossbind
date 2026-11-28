@@ -215,15 +215,14 @@ final class Indicator {
         permissions.show();
     }
 
-    // Clear this project's data…'s question, of the preview it was asked for: Cancel its first focus, and Back, Escape and
-    // a touch outside Cancel's; Clear asks for that preview's clearing.
+    // Clear this project's data…'s question, of the preview it was asked for, in its message, which wraps whole: Cancel
+    // its first focus, and Back, Escape and a touch outside Cancel's; Clear asks for that preview's clearing.
     private void askToClear(Activity activity) {
         if (clearQuestion != null && clearQuestion.isShowing()) return;
         String asked = origin;
         AlertDialog[] shown = new AlertDialog[1];
         shown[0] = new AlertDialog.Builder(activity)
-                .setTitle("Remove what “" + project + "” keeps on this device: its storage and its permissions?")
-                .setMessage("Its sources are untouched.")
+                .setMessage("Remove what “" + project + "” keeps on this device: its storage and its permissions?\n\nIts sources are untouched.")
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Clear", (dialog, button) -> {
                     if (shown[0] == clearQuestion) ask("clear " + asked);
